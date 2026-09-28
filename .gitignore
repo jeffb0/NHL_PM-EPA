@@ -1,0 +1,18 @@
+.venv/
+data/raw/
+data/processed/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.env
+*.tmp
+logs/
+data/smoke/
+reports/smoke/
+# large, regenerable outputs (rebuilt by `make pipeline`)
+data/outputs/pm_epa_player_game.csv
+reports/figures/value_surfaces/*.svg
+.DS_Store

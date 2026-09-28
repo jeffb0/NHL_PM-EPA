@@ -1,0 +1,97 @@
+[
+  {
+    "title": "Ex. R1: Observed carry: defensive-half takeaway carried to a scoring-area shot by the same player",
+    "points": [
+      {
+        "x": -75.0,
+        "y": 30.0,
+        "v": 0.011185306883315767,
+        "kind": "takeaway",
+        "label": "takeaway (Giroux)"
+      },
+      {
+        "x": 87.0,
+        "y": -2.0,
+        "v": 0.26215204975658113,
+        "kind": "shot",
+        "label": "shot (Giroux)"
+      }
+    ]
+  },
+  {
+    "title": "Ex. R2: Unobserved transition: recovery after an opponent miss, shot from the low slot (median \u0394)",
+    "points": [
+      {
+        "x": -85.0,
+        "y": 15.0,
+        "v": 0.025342093784381674,
+        "kind": "loose_opp_miss",
+        "label": "loose_opp_miss"
+      },
+      {
+        "x": 78.0,
+        "y": -9.0,
+        "v": 0.05117218531265869,
+        "kind": "shot",
+        "label": "shot (Zegras)"
+      }
+    ]
+  },
+  {
+    "title": "Ex. R3: Offensive-zone faceoff win \u2192 point shot blocked",
+    "points": [
+      {
+        "x": 69.0,
+        "y": 22.0,
+        "v": 0.014178102873187525,
+        "kind": "faceoff",
+        "label": "faceoff (Howden)"
+      },
+      {
+        "x": 48.0,
+        "y": -21.0,
+        "v": 0.015794802989604482,
+        "kind": "shot",
+        "label": "shot (Whitecloud)"
+      }
+    ]
+  },
+  {
+    "title": "Ex. R4: Takeaway followed by a defensive-zone giveaway (median \u0394)",
+    "points": [
+      {
+        "x": -2.0,
+        "y": 10.0,
+        "v": 0.016468067367687876,
+        "kind": "takeaway",
+        "label": "takeaway (Hronek)"
+      },
+      {
+        "x": -52.0,
+        "y": -13.0,
+        "v": 0.0003005083356820169,
+        "kind": "giveaway",
+        "label": "giveaway (Kane)"
+      }
+    ]
+  },
+  {
+    "title": "Ex. R5: Opponent giveaway converted into a shot",
+    "points": [
+      {
+        "x": 46.0,
+        "y": -37.0,
+        "v": 0.03520017721394121,
+        "kind": "loose_opp_giveaway",
+        "label": "loose_opp_giveaway"
+      },
+      {
+        "x": 55.0,
+        "y": -9.0,
+        "v": 0.03395379789249266,
+        "kind": "shot",
+        "label": "shot (Hutton)"
+      }
+    ]
+  }
+]

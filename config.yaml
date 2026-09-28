@@ -1,0 +1,77 @@
+# PM-EPA configuration. Every tunable used by the pipeline lives here; code reads it
+# through src/config.py (pydantic-validated). Change values here, never in code.
+
+seed: 20260927
+
+data:
+  # Season start years: 2017 == 2017-18. 2017-18 is the first season with the
+  # post-2017 coordinate conventions we rely on; 2025-26 is the latest complete season.
+  seasons: [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+  game_type: 2            # 2 = regular season only (playoffs out of scope for v1)
+  # Scorekeeping regimes. From 2024-25 recorded giveaways ~doubled and takeaways fell ~35%
+  # (see data/processed/data_quality.md); turnover-derived states are not comparable across the break.
+  scoring_regimes: [[2017, 2018, 2019, 2020, 2021, 2022, 2023], [2024, 2025]]
+  raw_dir: data/raw
+  processed_dir: data/processed
+  value_dir: data/value_surfaces
+  output_dir: data/outputs
+  figures_dir: reports/figures
+  metrics_dir: reports/metrics
+  ingest_workers: 6
+  request_timeout_s: 30
+
+splits:
+  # Temporal holdouts (season start years). Used for xG + V(s) model selection.
+  train: [2017, 2018, 2019, 2020, 2021]
+  validation: [2022]
+  test: [2023, 2024, 2025]
+  # Final artifacts used for player metrics are cross-fitted: the model applied to
+  # season Y is trained on all seasons != Y (removes in-sample leakage).
+  cross_fit: true
+
+possession:
+  rebound_window_s: 3          # same-team shot within this many seconds of a shot = rebound
+  carry_max_gap_s: 12          # same player at both ends of a segment within this gap = observed carry
+  max_inferred_start_gap_s: 25 # loose-puck origin -> next event gap allowed for an inferred start (~p60 of durations)
+  max_segment_gap_s: 30        # segments longer than this: movement credit goes 100% to the on-ice pool
+  hits_as_observations: false  # hits do not change or evidence possession (see definitions.md)
+
+states:
+  grid: zones                  # final choice after Phase 4 bake-off: zones | grid10 | grid20
+  candidate_grids: [zones, grid10, grid20]
+  score_buckets: [-2, -1, 0, 1, 2]  # clipped at +-2
+  use_score_in_state: false    # decided by ablation (Phase 4/5)
+  strengths: [5v5, PP, PK, 4v4_3v3]
+
+value:
+  method: markov               # markov | mc | gbm | hazard
+  min_n_per_state: 100         # below this a cell leans on its parent via shrinkage
+  shrinkage_k: auto            # empirical-Bayes prior strength ('auto' = method of moments) or a number
+  spatial_smoothing_bandwidth_ft: 0   # 0 = off; >0 Gaussian kernel smoothing over grid cells
+  monotonicity_check: true
+  # Weight on the opponent's possession value after a turnover. Chosen = 0 by the pre-registered rule
+  # (methodology §5): best team-changer YOY, convergent validity rises, discriminant within bound.
+  lambda_opponent: 0.0
+  crossfit_within_regime: true # V for season Y is fit on same-regime seasons != Y (decided in Phase 5)         # weight on opponent possession value after a turnover (0 = offense-only)
+
+epa:
+  # Attribution of unobserved movement between two observed events with different
+  # (or unknown) players. Shares for endpoint players; remainder goes to the on-ice pool.
+  start_share: 0.35
+  end_share: 0.35
+  onice_pool: true             # distribute the residual share across on-ice teammates
+  credit_rebounds: false       # rebound segments are shot sequences, not movement
+  include_turnovers: true      # giveaway debits / takeaway credits in PM-EPA
+  exclude_empty_net: true
+
+metrics:
+  min_toi_ev: 500              # minutes, 5v5 (EV) leaderboard qualification
+  min_toi_pp: 200
+  min_toi_pk: 200
+  bootstrap_reps: 1000
+  ci_level: 0.95
+
+xg:
+  model: logit                 # logit | gbm (chosen in Phase 5 on validation season)
+  calibrate: isotonic
+  rush_window_s: 4

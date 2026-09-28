@@ -1,0 +1,122 @@
+{
+  "v_dec_radial": {
+    "5v5": {
+      "ray_steps": 899,
+      "violations": 1,
+      "violation_rate": 0.0011123470522803114,
+      "worst_drop": -0.002862767055646004,
+      "violations_within_10ft": 0
+    },
+    "PP": {
+      "ray_steps": 899,
+      "violations": 50,
+      "violation_rate": 0.05561735261401557,
+      "worst_drop": -0.014723702722398327,
+      "violations_within_10ft": 0
+    },
+    "PK": {
+      "ray_steps": 899,
+      "violations": 4,
+      "violation_rate": 0.004449388209121246,
+      "worst_drop": -0.004079795983984058,
+      "violations_within_10ft": 3
+    },
+    "4v4": {
+      "ray_steps": 899,
+      "violations": 15,
+      "violation_rate": 0.01668520578420467,
+      "worst_drop": -0.005907786059515738,
+      "violations_within_10ft": 0
+    }
+  },
+  "v_start_radial": {
+    "5v5": {
+      "ray_steps": 899,
+      "violations": 30,
+      "violation_rate": 0.03337041156840934,
+      "worst_drop": -0.005770714231701439,
+      "violations_within_10ft": 30
+    },
+    "PP": {
+      "ray_steps": 899,
+      "violations": 44,
+      "violation_rate": 0.048943270300333706,
+      "worst_drop": -0.007198773970991633,
+      "violations_within_10ft": 34
+    },
+    "PK": {
+      "ray_steps": 899,
+      "violations": 32,
+      "violation_rate": 0.035595105672969966,
+      "worst_drop": -0.00554494401469801,
+      "violations_within_10ft": 32
+    },
+    "4v4": {
+      "ray_steps": 899,
+      "violations": 58,
+      "violation_rate": 0.06451612903225806,
+      "worst_drop": -0.00677793358887728,
+      "violations_within_10ft": 31
+    }
+  },
+  "v_dec_lanes": {
+    "5v5": {
+      "lane_steps": 1184,
+      "violations": 106,
+      "violation_rate": 0.08952702702702703,
+      "worst_drop": -0.17695729709855607,
+      "corr_value_vs_neg_distance_oz": 0.6739009088832753
+    },
+    "PP": {
+      "lane_steps": 1184,
+      "violations": 149,
+      "violation_rate": 0.1258445945945946,
+      "worst_drop": -0.15101154115303528,
+      "corr_value_vs_neg_distance_oz": 0.7643459451831328
+    },
+    "PK": {
+      "lane_steps": 1184,
+      "violations": 129,
+      "violation_rate": 0.1089527027027027,
+      "worst_drop": -0.18046133219009058,
+      "corr_value_vs_neg_distance_oz": 0.7420218391586177
+    },
+    "4v4": {
+      "lane_steps": 1184,
+      "violations": 153,
+      "violation_rate": 0.12922297297297297,
+      "worst_drop": -0.23008431216586195,
+      "corr_value_vs_neg_distance_oz": 0.7768684432727156
+    }
+  },
+  "v_start_lanes": {
+    "5v5": {
+      "lane_steps": 1184,
+      "violations": 33,
+      "violation_rate": 0.02787162162162162,
+      "worst_drop": -0.005770714231701439,
+      "corr_value_vs_neg_distance_oz": 0.7572371667327366
+    },
+    "PP": {
+      "lane_steps": 1184,
+      "violations": 22,
+      "violation_rate": 0.018581081081081082,
+      "worst_drop": -0.007712524510698496,
+      "corr_value_vs_neg_distance_oz": 0.6783517098458877
+    },
+    "PK": {
+      "lane_steps": 1184,
+      "violations": 85,
+      "violation_rate": 0.07179054054054054,
+      "worst_drop": -0.0069537890378293665,
+      "corr_value_vs_neg_distance_oz": 0.46354588340329317
+    },
+    "4v4": {
+      "lane_steps": 1184,
+      "violations": 113,
+      "violation_rate": 0.09543918918918919,
+      "worst_drop": -0.009042760730074088,
+      "corr_value_vs_neg_distance_oz": -0.0636638694580702
+    }
+  }
+}

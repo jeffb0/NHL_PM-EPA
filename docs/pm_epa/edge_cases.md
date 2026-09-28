@@ -1,0 +1,33 @@
+# Edge Cases and Their Resolution
+
+Every item from brief §11, plus data-level edge cases found while building the pipeline. For each case: what happens in real hockey, what public PBP shows, the rule we apply, and where it is enforced or tested.
+
+| # | Case | What PBP shows | Resolution | Enforced / tested |
+|---|---|---|---|---|
+| 1 | **Rebounds** | Shot, then a same-team shot ≤ 3 s later | New possession with start kind `rebound`. Its segment Δ and start value are **unattributed**, so a rebound never earns movement credit. The rebound's extra quality is visible only in `shot_quality` (excluded). | `test_rebound_same_team_within_window`, `test_example5_rebound_is_not_movement_credit` |
+| 2 | **Blocked shots** | `blocked-shot` with shooter + blocker. The block location is recorded; `eventOwnerTeamId`/`zoneCode` semantics differ by season. | Always terminal for the shooting team (G = 0, since a blocked shot cannot score). The shooter's team comes from the roster. If the *blocking* team records the next event within 25 s, its start is `loose_opp_block` at the block location. If the *shooting* team does, it is `loose_own_block` (retained). | `test_blocked_shot_then_blocker_team_recovers`; data check: blocks lie in the shooter's attacking half 99.8% of the time |
+| 3 | **Rims / boards** | Nothing, until the next event | Unobservable. A rim that is recovered by a teammate is part of an unobserved segment (split/pool); a rim that loses the puck becomes `unobserved_loss` (pool). | `test_opponent_event_without_takeaway_closes_as_unobserved_loss` |
+| 4 | **Dump-ins** | No dump event; the opponent's next event, or the own team's next event | Dump then own-team recovery: one continuing possession whose segment Δ is split. Dump then opponent recovery: `unobserved_loss`, charged to the on-ice pool as −(V + λ·V_O(`loose_unobserved`)). Dumps are never credited as advancement unless the team keeps the puck, because Δ is only realized at the next *own* observation. | engine example A7 |
+| 5 | **Loose pucks / battles** | Hits, takeaways, giveaways close together in time | Hits never change possession (§4.2 of the brief). A takeaway is the only event that transfers possession by force. Several takeaways in a row each open a new possession; a same-team takeaway implies an intervening unobserved loss. | `test_takeaway_by_team_already_in_possession_implies_unobserved_loss`, `test_hit_on_non_possessing_team_is_never_an_observation` |
+| 6 | **Icing, offside, puck over glass** | `stoppage` with reason | Possession closes. **Icing and offside** are charged as `stoppage_loss` (−V) to the possessing team's on-ice skaters *at the stoppage*. Other stoppages (puck out of play, frozen puck, TV timeout, injury, video review, net off) are unattributed, because the fault is not identifiable from PBP. | `test_stoppage_closes_possession`, `test_example6_icing_charged_to_on_ice_pool` |
+| 7 | **Penalties / PP starts** | `delayed-penalty` (no coordinates), then `penalty` at the stoppage | Delayed-penalty markers are ignored. The penalty closes the possession (unattributed end). Strength is read from each observation's own `situationCode`, so a possession spanning a PP expiry values each state under its own strength group. Drawing a penalty earns no PM-EPA; it belongs to a separate penalty-value metric (out of scope). | `test_strength_is_from_possessing_team_perspective` |
+| 8 | **Behind the net** | x beyond ±89 | Its own sub-zones (`OZ_behind`, `DZ_behind`) and grid cells. Monotonicity checks are applied only for 25 ≤ x ≤ 89, so wraparound value behind the net is allowed to be non-monotone. | `test_zone_geometry_landmarks`; `reports/metrics/monotonicity.json` |
+| 9 | **3v3 / OT** | `situationCode` 1331; RS OT periods | Pooled with 4v4 in the `4v4_3v3` surface (brief §12.2) with hierarchical shrinkage to parent zones. Shootouts are dropped at parse time. | shrinkage tests in `tests/test_value.py` |
+| 10 | **Reception in motion / one-touch** | Invisible | Cannot be split from PBP. A one-touch pass-and-shot appears as a split segment ending at the shooter; the passer's credit sits in the pool unless they were the start player. Documented as a core limitation. | — |
+| 11 | **Failed clears** | Often a DZ giveaway, or an opponent takeaway near the blue line | Giveaway: the giver pays −(V_T + λ·V_O(`loose_opp_giveaway`)), which is large in the DZ because V_O is high there. Opponent takeaway: the loser's on-ice pool pays the swing. | `test_example4_takeaway_then_own_zone_giveaway` |
+| 12 | **Own-zone regroups** | Invisible (lateral passes are not recorded) | Not penalized: only observed states enter Δ, so a regroup between two observations costs nothing unless the next observed state is worse. V is empirical, never aesthetic, so a safe regroup that leads to a controlled exit is valued by what such possessions actually produce. | by construction |
+
+## Data-level edge cases
+
+| Case | Resolution | Evidence |
+|---|---|---|
+| Blocked-shot owner team changes meaning across seasons | Shooter team taken from the roster (`rosterSpots`) | 100% of blocked shots have acting team = shooter's roster team |
+| `homeTeamDefendingSide` missing before 2019-20 | Attack direction inferred per game-period by zone-code vote | Agrees with `homeTeamDefendingSide` in 99.97% of 27,433 game-periods where both exist |
+| Out-of-order events (time decreases) | An inferred start is never created from a later origin | `test_out_of_order_time_never_creates_inferred_start` |
+| Goal followed by events before the faceoff | Goals never seed loose starts | `test_goal_never_seeds_a_loose_start` |
+| Faceoff while a possession is open | Closed as `unrecorded_stoppage`, unattributed | `ChainBuilder.run` |
+| Shots with x but no y (2 in 9 seasons) | Dropped from xG. The possession ends with G = 0 | `src/xg/features.py` |
+| Missing/defective shift charts | Games whose chart is missing or matches <90% of 5v5 events are dropped from both the numerator and the denominator of every per-60 rate. Pool credit with an empty on-ice list goes to `unattributed`. | 10,901 of 11,052 games usable; `test_missing_shift_data_sends_pool_share_to_unattributed` |
+| Empty net (either goalie pulled) | Whole possession excluded from V fitting and from credit | `epa.exclude_empty_net` |
+| 2024-25 scorekeeping change (giveaways ×2, takeaways −35%) | Scoring regimes in config; V cross-fitted within regime; YOY reported within regime and separately across the break | `data/processed/data_quality.md`; validation report §2 |
+| Period ends with an open possession | Closed as `period_end`, unattributed | `test_period_change_closes_open_possession` |

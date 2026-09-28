@@ -1,0 +1,124 @@
+{
+  "utc": "2026-09-28T01:18:59+00:00",
+  "git": "3973ec48bd155c6a2857427d9052b85ae60119f4",
+  "python": "3.11.16",
+  "steps": [
+    "report"
+  ],
+  "config": {
+    "seed": 20260927,
+    "data": {
+      "seasons": [
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025
+      ],
+      "game_type": 2,
+      "scoring_regimes": [
+        [
+          2017,
+          2018,
+          2019,
+          2020,
+          2021,
+          2022,
+          2023
+        ],
+        [
+          2024,
+          2025
+        ]
+      ],
+      "raw_dir": "data/raw",
+      "processed_dir": "data/processed",
+      "value_dir": "data/value_surfaces",
+      "output_dir": "data/outputs",
+      "figures_dir": "reports/figures",
+      "metrics_dir": "reports/metrics",
+      "ingest_workers": 6,
+      "request_timeout_s": 30
+    },
+    "splits": {
+      "train": [
+        2017,
+        2018,
+        2019,
+        2020,
+        2021
+      ],
+      "validation": [
+        2022
+      ],
+      "test": [
+        2023,
+        2024,
+        2025
+      ],
+      "cross_fit": true
+    },
+    "possession": {
+      "rebound_window_s": 3.0,
+      "carry_max_gap_s": 12.0,
+      "max_inferred_start_gap_s": 25.0,
+      "max_segment_gap_s": 30.0,
+      "hits_as_observations": false
+    },
+    "states": {
+      "grid": "zones",
+      "candidate_grids": [
+        "zones",
+        "grid10",
+        "grid20"
+      ],
+      "score_buckets": [
+        -2,
+        -1,
+        0,
+        1,
+        2
+      ],
+      "use_score_in_state": false,
+      "strengths": [
+        "5v5",
+        "PP",
+        "PK",
+        "4v4_3v3"
+      ]
+    },
+    "value": {
+      "method": "markov",
+      "min_n_per_state": 100,
+      "shrinkage_k": "auto",
+      "spatial_smoothing_bandwidth_ft": 0.0,
+      "monotonicity_check": true,
+      "lambda_opponent": 0.0,
+      "crossfit_within_regime": true
+    },
+    "epa": {
+      "start_share": 0.35,
+      "end_share": 0.35,
+      "onice_pool": true,
+      "credit_rebounds": false,
+      "include_turnovers": true,
+      "exclude_empty_net": true
+    },
+    "metrics": {
+      "min_toi_ev": 500.0,
+      "min_toi_pp": 200.0,
+      "min_toi_pk": 200.0,
+      "bootstrap_reps": 1000,
+      "ci_level": 0.95
+    },
+    "xg": {
+      "model": "logit",
+      "calibrate": "isotonic",
+      "rush_window_s": 4.0
+    }
+  }
+}
