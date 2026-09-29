@@ -1,8 +1,10 @@
 {
-  "utc": "2026-09-28T01:18:59+00:00",
-  "git": "3973ec48bd155c6a2857427d9052b85ae60119f4",
+  "utc": "2026-09-29T02:14:29+00:00",
+  "git": null,
   "python": "3.11.16",
   "steps": [
+    "examples",
+    "figures",
     "report"
   ],
   "config": {
@@ -119,6 +121,79 @@
       "model": "logit",
       "calibrate": "isotonic",
       "rush_window_s": 4.0
+    },
+    "defense": {
+      "min_match_rate": 0.9,
+      "alphas": [
+        100.0,
+        300.0,
+        1000.0,
+        3000.0,
+        10000.0,
+        30000.0
+      ],
+      "cv_seasons": [
+        2017,
+        2018,
+        2019,
+        2020,
+        2021
+      ],
+      "cv_folds": 5,
+      "core_components": [
+        "start_recovery",
+        "start_unobserved",
+        "move",
+        "term"
+      ],
+      "prior_rhos": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "train_pairs": [
+        [
+          2017,
+          2018
+        ],
+        [
+          2018,
+          2019
+        ],
+        [
+          2019,
+          2020
+        ],
+        [
+          2020,
+          2021
+        ]
+      ],
+      "validation_pairs": [
+        [
+          2021,
+          2022
+        ],
+        [
+          2022,
+          2023
+        ]
+      ],
+      "test_pairs": [
+        [
+          2023,
+          2024
+        ],
+        [
+          2024,
+          2025
+        ]
+      ],
+      "window": 3,
+      "bootstrap_reps": 200,
+      "loss_bootstrap_reps": 500,
+      "min_toi": 500.0,
+      "workers": 12
     }
   }
 }

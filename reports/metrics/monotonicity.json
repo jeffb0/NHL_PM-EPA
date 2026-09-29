@@ -9,9 +9,9 @@
     },
     "PP": {
       "ray_steps": 899,
-      "violations": 50,
-      "violation_rate": 0.05561735261401557,
-      "worst_drop": -0.014723702722398327,
+      "violations": 48,
+      "violation_rate": 0.05339265850945495,
+      "worst_drop": -0.017607323944809725,
       "violations_within_10ft": 0
     },
     "PK": {
@@ -25,7 +25,7 @@
       "ray_steps": 899,
       "violations": 15,
       "violation_rate": 0.01668520578420467,
-      "worst_drop": -0.005907786059515738,
+      "worst_drop": -0.0059077860595157655,
       "violations_within_10ft": 0
     }
   },
@@ -64,29 +64,29 @@
       "lane_steps": 1184,
       "violations": 106,
       "violation_rate": 0.08952702702702703,
-      "worst_drop": -0.17695729709855607,
-      "corr_value_vs_neg_distance_oz": 0.6739009088832753
+      "worst_drop": -0.176957297098556,
+      "corr_value_vs_neg_distance_oz": 0.6739009088832744
     },
     "PP": {
       "lane_steps": 1184,
       "violations": 149,
       "violation_rate": 0.1258445945945946,
       "worst_drop": -0.15101154115303528,
-      "corr_value_vs_neg_distance_oz": 0.7643459451831328
+      "corr_value_vs_neg_distance_oz": 0.7643459451831324
     },
     "PK": {
       "lane_steps": 1184,
       "violations": 129,
       "violation_rate": 0.1089527027027027,
-      "worst_drop": -0.18046133219009058,
-      "corr_value_vs_neg_distance_oz": 0.7420218391586177
+      "worst_drop": -0.18046133219009125,
+      "corr_value_vs_neg_distance_oz": 0.7420218391586174
     },
     "4v4": {
       "lane_steps": 1184,
       "violations": 153,
       "violation_rate": 0.12922297297297297,
-      "worst_drop": -0.23008431216586195,
-      "corr_value_vs_neg_distance_oz": 0.7768684432727156
+      "worst_drop": -0.23008431216586284,
+      "corr_value_vs_neg_distance_oz": 0.7768684432727152
     }
   },
   "v_start_lanes": {
@@ -95,28 +95,28 @@
       "violations": 33,
       "violation_rate": 0.02787162162162162,
       "worst_drop": -0.005770714231701439,
-      "corr_value_vs_neg_distance_oz": 0.7572371667327366
+      "corr_value_vs_neg_distance_oz": 0.7572371667327368
     },
     "PP": {
       "lane_steps": 1184,
       "violations": 22,
       "violation_rate": 0.018581081081081082,
       "worst_drop": -0.007712524510698496,
-      "corr_value_vs_neg_distance_oz": 0.6783517098458877
+      "corr_value_vs_neg_distance_oz": 0.6783517098458872
     },
     "PK": {
       "lane_steps": 1184,
       "violations": 85,
       "violation_rate": 0.07179054054054054,
       "worst_drop": -0.0069537890378293665,
-      "corr_value_vs_neg_distance_oz": 0.46354588340329317
+      "corr_value_vs_neg_distance_oz": 0.4635458834032932
     },
     "4v4": {
       "lane_steps": 1184,
       "violations": 113,
       "violation_rate": 0.09543918918918919,
       "worst_drop": -0.009042760730074088,
-      "corr_value_vs_neg_distance_oz": -0.0636638694580702
+      "corr_value_vs_neg_distance_oz": -0.06366386945807027
     }
   }
 }
