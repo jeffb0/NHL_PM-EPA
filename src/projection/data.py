@@ -35,14 +35,22 @@ def age_at(season: pl.Expr, birth: pl.Expr) -> pl.Expr:
     return ((pl.date(season, 10, 1) - birth).dt.total_days() / 365.25)
 
 
-def panel(proc, roll: pl.DataFrame) -> pl.DataFrame:
-    """One row per skater-season: minutes, the ten component rates per 60 (finishing and faceoffs rolling-refit), and their sum."""
+def panel(proc, roll: pl.DataFrame, chainfree: pl.DataFrame | None = None) -> pl.DataFrame:
+    """One row per skater-season: minutes, the ten component rates per 60 (finishing and faceoffs rolling-refit), and their sum.
+
+    With ``chainfree`` the defense and special-teams RAPM parts come from the rho = 0 refits (docs/chainfree)."""
     t = pl.read_parquet(proc / "player_value_calibrated_all.parquet")
     m = pl.col("toi_5v5") + sum((pl.col(f"st_{c}_min") for c in ("pp", "pk", "4v4", "3v3")), pl.lit(0.0))
     j = t.with_columns(m.alias("m")).join(roll.with_columns(pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)), on=["player_id", "season"], how="left")
     j = j.with_columns([pl.col(c).fill_null(0.0) for c in j.columns if c.startswith("roll_")]).filter(pl.col("m") > 0)
+    if chainfree is not None:
+        j = j.join(chainfree.with_columns(pl.col("player_id").cast(j["player_id"].dtype), pl.col("season").cast(j["season"].dtype)), on=["player_id", "season"], how="left").with_columns(
+            [pl.col(x).fill_null(0.0) for x in chainfree.columns if x.endswith("_rho0")])
     gar = {"pm": pl.col("pm_gar"), "def": pl.col("def_gar"), "fin": pl.col("roll_fin_gar"), "to": pl.col("to_gar"), "fo": pl.col("roll_fo_gar"), "pen": pl.col("pen_gar"),
            **{c: pl.col(f"st_{c}_gar") - pl.col(f"st_{c}_fin_gar") + pl.col(f"roll_st_{c}_fin") for c in ("pp", "pk", "4v4", "3v3")}}
+    if chainfree is not None:
+        gar["def"] = pl.col("def_gar_rho0")
+        gar.update({c: pl.col(f"st_{c}_rapm_gar_rho0") + pl.col(f"roll_st_{c}_fin") for c in ("pp", "pk", "4v4", "3v3")})
     out = j.select(pl.col("player_id").cast(pl.Int64), pl.col("season").cast(pl.Int64), "pos_group", "team", "m", *[(g / pl.col("m") * 60).alias(f"r_{c}") for c, g in gar.items()])
     return out.with_columns(pl.sum_horizontal([f"r_{c}" for c in COMPS]).alias("r_total"))
 

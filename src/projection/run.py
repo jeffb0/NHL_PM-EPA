@@ -74,7 +74,7 @@ def forecast(frame_all: pl.DataFrame, frame_targets: pl.DataFrame, k: int, T: in
     return out
 
 
-def _evaluate(cfg, proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float) -> dict:
+def _evaluate(cfg, proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float, comp_col: str = "S_rolling_refit") -> dict:
     """All gates and tables for one training floor (target-season minutes required of a training row)."""
     res: dict = {"floor": floor}
     M = Spec()
@@ -141,14 +141,14 @@ def _evaluate(cfg, proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float) -> di
     from src.wholemodel.run import paired as team_paired
     seasons = [2021, 2022, 2023, 2024, 2025]
     tp = wb.expanding_fit(wm, ["G"], seasons, fixed_slope="S_proj")
-    tr_ = wb.expanding_fit(wm, ["G"], seasons, fixed_slope="S_rolling_refit")
+    tr_ = wb.expanding_fit(wm, ["G"], seasons, fixed_slope=comp_col)
     tb = wb.expanding_fit(wm, ["G"], seasons)
     tb1 = wb.expanding_fit(wm, ["G", "B_gd"], seasons)
     rm = lambda q: float(np.sqrt(((q["y"] - q["pred"]) ** 2).mean()))  # noqa: E731
     tpf = wb.expanding_fit(wm, ["G", "S_proj"], seasons)                                   # the M protocol of the methodology: slope fitted on earlier seasons
-    trf = wb.expanding_fit(wm, ["G", "S_rolling_refit"], seasons)
+    trf = wb.expanding_fit(wm, ["G", comp_col], seasons)
     tpb = wb.expanding_fit(wm, ["G", "S_proj", "B_gd"], seasons)
-    trb = wb.expanding_fit(wm, ["G", "S_rolling_refit", "B_gd"], seasons)
+    trb = wb.expanding_fit(wm, ["G", comp_col, "B_gd"], seasons)
     res["team"] = {"rmse": {"projected": rm(tpf), "rolling_last_season": rm(trf), "projected_plus_prior_gd": rm(tpb), "rolling_plus_prior_gd": rm(trb), "goalie_only": rm(tb), "prior_team_gd": rm(tb1),
                             "projected_fixed_slope": rm(tp), "rolling_fixed_slope": rm(tr_)},
                    "projected_vs_rolling": team_paired(tpf, trf), "projected_vs_goalie_only": team_paired(tpf, tb), "projected_vs_prior_team_gd": team_paired(tpf, tb1),
@@ -169,15 +169,24 @@ def _evaluate(cfg, proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float) -> di
     return res
 
 
-def run() -> dict:
+def run(chainfree: bool = False) -> dict:
     cfg = load_config()
     proc = cfg.path(cfg.data.processed_dir)
     met = cfg.path(cfg.data.metrics_dir)
     outdir = cfg.path(cfg.data.output_dir)
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
-    p = pd_.panel(proc, roll)
+    cf = pl.read_parquet(proc / "chainfree_values.parquet") if chainfree else None
+    p = pd_.panel(proc, roll, cf)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
     res: dict = {"coverage": {"skater_seasons": p.height, "with_birth_date": int(p.join(bio.filter(pl.col("birth_date").is_not_null()), on="player_id", how="inner").height)}}
+    if chainfree:
+        # docs/chainfree/methodology.md: the revised-floor evaluation and the results-target diagnostic on chain-free component rates; published outputs are not touched
+        comp = "S_rolling_rho0"
+        res["revised"] = _evaluate(cfg, proc, p, bio, REVISED_FLOOR, comp)
+        res["results_target"] = _evaluate_results(proc, p, bio, REVISED_FLOOR, comp)
+        _save(met / "proj_validation_chainfree.json", res)
+        log.info("chain-free gates %s", {k: (round(v.get("z", v.get("slope", v.get("coverage_80", 0))), 2), v["pass"]) for k, v in res["revised"]["gates"].items()})
+        return res
     res["as_preregistered"] = _evaluate(cfg, proc, p, bio, pd_.MIN_TARGET_MIN)
     res["revised"] = _evaluate(cfg, proc, p, bio, REVISED_FLOOR)
     res["results_target"] = _evaluate_results(proc, p, bio, REVISED_FLOOR)
@@ -202,7 +211,7 @@ def _rmse(q: pl.DataFrame) -> float:
     return float(np.sqrt(((q["y"] - q["pred"]) ** 2).mean()))
 
 
-def _evaluate_results(proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float) -> dict:
+def _evaluate_results(proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float, comp_col: str = "S_rolling_refit") -> dict:
     """Exploratory (methodology section 9, deviation 2): the same ridge trained on next-season *results* (adjusted on-ice goal differential per 60)
     instead of next-season value estimates, with the season's state shares as (oracle) usage controls."""
     p2 = p.join(results_outcome(proc), on=["player_id", "season"], how="left").with_columns(pl.col("y_res").fill_null(0.0), pl.col("sh_pp").fill_null(0.0), pl.col("sh_pk").fill_null(0.0), pl.col("sh_o").fill_null(0.0))
@@ -232,7 +241,7 @@ def _evaluate_results(proc, p: pl.DataFrame, bio: pl.DataFrame, floor: float) ->
     from src.wholemodel.run import paired as team_paired
     seasons = [2021, 2022, 2023, 2024, 2025]
     t_res = wb.expanding_fit(wm, ["G", "S_res"], seasons)
-    t_roll = wb.expanding_fit(wm, ["G", "S_rolling_refit"], seasons)
+    t_roll = wb.expanding_fit(wm, ["G", comp_col], seasons)
     t_g = wb.expanding_fit(wm, ["G"], seasons)
     t_b1 = wb.expanding_fit(wm, ["G", "B_gd"], seasons)
     out["team"] = {"rmse": {"results_target": _rmse(t_res), "rolling_last_season": _rmse(t_roll), "goalie_only": _rmse(t_g), "prior_team_gd": _rmse(t_b1)},
@@ -330,8 +339,9 @@ def _final(p: pl.DataFrame, bio: pl.DataFrame, cfg, proc, outdir, res: dict) -> 
 
 
 def main():
+    import sys
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    run()
+    run(chainfree="--chainfree" in sys.argv)
 
 
 if __name__ == "__main__":

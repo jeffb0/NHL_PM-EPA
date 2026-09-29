@@ -101,44 +101,44 @@
         "pass": true
       },
       "PR6": {
-        "z": -2.9193043727310184,
+        "z": -2.9193043727310215,
         "pass": false
       }
     },
     "team": {
       "rmse": {
-        "projected": 48.81008987963272,
-        "rolling_last_season": 44.88979190010685,
+        "projected": 48.81008987963273,
+        "rolling_last_season": 44.88979190010684,
         "projected_plus_prior_gd": 42.060147863752356,
-        "rolling_plus_prior_gd": 41.90534500234783,
+        "rolling_plus_prior_gd": 41.90534500234782,
         "goalie_only": 50.888387691786946,
         "prior_team_gd": 41.42273339080958,
         "projected_fixed_slope": 47.26678547970703,
-        "rolling_fixed_slope": 43.35435753607084
+        "rolling_fixed_slope": 43.354357536070836
       },
       "projected_vs_rolling": {
-        "mean_diff": -367.33145722292676,
-        "z": -2.9193043727310184,
+        "mean_diff": -367.3314572229275,
+        "z": -2.9193043727310215,
         "n": 158
       },
       "projected_vs_goalie_only": {
-        "mean_diff": 207.203127811788,
-        "z": 0.9281583690769636,
+        "mean_diff": 207.2031278117876,
+        "z": 0.9281583690769615,
         "n": 158
       },
       "projected_vs_prior_team_gd": {
-        "mean_diff": -666.5820324917339,
-        "z": -2.6535179571605414,
+        "mean_diff": -666.5820324917344,
+        "z": -2.653517957160543,
         "n": 158
       },
       "projected_plus_gd_vs_rolling_plus_gd": {
-        "mean_diff": -12.998098554913843,
-        "z": -0.22610380769600566,
+        "mean_diff": -12.998098554914057,
+        "z": -0.22610380769600943,
         "n": 158
       },
       "fixed_slope_projected_vs_rolling": {
-        "mean_diff": -354.54869221918085,
-        "z": -3.9985375611129186,
+        "mean_diff": -354.5486922191809,
+        "z": -3.9985375611129177,
         "n": 158
       },
       "test_seasons": [
@@ -253,44 +253,44 @@
         "pass": true
       },
       "PR6": {
-        "z": -2.7494858554245134,
+        "z": -2.749485855424516,
         "pass": false
       }
     },
     "team": {
       "rmse": {
         "projected": 48.38256701677135,
-        "rolling_last_season": 44.88979190010685,
+        "rolling_last_season": 44.88979190010684,
         "projected_plus_prior_gd": 41.92738200394595,
-        "rolling_plus_prior_gd": 41.90534500234783,
+        "rolling_plus_prior_gd": 41.90534500234782,
         "goalie_only": 50.888387691786946,
         "prior_team_gd": 41.42273339080958,
-        "projected_fixed_slope": 46.96176149706585,
-        "rolling_fixed_slope": 43.35435753607084
+        "projected_fixed_slope": 46.961761497065844,
+        "rolling_fixed_slope": 43.354357536070836
       },
       "projected_vs_rolling": {
-        "mean_diff": -325.77937429747243,
-        "z": -2.7494858554245134,
+        "mean_diff": -325.7793742974729,
+        "z": -2.749485855424516,
         "n": 158
       },
       "projected_vs_goalie_only": {
-        "mean_diff": 248.75521073724215,
-        "z": 1.1246767043964014,
+        "mean_diff": 248.75521073724224,
+        "z": 1.1246767043964017,
         "n": 158
       },
       "projected_vs_prior_team_gd": {
-        "mean_diff": -625.0299495662795,
-        "z": -2.5439562857425693,
+        "mean_diff": -625.0299495662798,
+        "z": -2.5439562857425706,
         "n": 158
       },
       "projected_plus_gd_vs_rolling_plus_gd": {
-        "mean_diff": -1.8474219390124595,
-        "z": -0.032841598725840124,
+        "mean_diff": -1.8474219390128568,
+        "z": -0.032841598725847215,
         "n": 158
       },
       "fixed_slope_projected_vs_rolling": {
-        "mean_diff": -325.8067255418343,
-        "z": -3.8222466593770985,
+        "mean_diff": -325.80672554183406,
+        "z": -3.822246659377097,
         "n": 158
       },
       "test_seasons": [
@@ -365,23 +365,23 @@
     "team": {
       "rmse": {
         "results_target": 42.37382424289694,
-        "rolling_last_season": 44.88979190010685,
+        "rolling_last_season": 44.88979190010684,
         "goalie_only": 50.888387691786946,
         "prior_team_gd": 41.42273339080958
       },
       "results_vs_rolling": {
-        "mean_diff": 219.55243586697804,
-        "z": 1.162774194223528,
+        "mean_diff": 219.5524358669775,
+        "z": 1.1627741942235255,
         "n": 158
       },
       "results_vs_goalie_only": {
-        "mean_diff": 794.0870209016928,
-        "z": 2.9307423079892354,
+        "mean_diff": 794.0870209016925,
+        "z": 2.930742307989235,
         "n": 158
       },
       "results_vs_prior_team_gd": {
-        "mean_diff": -79.69813940182905,
-        "z": -0.393644577872429,
+        "mean_diff": -79.69813940182932,
+        "z": -0.3936445778724303,
         "n": 158
       },
       "test_seasons": [

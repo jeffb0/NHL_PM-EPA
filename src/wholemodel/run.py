@@ -82,6 +82,16 @@ def run() -> dict:
         rr["headline_better_z"] = rr["headline_vs_rolling"]["z"]
         rr["verdict"] = "leakage-sensitive" if rr["headline_better_z"] > 2 else "no leakage-driven advantage found"
         res["rolling_refit"] = rr
+    # chain-free defense and special teams (docs/chainfree/methodology.md, CF-1)
+    if "rolling_rho0" in var and "rolling_refit" in var:
+        Pc = {"M_rho0": fit(df, ["G", "S_rolling_rho0"], TEST_SEASONS), "M+B1_rho0": fit(df, ["G", "S_rolling_rho0", "B_gd"], TEST_SEASONS)}
+        Pr2 = {"M_rr": fit(df, ["G", "S_rolling_refit"], TEST_SEASONS), "M+B1_rr": fit(df, ["G", "S_rolling_refit", "B_gd"], TEST_SEASONS)}
+        cf = {"rmse": {**{k: summarize(v, P["B0"])["rmse"] for k, v in Pc.items()}, **{k: summarize(v, P["B0"])["rmse"] for k, v in Pr2.items()}},
+              "rho0_vs_chained_rolling": paired(Pc["M_rho0"], Pr2["M_rr"]), "rho0_vs_B0": paired(Pc["M_rho0"], P["B0"]), "rho0_vs_B1": paired(Pc["M_rho0"], P["B1"]), "rho0_vs_B3": paired(Pc["M_rho0"], P["B3"]),
+              "rho0_plus_B1_vs_B1": paired(Pc["M+B1_rho0"], P["B1"]), "headline_rho0_vs_headline": var["headline_rho0"]["vs_headline"]}
+        cf["headline_rho0_vs_headline"] = {**cf["headline_rho0_vs_headline"], "note": "positive z favors the chained headline"}
+        cf["CF1"] = {"z_rho0_better": cf["rho0_vs_chained_rolling"]["z"], "pass": bool(cf["rho0_vs_chained_rolling"]["z"] > -2)}
+        res["chainfree"] = cf
     # gates
     g = {}
     g["WM1"] = {"z": res["paired"]["M_vs_B0"]["z"], "pass": bool(res["paired"]["M_vs_B0"]["z"] > 2)}

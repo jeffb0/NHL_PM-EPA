@@ -77,6 +77,9 @@ def variants(t: pl.DataFrame) -> dict[str, pl.Expr]:
         rolling = {"rolling_refit": tot - pl.col("fin_gar") - pl.col("fo_gar") - st_fin + roll}
     else:
         rolling = {}
+    if "def_gar_rho0" in t.columns:     # chain-free defense and special-teams RAPM (docs/chainfree)
+        swap = (pl.col("def_gar_rho0") - pl.col("def_gar")) + sum((pl.col(f"st_{c}_rapm_gar_rho0") - pl.col(f"st_{c}_rapm_gar") for c in ("pp", "pk", "4v4", "3v3")), pl.lit(0.0))
+        rolling = {**rolling, "headline_rho0": tot + swap, **({"rolling_rho0": rolling["rolling_refit"] + swap} if rolling else {})}
     out = {**rolling, "headline": tot, "calibrated": pl.col("total_gar_all_cal"), "five_v_five_total": pl.col("total_gar"), "original_turnover": tot - pl.col("to_gar") + pl.col("to_gar_orig"),
            "leakage_clean": (pl.col("pm_gar") + pl.col("def_gar") + pl.col("fin_raw_gar") + pl.col("to_gar") + pl.col("fo_raw_gar") + pl.col("pen_gar")
                              + pl.col("st_pp_raw_gar") + pl.col("st_pk_raw_gar") + pl.col("st_4v4_raw_gar") + pl.col("st_3v3_raw_gar"))}
@@ -97,6 +100,12 @@ def build(proc) -> pl.DataFrame:
         rc = [c for c in roll.columns if c.startswith("roll_")]
         t = (t.join(roll.with_columns(pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)), on=["player_id", "season"], how="left")
              .with_columns([pl.col(c).fill_null(0.0) for c in rc]))
+    cp = proc / "chainfree_values.parquet"
+    if cp.exists():
+        cf = pl.read_parquet(cp)
+        cc = [c for c in cf.columns if c.endswith("_rho0")]
+        t = (t.join(cf.with_columns(pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)), on=["player_id", "season"], how="left")
+             .with_columns([pl.col(c).fill_null(0.0) for c in cc]))
     m_all = pl.col("toi_5v5") + sum((pl.col(f"st_{c}_min") for c in ("pp", "pk", "4v4", "3v3")), pl.lit(0.0))
     var = variants(t)
     base = t.with_columns(m_all.alias("m")).filter(pl.col("m") > 0)

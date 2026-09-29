@@ -180,7 +180,19 @@ Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season):
 | Calibration slope; 80% interval coverage | 0.93 ± 0.01; 78.9% ✅ |
 | **Team level: projected rates vs last season's rolling-refit rates** | RMSE 48.4 vs 44.9, z = −2.75 ❌ |
 
-The projections forecast next season's *value estimates*, which are persistent partly through the chained priors in the defensive and special-teams components. A results-trained variant (exploratory) does better at the team level (RMSE 42.4) but does not beat the prior team goal differential (41.4). Use the projections for ranking, aging and contract-length questions, not as validated team forecasts. [Report](reports/projection/validation_report.md) · [methodology & pre-registration](docs/projection/methodology.md). `python -m src.projection.run` (needs `python -m src.wholemodel.rolling` first).
+The projections forecast next season's *value estimates* (player talent). Removing the chained priors in defense and special teams does not fix the team-level failure; exploratory diagnostics point to team context, since last season's rates alone forecast teams best. A results-trained variant (exploratory) does better at the team level (RMSE 42.4) but does not beat the prior team goal differential (41.4). Use the projections for ranking, aging and contract-length questions, not as validated team forecasts. [Report](reports/projection/validation_report.md) · [methodology & pre-registration](docs/projection/methodology.md). `python -m src.projection.run` (needs `python -m src.wholemodel.rolling` first).
+
+## Chain-free defense and special teams (v1.0)
+
+The defensive component and the special-teams RAPM use a chained prior, which makes their values persistent partly by construction. `data/processed/chainfree_values.parquet` holds ρ = 0 variants (`def_gar_rho0`, `st_<state>_rapm_gar_rho0`); the published defaults are unchanged.
+
+| Check | Result |
+|---|---|
+| Year-over-year, defense | 0.78 (chained) → 0.30–0.33 (ρ = 0) |
+| Team-level forecast, chain-free vs chained rolling total | RMSE 41.4 vs 41.2, z = −0.71 (not significantly different) |
+| Projection with chain-free rates: player level / team level | beats Marcel (z = 3.9) / still loses to last season's rates (z = −2.77) |
+
+Removing the chain does not fix the projection's team-level failure. Exploratory diagnostics point to team context instead: last season's rates alone forecast teams best, older seasons dilute it. [Report](reports/chainfree/validation_report.md) · [methodology](docs/chainfree/methodology.md). `python -m src.chainfree.run`, then `python -m src.wholemodel.run`, `python -m src.projection.run --chainfree`, `python -m src.chainfree.diagnostics`, `python -m src.chainfree.report`.
 
 ## Goaltending (v1.0)
 
