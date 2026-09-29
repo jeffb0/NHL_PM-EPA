@@ -62,7 +62,7 @@ The three ledgers are disjoint by construction (`goal − V_dec` splits into PM-
 
 ## Caveats and recommendations
 
-* **Scale mismatch.** A team-level check gives joint slopes of 2.05 (possession), 1.17 (defense) and 1.76 (finishing) on team 5v5 goal differential. PM-EPA in particular is under-scaled relative to goals. Do not add the columns as if equally calibrated until the joint calibration step is done. No rescaling has been applied.
-* **DPM replacement noise.** Use `total_gar_pooledrep` for cross-season or forward-versus-defense comparisons (pending your decision).
+* **Scale mismatch.** A team-level check gives joint slopes of 1.68 (possession), 1.18 (defense) and 1.46 (finishing) on team 5v5 goal differential. PM-EPA in particular is under-scaled relative to goals. Do not add the columns as if equally calibrated until the joint calibration step is done. No rescaling has been applied.
+* **DPM replacement level is pooled across seasons** (the default), because the per-season estimate is noisy; the per-season version is `total_gar_perseason`.
 * Prefer multi-season windows for finishing decisions.
 * Re-validate xG_f when event definitions change (as in 2024-25).

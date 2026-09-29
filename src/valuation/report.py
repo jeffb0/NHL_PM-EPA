@@ -43,19 +43,18 @@ def run() -> None:
             _table([{"season": r["season"], "PM-EPA F": r["pm_rep_F"], "PM-EPA D": r["pm_rep_D"], "DPM F": r["dpm_rep_F"], "DPM D": r["dpm_rep_D"]} for r in com["replacement_rates"]], 4), "",
             "The DPM rates come from the refit with unpenalized fringe-count covariates, so they are not biased toward zero by ridge shrinkage. "
             "Finishing replacement is the fringe pool's mean shooter shift from the fitted model.", "",
-            f"**Caution: the per-season DPM replacement rate is noisy.** Across seasons it has an SD of {com['dpm_pooled_replacement']['sd_across_seasons_F']:.3f} (F) and "
+            f"**The DPM replacement level is pooled over all seasons (the default).** The per-season estimate is noisy: across seasons it has an SD of {com['dpm_pooled_replacement']['sd_across_seasons_F']:.3f} (F) and "
             f"{com['dpm_pooled_replacement']['sd_across_seasons_D']:.3f} (D) xGA/60, i.e. about {com['dpm_pooled_replacement']['goals_per_1000min_per_sd_F']:.1f} / "
             f"{com['dpm_pooled_replacement']['goals_per_1000min_per_sd_D']:.1f} goals per 1,000 minutes of common shift for every player of that position, and it flips sign for forwards in some seasons. "
-            f"The pre-registered per-season definition is the default (`def_gar`, `total_gar`). An alternative with the replacement effect pooled over all seasons "
-            f"(F {com['dpm_pooled_replacement']['F']:.3f}, D {com['dpm_pooled_replacement']['D']:.3f} per 60) is provided as `def_gar_pooledrep` / `total_gar_pooledrep`. "
-            "Use the pooled columns for cross-season or forward-versus-defense comparisons until a decision is made.", ""]
+            f"The default (`def_gar`, `total_gar`) therefore uses the pooled effect (F {com['dpm_pooled_replacement']['F']:.3f}, D {com['dpm_pooled_replacement']['D']:.3f} per 60); "
+            "the pre-registered per-season version is kept as `def_gar_perseason` / `total_gar_perseason`. The table above shows the per-season rates for reference only.", ""]
     out += ["## Scale checks", "",
             f"SD of goals above replacement among qualified skaters (≥ {vc.min_toi:.0f} 5v5 min): " + ", ".join(f"{k} {v:.2f}" for k, v in com["component_sd_qualified"].items()) + ".", "",
             "Correlation between components (qualified): " + ", ".join(f"{k} {v:.2f}" for k, v in com["component_corr_qualified"].items()) + ".", "",
             "### Team reconciliation", "",
             f"{com['reconciliation']['n_team_seasons']} team-seasons: 5v5 goal differential regressed on the sum of player goals above replacement (by primary team). "
             "A slope near 1 means the components are on the goal scale. **Slopes are reported, not used to rescale.**", "",
-            _table([{"regressor": k, "slope": com["reconciliation"][k]["slope"], "r": com["reconciliation"][k]["r"]} for k in ("total_gar", "total_gar_pooledrep", "pm_gar", "def_gar", "fin_gar") if k in com["reconciliation"]], 3), "",
+            _table([{"regressor": k, "slope": com["reconciliation"][k]["slope"], "r": com["reconciliation"][k]["r"]} for k in ("total_gar", "total_gar_perseason", "pm_gar", "def_gar", "fin_gar") if k in com["reconciliation"]], 3), "",
             "Joint regression on the three components: " + ", ".join(f"{k} = {v:.2f}" for k, v in com["reconciliation"]["joint"].items()) + f". SD of team 5v5 goal differential {com['reconciliation']['sd_team_5v5_gd']:.1f}; "
             f"SD of summed player value {com['reconciliation']['sd_sum_total_gar']:.1f}.", ""]
     out += ["## Sensitivity to the regular/fringe cutoff", "",

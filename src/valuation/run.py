@@ -77,7 +77,7 @@ def step_combine(cfg):
     t, rep_pm, fr = build_table(cfg, vc.regular_forwards, vc.regular_defense, ps, dpm, shifts, fin_ps, sel, gpw, cache)
     keep = ["player_id", "player_name", "team", "position", "pos_group", "season", "toi_5v5", "fringe",
             "pm_gar", "def_gar", "fin_gar", "total_gar", "total_gar_lo", "total_gar_hi", "total_war", "total_war_sd",
-            "pm_wins", "def_wins", "fin_wins", "pm_gar_sd", "def_gar_sd", "fin_gar_sd", "total_gar_sd", "def_gar_pooledrep", "total_gar_pooledrep",
+            "pm_wins", "def_wins", "fin_wins", "pm_gar_sd", "def_gar_sd", "fin_gar_sd", "total_gar_sd", "def_gar_perseason", "total_gar_perseason",
             "pm_post_per60", "pm_rep_per60", "dpm_var_per60", "dpm_rep_per60", "pm_shrink_B",
             "fin_attempts_5v5", "raw_g_minus_xg_5v5", "fin_gaa_5v5", "fin_gar_other_strengths_memo", "fin_attempts_other_memo",
             "pm_epa_per60_ev", "dpm_val_per60", "qualified_ev"]

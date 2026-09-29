@@ -36,13 +36,13 @@ Per-60 replacement rates by season and position (positive = better than the regu
 
 The DPM rates come from the refit with unpenalized fringe-count covariates, so they are not biased toward zero by ridge shrinkage. Finishing replacement is the fringe pool's mean shooter shift from the fitted model.
 
-**Caution: the per-season DPM replacement rate is noisy.** Across seasons it has an SD of 0.036 (F) and 0.029 (D) xGA/60, i.e. about 0.6 / 0.5 goals per 1,000 minutes of common shift for every player of that position, and it flips sign for forwards in some seasons. The pre-registered per-season definition is the default (`def_gar`, `total_gar`). An alternative with the replacement effect pooled over all seasons (F -0.018, D -0.071 per 60) is provided as `def_gar_pooledrep` / `total_gar_pooledrep`. Use the pooled columns for cross-season or forward-versus-defense comparisons until a decision is made.
+**The DPM replacement level is pooled over all seasons (the default).** The per-season estimate is noisy: across seasons it has an SD of 0.036 (F) and 0.029 (D) xGA/60, i.e. about 0.6 / 0.5 goals per 1,000 minutes of common shift for every player of that position, and it flips sign for forwards in some seasons. The default (`def_gar`, `total_gar`) therefore uses the pooled effect (F -0.018, D -0.071 per 60); the pre-registered per-season version is kept as `def_gar_perseason` / `total_gar_perseason`. The table above shows the per-season rates for reference only.
 
 ## Scale checks
 
-SD of goals above replacement among qualified skaters (≥ 500 5v5 min): pm_gar 0.37, def_gar 2.13, fin_gar 1.48, total_gar 2.42.
+SD of goals above replacement among qualified skaters (≥ 500 5v5 min): pm_gar 0.37, def_gar 2.10, fin_gar 1.48, total_gar 2.41.
 
-Correlation between components (qualified): pm_gar~def_gar 0.03, pm_gar~fin_gar 0.39, def_gar~fin_gar -0.23.
+Correlation between components (qualified): pm_gar~def_gar 0.05, pm_gar~fin_gar 0.39, def_gar~fin_gar -0.23.
 
 ### Team reconciliation
 
@@ -50,20 +50,20 @@ Correlation between components (qualified): pm_gar~def_gar 0.03, pm_gar~fin_gar 
 
 | regressor | slope | r |
 |---|---|---|
-| total_gar | 1.404 | 0.698 |
-| total_gar_pooledrep | 1.314 | 0.677 |
+| total_gar | 1.314 | 0.677 |
+| total_gar_perseason | 1.404 | 0.698 |
 | pm_gar | 3.968 | 0.457 |
-| def_gar | 1.401 | 0.537 |
+| def_gar | 1.602 | 0.576 |
 | fin_gar | 2.471 | 0.468 |
 
-Joint regression on the three components: pm_slope = 2.05, def_slope = 1.17, fin_slope = 1.76, r2 = 0.51. SD of team 5v5 goal differential 30.9; SD of summed player value 15.4.
+Joint regression on the three components: pm_slope = 1.68, def_slope = 1.17, fin_slope = 1.46, r2 = 0.46. SD of team 5v5 goal differential 30.9; SD of summed player value 15.9.
 
 ## Sensitivity to the regular/fringe cutoff
 
 | cutoff | corr with baseline total | rank corr | mean shift (goals per 1000 min) |
 |---|---|---|---|
-| 11F_5D | 0.990 | 0.987 | -0.520 |
-| 13F_7D | 0.990 | 0.987 | 0.230 |
+| 11F_5D | 0.996 | 0.995 | -0.535 |
+| 13F_7D | 0.999 | 0.998 | 0.233 |
 
 ## Total value, 2025-26 (≥ 500 5v5 min)
 
@@ -71,36 +71,36 @@ Joint regression on the three components: pm_slope = 2.05, def_slope = 1.17, fin
 
 | player_name | team | position | toi_5v5 | pm_gar | def_gar | fin_gar | total_gar | total_gar_lo | total_gar_hi | total_war |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Moritz Seider | DET | D | 1564.53 | 0.07 | 12.75 | 0.50 | 13.32 | 9.07 | 17.58 | 2.26 |
-| Adam Pelech | NYI | D | 1389.98 | 0.39 | 12.21 | -0.13 | 12.47 | 9.45 | 15.49 | 2.11 |
-| Artem Zub | OTT | D | 1343.18 | 0.38 | 11.03 | 0.46 | 11.86 | 8.70 | 15.03 | 2.01 |
-| Jason Robertson | DAL | L | 1214.32 | 0.81 | 1.73 | 9.28 | 11.83 | 6.85 | 16.80 | 2.01 |
-| Esa Lindell | DAL | D | 1417.27 | 0.36 | 9.66 | 0.35 | 10.37 | 7.40 | 13.34 | 1.76 |
-| Colton Parayko | STL | D | 1412.45 | 0.40 | 8.54 | 0.53 | 9.48 | 6.33 | 12.64 | 1.61 |
-| Damon Severson | CBJ | D | 1296.33 | 0.61 | 7.82 | 0.79 | 9.22 | 5.91 | 12.53 | 1.56 |
-| Dylan DeMelo | WPG | D | 1485.25 | 0.24 | 8.57 | 0.06 | 8.87 | 5.78 | 11.96 | 1.50 |
-| Jonas Brodin | MIN | D | 1078.12 | 0.07 | 8.26 | 0.32 | 8.65 | 6.06 | 11.24 | 1.47 |
-| Jack Eichel | VGK | C | 1073.72 | 0.14 | 4.10 | 4.33 | 8.56 | 4.81 | 12.32 | 1.45 |
-| Cale Makar | COL | D | 1289.12 | 1.79 | 4.29 | 2.28 | 8.36 | 4.94 | 11.78 | 1.42 |
-| Jordan Kyrou | STL | R | 911.22 | 0.59 | 3.54 | 4.19 | 8.32 | 4.90 | 11.75 | 1.41 |
-| Connor Murphy | CHI | D | 1144.32 | -0.12 | 7.96 | 0.41 | 8.26 | 5.53 | 10.99 | 1.40 |
-| Zach Werenski | CBJ | D | 1539.38 | 1.42 | 4.38 | 2.36 | 8.16 | 3.52 | 12.79 | 1.38 |
-| Pavel Dorofeyev | VGK | R | 1090.22 | 0.83 | 1.72 | 5.54 | 8.08 | 4.17 | 11.99 | 1.37 |
+| Jason Robertson | DAL | L | 1214.32 | 0.81 | 2.89 | 9.28 | 12.99 | 8.01 | 17.96 | 2.20 |
+| Moritz Seider | DET | D | 1564.53 | 0.07 | 12.23 | 0.50 | 12.80 | 8.54 | 17.05 | 2.17 |
+| Adam Pelech | NYI | D | 1389.98 | 0.39 | 11.75 | -0.13 | 12.00 | 8.98 | 15.02 | 2.04 |
+| Artem Zub | OTT | D | 1343.18 | 0.38 | 10.58 | 0.46 | 11.41 | 8.25 | 14.58 | 1.94 |
+| Esa Lindell | DAL | D | 1417.27 | 0.36 | 9.18 | 0.35 | 9.90 | 6.93 | 12.87 | 1.68 |
+| Jack Eichel | VGK | C | 1073.72 | 0.14 | 5.12 | 4.33 | 9.59 | 5.83 | 13.34 | 1.63 |
+| Jordan Kyrou | STL | R | 911.22 | 0.59 | 4.41 | 4.19 | 9.19 | 5.77 | 12.62 | 1.56 |
+| Pavel Dorofeyev | VGK | R | 1090.22 | 0.83 | 2.76 | 5.54 | 9.12 | 5.21 | 13.03 | 1.55 |
+| Kirill Kaprizov | MIN | L | 1291.72 | 0.84 | 1.77 | 6.48 | 9.09 | 4.53 | 13.64 | 1.54 |
+| Colton Parayko | STL | D | 1412.45 | 0.40 | 8.07 | 0.53 | 9.01 | 5.85 | 12.16 | 1.53 |
+| Damon Severson | CBJ | D | 1296.33 | 0.61 | 7.39 | 0.79 | 8.79 | 5.48 | 12.09 | 1.49 |
+| Nick Suzuki | MTL | C | 1195.08 | 0.43 | 4.33 | 3.95 | 8.72 | 5.04 | 12.39 | 1.48 |
+| Dylan DeMelo | WPG | D | 1485.25 | 0.24 | 8.07 | 0.06 | 8.37 | 5.28 | 11.47 | 1.42 |
+| Jonas Brodin | MIN | D | 1078.12 | 0.07 | 7.90 | 0.32 | 8.29 | 5.70 | 10.88 | 1.41 |
+| Sam Reinhart | FLA | C | 872.38 | 0.21 | 5.19 | 2.83 | 8.23 | 5.40 | 11.05 | 1.40 |
 
 **Bottom 10**
 
 | player_name | team | position | toi_5v5 | pm_gar | def_gar | fin_gar | total_gar | total_gar_lo | total_gar_hi | total_war |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Josh Anderson | MTL | R | 794.73 | 0.41 | -4.13 | 0.70 | -3.01 | -5.60 | -0.42 | -0.51 |
-| Mason McTavish | ANA | C | 916.38 | 0.38 | -4.85 | 1.40 | -3.07 | -6.49 | 0.34 | -0.52 |
-| Anthony Duclair | NYI | L | 711.00 | -0.00 | -5.10 | 1.63 | -3.47 | -5.96 | -0.99 | -0.59 |
-| Evander Kane | VAN | L | 988.98 | 0.53 | -5.66 | 1.64 | -3.50 | -7.53 | 0.53 | -0.59 |
-| Artyom Levshunov | CHI | D | 1025.97 | 0.13 | -3.66 | 0.01 | -3.52 | -6.22 | -0.82 | -0.60 |
-| Connor Bedard | CHI | C | 1090.98 | 0.63 | -7.19 | 3.03 | -3.53 | -8.31 | 1.25 | -0.60 |
-| Max Domi | TOR | C | 1009.70 | -0.51 | -4.06 | 0.88 | -3.69 | -6.90 | -0.49 | -0.63 |
-| John Klingberg | SJS | D | 921.27 | 0.09 | -6.40 | 0.44 | -5.87 | -8.74 | -2.99 | -0.99 |
-| Chandler Stephenson | SEA | C | 1094.05 | -0.76 | -7.07 | 1.69 | -6.15 | -8.96 | -3.34 | -1.04 |
-| Tony DeAngelo | NYI | D | 1242.42 | 0.37 | -7.53 | 0.49 | -6.67 | -10.08 | -3.26 | -1.13 |
+| Morgan Rielly | TOR | D | 1310.98 | 0.31 | -3.53 | 0.69 | -2.53 | -5.46 | 0.40 | -0.43 |
+| Evander Kane | VAN | L | 988.98 | 0.53 | -4.72 | 1.64 | -2.55 | -6.58 | 1.48 | -0.43 |
+| Tanner Pearson | WPG | L | 528.18 | -0.10 | -2.39 | -0.20 | -2.69 | -4.36 | -1.02 | -0.46 |
+| Max Domi | TOR | C | 1009.70 | -0.51 | -3.10 | 0.88 | -2.73 | -5.93 | 0.48 | -0.46 |
+| Anthony Duclair | NYI | L | 711.00 | -0.00 | -4.42 | 1.63 | -2.79 | -5.28 | -0.31 | -0.47 |
+| Ben Chiarot | DET | D | 1462.78 | -0.03 | -3.54 | 0.49 | -3.09 | -7.36 | 1.19 | -0.52 |
+| Artyom Levshunov | CHI | D | 1025.97 | 0.13 | -4.00 | 0.01 | -3.87 | -6.57 | -1.17 | -0.66 |
+| Chandler Stephenson | SEA | C | 1094.05 | -0.76 | -6.03 | 1.69 | -5.10 | -7.91 | -2.29 | -0.87 |
+| John Klingberg | SJS | D | 921.27 | 0.09 | -6.71 | 0.44 | -6.18 | -9.05 | -3.30 | -1.05 |
+| Tony DeAngelo | NYI | D | 1242.42 | 0.37 | -7.95 | 0.49 | -7.09 | -10.50 | -3.67 | -1.20 |
 
 ## Finishing vs raw G−xG, last three seasons pooled (2023-24 to 2025-26; ≥ 300 5v5 attempts)
 
@@ -174,22 +174,22 @@ Joint regression on the three components: pm_slope = 2.05, def_slope = 1.17, fin
 
 **The three components are not yet on equal footing.** They are all in goals, but the team reconciliation shows they do not carry equal weight:
 
-* Regressing team 5v5 goal differential on the components jointly gives slopes of **2.05 (possession), 1.17 (defense) and 1.76 (finishing)**, R² 0.51. The SD of summed player value (15.4 goals) is about half the SD of team goal differential (30.9). Team goal differential also contains goaltending, coaching and depth effects that are not player components, so a slope of exactly 1 is not expected. But slopes near 2 for possession and finishing say those two are being under-weighted relative to defense.
-* Possession is the clearest case. PM-EPA credits only individually observed puck actions plus a 30% pooled share, excludes shot quality and start values, and is then shrunk, so its SD is only 0.37 goals per qualified player-season against 2.13 for defense and 1.48 for finishing. This is a scale property of the metric, not a bug in the integration. **No rescaling was applied.** The recommended next step is the joint calibration (regress team goal differential on the components, with shrinkage) as part of the combining framework.
-* The reconciliation intercepts are large (about −57 goals) because the sum is measured above replacement, not above average.
+* Regressing team 5v5 goal differential on the components jointly gives slopes of **1.68 (possession), 1.18 (defense) and 1.46 (finishing)**, R² 0.46. The SD of summed player value (15.9 goals) is about half the SD of team goal differential (30.9). Team goal differential also contains goaltending, coaching and depth effects that are not player components, so a slope of exactly 1 is not expected. But slopes well above 1 for possession and finishing say those two are being under-weighted relative to defense.
+* Possession is the clearest case. PM-EPA credits only individually observed puck actions plus a 30% pooled share, excludes shot quality and start values, and is then shrunk, so its SD is only 0.37 goals per qualified player-season against 2.10 for defense and 1.48 for finishing. This is a scale property of the metric, not a bug in the integration. **No rescaling was applied.** The recommended next step is the joint calibration (regress team goal differential on the components, with shrinkage) as part of the combining framework.
+* The reconciliation intercepts are large (about −54 goals) because the sum is measured above replacement, not above average.
 
 **Replacement level.**
 
-* The pre-registered per-season DPM replacement rate is noisy: its SD across seasons is 0.036 (F) and 0.029 (D) xGA/60, i.e. 0.5–0.6 goals per 1,000 minutes shifted for every skater of a position, and it turns positive for forwards in 2021 and 2025 (fringe forwards rated *better* than regulars, which is not credible). This visibly distorts single seasons: defensemen are **72% of the 2025-26 top 25** but 29% of the top 100 across all seasons (they are 36% of players).
-* Pooling the replacement effect across seasons (`def_gar_pooledrep`, `total_gar_pooledrep`) reduces that outlier (2025-26: 44%) and moves the reconciliation slope from 1.40 to 1.31. **I recommend the pooled columns as the default.** The pre-registered columns remain the published default until you decide, and the change would be logged in the deviations section.
-* Sensitivity to the regular/fringe cutoff is small for rankings (rank correlation 0.987 for both 11F/5D and 13F/7D) but not for levels: −0.5 and +0.2 goals per 1,000 minutes.
+* **The DPM replacement level is pooled over all seasons (the default, chosen 2026-09-29).** The pre-registered per-season estimate is noisy: its SD across seasons is 0.036 (F) and 0.029 (D) xGA/60, i.e. 0.5–0.6 goals per 1,000 minutes shifted for every skater of a position, and it turns positive for forwards in 2021 and 2025 (fringe forwards rated *better* than regulars, which is not credible). Under the per-season version defensemen were 72% of the 2025-26 top 25. With the pooled level they are 44%, and 35% of the top 100 across all seasons (they are 36% of players). The per-season version remains available as `def_gar_perseason` / `total_gar_perseason`.
+* Pooling assumes the true replacement gap is stable across 2017-2025. If it drifted, pooled values carry a small bias in the early and late seasons.
+* Sensitivity to the regular/fringe cutoff is small for rankings (rank correlation 0.995 for 11F/5D and 0.998 for 13F/7D) but not for levels: −0.5 and +0.2 goals per 1,000 minutes.
 * The possession replacement rate is *higher* than the regulars' mean for forwards (about +0.05 xG/60 pooled). Depth forwards accrue PM-EPA quickly, because PM-EPA rewards forechecking, retrievals and takeaways. Regulars' possession value above replacement is therefore small (mean +0.29 goals; fringe pool mean 0.0).
 
 **Other cautions.**
 
-* Defense is the largest and least certain component. The median 95% interval on total value is ±2.5 goals (D) to ±2.8 (F). The top of the defense scale (Seider +12.8, Pelech +12.2 goals in 2025-26) reflects a chained prior plus a large DPM spread, and these are not comparable with typical WAR magnitudes.
+* Defense is the largest and least certain component. The median 95% interval on total value is ±2.5 goals (D) to ±2.8 (F). The top of the defense scale (Seider +12.2, Pelech +11.8 goals in 2025-26) reflects a chained prior plus a large DPM spread, and these are not comparable with typical WAR magnitudes.
 * Total value intervals combine the component SDs assuming independence. The components are correlated (finishing ~ possession +0.39, finishing ~ defense −0.23), so the total intervals are approximate.
-* DPM uncertainty uses the published bootstrap SE (of the un-refit headline). The refit changes point estimates slightly.
+* DPM uncertainty uses the published bootstrap SE (of the un-refit headline). The refit changes point estimates slightly, and the pooled replacement level's own uncertainty is not included.
 * Finishing is 5v5 only. Power-play and other-strength finishing is in `fin_gar_other_strengths_memo`, reserved for the special-teams component (its intervals are not computed).
 * Skaters who changed teams are assigned to their primary team in the reconciliation.
 

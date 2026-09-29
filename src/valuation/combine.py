@@ -94,19 +94,22 @@ def dpm_component(refit: pl.DataFrame, fr: pl.DataFrame, status: pl.DataFrame, p
     c_f = pl.when(pl.col("pos_group") == "D").then(pl.col("c_val_fringe_D")).otherwise(pl.col("c_val_fringe_F"))
     rep = pl.when(pl.col("pos_group") == "D").then(pl.col("dpm_rep_per60_D")).otherwise(pl.col("dpm_rep_per60_F"))
     med = float(dpm["dpm_se"].drop_nulls().median())
-    # alternative: replacement effect pooled over all seasons (the per-season fringe estimate is noisy; see the report)
+    # DEFAULT (methodology §11 deviation 5): the replacement effect is pooled over all seasons, because the
+    # per-season fringe estimate is noisy. The per-season estimate is kept as the *_perseason alternative.
     pooled = {"F": float(fr["c_val_fringe_F"].mean()), "D": float(fr["c_val_fringe_D"].mean())}
     c_pool = pl.when(pl.col("pos_group") == "D").then(pl.lit(pooled["D"])).otherwise(pl.lit(pooled["F"]))
+    reg = 1 - pl.col("fringe").cast(pl.Float64)
     return d.with_columns(
-        (-pl.col("c_val_beta") + (1 - pl.col("fringe").cast(pl.Float64)) * c_f).alias("dpm_var_per60"),
-        rep.alias("dpm_rep_per60"),
+        (-pl.col("c_val_beta") + reg * c_pool).alias("dpm_var_per60"),
+        (-c_pool).alias("dpm_rep_per60"),
+        (-pl.col("c_val_beta") + reg * c_f).alias("dpm_var_perseason_per60"),
+        rep.alias("dpm_rep_perseason_per60"),
         (-pl.col("c_val_beta") - pl.col("fringe").cast(pl.Float64) * c_f).alias("dpm_val_refit_per60"),
-        (-pl.col("c_val_beta") + (1 - pl.col("fringe").cast(pl.Float64)) * c_pool).alias("dpm_var_pooledrep_per60"),
     ).with_columns(
         (pl.col("dpm_var_per60") * pl.col("toi_ev") / 60).alias("def_gar"),
-        (pl.col("dpm_var_pooledrep_per60") * pl.col("toi_ev") / 60).alias("def_gar_pooledrep"),
+        (pl.col("dpm_var_perseason_per60") * pl.col("toi_ev") / 60).alias("def_gar_perseason"),
         (pl.col("dpm_se").fill_null(med) * pl.col("toi_ev") / 60).alias("def_gar_sd"),
-    ).select("player_id", "season", "dpm_var_per60", "dpm_val_refit_per60", "dpm_rep_per60", "def_gar", "def_gar_pooledrep", "def_gar_sd", "dpm_val_per60")
+    ).select("player_id", "season", "dpm_var_per60", "dpm_val_refit_per60", "dpm_rep_per60", "def_gar", "def_gar_perseason", "def_gar_sd", "dpm_val_per60")
 
 
 # ------------------------------------------------------------------ finishing (from saved shot shifts)
@@ -134,8 +137,8 @@ def combine(ps: pl.DataFrame, pm: pl.DataFrame, dp: pl.DataFrame, fin: pl.DataFr
                        pl.col("pm_gar_sd").fill_null(0.0), pl.col("def_gar_sd").fill_null(0.0))
     t = t.with_columns((pl.col("pm_gar") + pl.col("def_gar") + pl.col("fin_gar")).alias("total_gar"),
                        (pl.col("pm_gar_sd") ** 2 + pl.col("def_gar_sd") ** 2 + pl.col("fin_gar_sd") ** 2).sqrt().alias("total_gar_sd"))
-    if "def_gar_pooledrep" in t.columns:  # alternative total with the season-pooled DPM replacement level
-        t = t.with_columns((pl.col("pm_gar") + pl.col("def_gar_pooledrep").fill_null(0.0) + pl.col("fin_gar")).alias("total_gar_pooledrep"))
+    if "def_gar_perseason" in t.columns:  # alternative total with the per-season DPM replacement level
+        t = t.with_columns((pl.col("pm_gar") + pl.col("def_gar_perseason").fill_null(0.0) + pl.col("fin_gar")).alias("total_gar_perseason"))
     t = t.with_columns((pl.col("total_gar") / gpw).alias("total_war"), (pl.col("total_gar_sd") / gpw).alias("total_war_sd"),
                        (pl.col("total_gar") - 1.96 * pl.col("total_gar_sd")).alias("total_gar_lo"), (pl.col("total_gar") + 1.96 * pl.col("total_gar_sd")).alias("total_gar_hi"))
     t = t.with_columns(*[(pl.col(c) / gpw).alias(c.replace("_gar", "_wins")) for c in ("pm_gar", "def_gar", "fin_gar")])
@@ -150,7 +153,7 @@ def reconcile(t: pl.DataFrame, proc) -> dict:
     gf = goals.group_by("season", "team_id").agg(pl.len().cast(pl.Int64).alias("gf"))  # signed: gf - ga must not wrap
     ga = goals.group_by("season", pl.col("opp_team_id").alias("team_id")).agg(pl.len().cast(pl.Int64).alias("ga"))
     gd = gf.join(ga, on=["season", "team_id"], how="full", coalesce=True).fill_null(0).with_columns((pl.col("gf") - pl.col("ga")).alias("gd5")).join(abbr, on="team_id")
-    extra = ["total_gar_pooledrep"] if "total_gar_pooledrep" in t.columns else []
+    extra = ["total_gar_perseason"] if "total_gar_perseason" in t.columns else []
     sums = t.group_by("season", "team").agg(*[pl.col(c).sum().alias(c) for c in ("pm_gar", "def_gar", "fin_gar", "total_gar", *extra)])
     j = gd.join(sums, on=["season", "team"]).filter(pl.col("gd5").is_not_null())
     y = j["gd5"].to_numpy().astype(float)

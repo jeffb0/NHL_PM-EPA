@@ -173,7 +173,9 @@ with a team-season bootstrap interval. A per-season table is reported as a cross
     fringe mean upward (about 0.05 xGA/60 ≈ 0.8 goals per 1,000 min, ~30% of the player SD). DPM is therefore refit
     once per season with unpenalized fringe-count covariates (fringe F and D among defenders and among
     attackers on ice), holding the DPM specification otherwise fixed (α from the DPM CV, ρ = 1 chain,
-    same stints). The published DPM columns are unchanged; the valuation uses the refit values.
+    same stints). The published DPM columns are unchanged; the valuation uses the refit values. The
+    replacement effect itself is then **averaged over seasons per position** (§11 deviation 5); the
+    per-season effect is kept as an alternative.
 * Value above replacement = (component rate − replacement rate) × TOI ÷ 60.
 
 ## 10. Data flags found before modelling
@@ -219,12 +221,15 @@ with a team-season bootstrap interval. A per-season table is reported as a cross
    folds, production fit, stability, integration, NUTS inputs); the pre-registered decisions and gates were
    re-applied mechanically to the new fit, and none changed (D-xG: F1; D-type: A; F1, F2, F3 pass). A unit
    test now checks that the fitted variances are a fixed point of the plain EM map.
-5. **Pooled DPM replacement alternative (published alongside the pre-registered default).** The pre-registered
-   per-season fringe-effect estimate for DPM proved noisy (SD across seasons 0.036 F / 0.029 D xGA/60, positive
-   for forwards in 2021 and 2025), which distorts single seasons (defensemen 72% of the 2025-26 top 25). The
-   pre-registered definition remains the default (`def_gar`, `total_gar`); the season-pooled alternative is
-   provided as `def_gar_pooledrep` / `total_gar_pooledrep`. **Decision pending with the model owner**; the
-   report recommends the pooled columns. No selection was made by looking at which player ranks look better.
+5. **DPM replacement level pooled across seasons (default changed by the model owner, 2026-09-29).** The
+   pre-registered per-season fringe-effect estimate for DPM proved noisy (SD across seasons 0.036 F / 0.029 D
+   xGA/60, positive for forwards in 2021 and 2025), which distorts single seasons (defensemen 72% of the
+   2025-26 top 25). Initially both versions were published with the per-season one as default; on the model
+   owner's decision the **season-pooled effect is now the default** (`def_gar`, `total_gar`, `dpm_rep_per60`),
+   and the pre-registered per-season version is kept as `def_gar_perseason` / `total_gar_perseason`. The
+   choice rests on the estimator's variance (an implausible sign flip), not on which players rank better.
+   Effect on the team reconciliation: total slope 1.40 → 1.31; joint slopes 2.05/1.17/1.76 →
+   1.68/1.18/1.46. Pooling assumes a stable replacement gap over 2017-2025.
 
 **Known limitations recorded, not changed:**
 
