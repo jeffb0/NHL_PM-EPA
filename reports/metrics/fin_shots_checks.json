@@ -1,0 +1,28 @@
+{
+  "goals_in_events": 66976,
+  "goals_in_shot_features_table": 66971,
+  "goals_without_coordinates": 5,
+  "goals_on_blocked_rows": 0,
+  "goals_empty_net": 3732,
+  "goals_by_goalie_shooters": 0,
+  "goals_in_finishing_table": 63239,
+  "goals_unaccounted": 0,
+  "rows": 947091,
+  "rows_missing_xg_v1": 0,
+  "rows_duplicate_keys": 0,
+  "rows_goalie_null": 28,
+  "goalie_ids_not_goalies": 0,
+  "rows_by_strength": {
+    "4v4_3v3": 21269,
+    "PK": 23817,
+    "5v5": 747925,
+    "PP": 133265,
+    "pulled": 20815
+  },
+  "rows_by_type_group": {
+    "base": 652723,
+    "slap": 130699,
+    "tip": 94604,
+    "back": 69065
+  }
+}

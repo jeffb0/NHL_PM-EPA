@@ -1,0 +1,798 @@
+{
+  "n_train": 497310,
+  "n_valid": 113347,
+  "n_test": 336434,
+  "features": {
+    "F0": [
+      "dist",
+      "angle",
+      "x",
+      "dt_prev",
+      "dist_prev",
+      "speed_prev",
+      "score_c",
+      "t_period",
+      "y_abs",
+      "rebound",
+      "rush",
+      "empty_net",
+      "own_goalie_pulled",
+      "ot",
+      "off_wing",
+      "is_home",
+      "shot_type_c=wrist",
+      "shot_type_c=snap",
+      "shot_type_c=slap",
+      "shot_type_c=backhand",
+      "shot_type_c=tip-in",
+      "shot_type_c=deflected",
+      "shot_type_c=wrap-around",
+      "shot_type_c=other",
+      "prev_type_c=faceoff",
+      "prev_type_c=hit",
+      "prev_type_c=giveaway",
+      "prev_type_c=takeaway",
+      "prev_type_c=shot-on-goal",
+      "prev_type_c=missed-shot",
+      "prev_type_c=blocked-shot",
+      "prev_type_c=other",
+      "strength=5v5",
+      "strength=PP",
+      "strength=PK",
+      "strength=4v4",
+      "strength=3v3",
+      "strength=EN",
+      "dist*tip-in",
+      "dist*deflected",
+      "dist*slap",
+      "dist*backhand",
+      "angle*rebound"
+    ],
+    "F1": [
+      "dist",
+      "angle",
+      "x",
+      "dt_prev",
+      "dist_prev",
+      "speed_prev",
+      "score_c",
+      "t_period",
+      "y_abs",
+      "rebound",
+      "rush",
+      "empty_net",
+      "own_goalie_pulled",
+      "ot",
+      "off_wing",
+      "is_home",
+      "shot_type_c=wrist",
+      "shot_type_c=snap",
+      "shot_type_c=slap",
+      "shot_type_c=backhand",
+      "shot_type_c=tip-in",
+      "shot_type_c=deflected",
+      "shot_type_c=wrap-around",
+      "shot_type_c=other",
+      "prev_type_c=faceoff",
+      "prev_type_c=hit",
+      "prev_type_c=giveaway",
+      "prev_type_c=takeaway",
+      "prev_type_c=shot-on-goal",
+      "prev_type_c=missed-shot",
+      "prev_type_c=blocked-shot",
+      "prev_type_c=other",
+      "strength=5v5",
+      "strength=PP",
+      "strength=PK",
+      "strength=4v4",
+      "strength=3v3",
+      "strength=EN",
+      "dist*tip-in",
+      "dist*deflected",
+      "dist*slap",
+      "dist*backhand",
+      "angle*rebound",
+      "prev_same",
+      "lat_same",
+      "dx_same",
+      "prev_y_abs_same",
+      "cross_slot",
+      "secs_since_fo",
+      "own_skaters",
+      "opp_skaters",
+      "team_att_10s"
+    ]
+  },
+  "F0_valid": {
+    "n": 113347,
+    "goals": 7810,
+    "sum_xg": 8559.740952358048,
+    "log_loss": 0.22451768496828178,
+    "brier": 0.06077206943790582,
+    "auc": 0.7517446988420189,
+    "calib_in_large": 1.095997561121389,
+    "ece": 0.007989031726450784,
+    "calib_slope": 0.8934118546533792,
+    "reliability": [
+      {
+        "bin": 0,
+        "n": 11335,
+        "mean_pred": 0.005748189767584045,
+        "mean_obs": 0.00564622849580944
+      },
+      {
+        "bin": 1,
+        "n": 11335,
+        "mean_pred": 0.012362591390152462,
+        "mean_obs": 0.012174680194089104
+      },
+      {
+        "bin": 2,
+        "n": 11334,
+        "mean_pred": 0.019472093564195304,
+        "mean_obs": 0.020028233633315688
+      },
+      {
+        "bin": 3,
+        "n": 11335,
+        "mean_pred": 0.03038531923328282,
+        "mean_obs": 0.02928981032201147
+      },
+      {
+        "bin": 4,
+        "n": 11334,
+        "mean_pred": 0.043955888797333385,
+        "mean_obs": 0.04182106934886183
+      },
+      {
+        "bin": 5,
+        "n": 11335,
+        "mean_pred": 0.059442008344797743,
+        "mean_obs": 0.06193206881340979
+      },
+      {
+        "bin": 6,
+        "n": 11335,
+        "mean_pred": 0.07919119661095218,
+        "mean_obs": 0.08301720335244817
+      },
+      {
+        "bin": 7,
+        "n": 11334,
+        "mean_pred": 0.10684330645011039,
+        "mean_obs": 0.1019057702488089
+      },
+      {
+        "bin": 8,
+        "n": 11335,
+        "mean_pred": 0.15205319385143287,
+        "mean_obs": 0.13506837229819144
+      },
+      {
+        "bin": 9,
+        "n": 11335,
+        "mean_pred": 0.24572144124881415,
+        "mean_obs": 0.19814733127481252
+      }
+    ]
+  },
+  "F0_test": {
+    "n": 336434,
+    "goals": 22594,
+    "sum_xg": 25670.56855541882,
+    "log_loss": 0.22606982653444488,
+    "brier": 0.060926944446310735,
+    "auc": 0.7368423300471538,
+    "calib_in_large": 1.1361675026741092,
+    "ece": 0.015023730490268748,
+    "calib_slope": 0.763133079122585,
+    "reliability": [
+      {
+        "bin": 0,
+        "n": 33644,
+        "mean_pred": 0.0054182652671941525,
+        "mean_obs": 0.005974319343716562
+      },
+      {
+        "bin": 1,
+        "n": 33643,
+        "mean_pred": 0.011539931475343738,
+        "mean_obs": 0.011711202924828345
+      },
+      {
+        "bin": 2,
+        "n": 33643,
+        "mean_pred": 0.017896347821103067,
+        "mean_obs": 0.018636863537734447
+      },
+      {
+        "bin": 3,
+        "n": 33644,
+        "mean_pred": 0.02775053454557776,
+        "mean_obs": 0.028415170609915587
+      },
+      {
+        "bin": 4,
+        "n": 33643,
+        "mean_pred": 0.04092918663113918,
+        "mean_obs": 0.04660702077698184
+      },
+      {
+        "bin": 5,
+        "n": 33643,
+        "mean_pred": 0.056313610376918906,
+        "mean_obs": 0.06479802633534465
+      },
+      {
+        "bin": 6,
+        "n": 33644,
+        "mean_pred": 0.07674546888860115,
+        "mean_obs": 0.08818808702889074
+      },
+      {
+        "bin": 7,
+        "n": 33643,
+        "mean_pred": 0.10692321093619535,
+        "mean_obs": 0.10858127990963945
+      },
+      {
+        "bin": 8,
+        "n": 33643,
+        "mean_pred": 0.15847161876026597,
+        "mean_obs": 0.13334125969741106
+      },
+      {
+        "bin": 9,
+        "n": 33644,
+        "mean_pred": 0.26102932111637506,
+        "mean_obs": 0.1653192248246344
+      }
+    ]
+  },
+  "F1_valid": {
+    "n": 113347,
+    "goals": 7810,
+    "sum_xg": 8581.084300851386,
+    "log_loss": 0.22397607910108708,
+    "brier": 0.06061923903486244,
+    "auc": 0.7534405171323244,
+    "calib_in_large": 1.0987303842319316,
+    "ece": 0.007989243652491691,
+    "calib_slope": 0.9009552633732106,
+    "reliability": [
+      {
+        "bin": 0,
+        "n": 11335,
+        "mean_pred": 0.006018983897942496,
+        "mean_obs": 0.00529333921482135
+      },
+      {
+        "bin": 1,
+        "n": 11335,
+        "mean_pred": 0.012691748002079539,
+        "mean_obs": 0.012262902514336127
+      },
+      {
+        "bin": 2,
+        "n": 11334,
+        "mean_pred": 0.01968708401250293,
+        "mean_obs": 0.020822304570319392
+      },
+      {
+        "bin": 3,
+        "n": 11335,
+        "mean_pred": 0.030402642017566477,
+        "mean_obs": 0.030172033524481695
+      },
+      {
+        "bin": 4,
+        "n": 11334,
+        "mean_pred": 0.04391801672505836,
+        "mean_obs": 0.040585847891300514
+      },
+      {
+        "bin": 5,
+        "n": 11335,
+        "mean_pred": 0.05948142503417774,
+        "mean_obs": 0.061755624172915746
+      },
+      {
+        "bin": 6,
+        "n": 11335,
+        "mean_pred": 0.07908322781879945,
+        "mean_obs": 0.08160564622849581
+      },
+      {
+        "bin": 7,
+        "n": 11334,
+        "mean_pred": 0.10640938711369229,
+        "mean_obs": 0.09802364566790189
+      },
+      {
+        "bin": 8,
+        "n": 11335,
+        "mean_pred": 0.15100290632134428,
+        "mean_obs": 0.13603881782090868
+      },
+      {
+        "bin": 9,
+        "n": 11335,
+        "mean_pred": 0.24836274538583833,
+        "mean_obs": 0.20247022496691663
+      }
+    ]
+  },
+  "F1_test": {
+    "n": 336434,
+    "goals": 22594,
+    "sum_xg": 25686.529337140128,
+    "log_loss": 0.22538110902772587,
+    "brier": 0.06073962273662656,
+    "auc": 0.7390081917037521,
+    "calib_in_large": 1.1368739194981026,
+    "ece": 0.014433096994552148,
+    "calib_slope": 0.7762228917910108,
+    "reliability": [
+      {
+        "bin": 0,
+        "n": 33644,
+        "mean_pred": 0.0057157550840923775,
+        "mean_obs": 0.006063488289145167
+      },
+      {
+        "bin": 1,
+        "n": 33643,
+        "mean_pred": 0.011969586138829704,
+        "mean_obs": 0.011740926790119788
+      },
+      {
+        "bin": 2,
+        "n": 33643,
+        "mean_pred": 0.01835922074036195,
+        "mean_obs": 0.018934102190648873
+      },
+      {
+        "bin": 3,
+        "n": 33644,
+        "mean_pred": 0.028075460315552834,
+        "mean_obs": 0.0285935085007728
+      },
+      {
+        "bin": 4,
+        "n": 33643,
+        "mean_pred": 0.04102206711390737,
+        "mean_obs": 0.04583420027940433
+      },
+      {
+        "bin": 5,
+        "n": 33643,
+        "mean_pred": 0.05621443963415772,
+        "mean_obs": 0.06464940700888744
+      },
+      {
+        "bin": 6,
+        "n": 33644,
+        "mean_pred": 0.07637806882986718,
+        "mean_obs": 0.08557246462965165
+      },
+      {
+        "bin": 7,
+        "n": 33643,
+        "mean_pred": 0.10613946238226728,
+        "mean_obs": 0.10846238444847368
+      },
+      {
+        "bin": 8,
+        "n": 33643,
+        "mean_pred": 0.15627432712323341,
+        "mean_obs": 0.12873406057723746
+      },
+      {
+        "bin": 9,
+        "n": 33644,
+        "mean_pred": 0.26334344821742517,
+        "mean_obs": 0.17298775413149448
+      }
+    ]
+  },
+  "paired_valid": {
+    "mean_improvement": 0.0005416058671946973,
+    "se": 0.00011561242403260072,
+    "n": 113347
+  },
+  "paired_test": {
+    "mean_improvement": 0.0006887175067189529,
+    "se": 6.928539738715984e-05,
+    "n": 336434
+  },
+  "D_xG": {
+    "use_F1": true,
+    "valid_z": 4.68466837994828,
+    "test_z": 9.940298139165872
+  },
+  "F1_permutation_importance": [
+    {
+      "feature": "dist",
+      "importance": 0.02689300109621473
+    },
+    {
+      "feature": "y_abs",
+      "importance": 0.007749619883305026
+    },
+    {
+      "feature": "shot_type_c=snap",
+      "importance": 0.0020316502519655646
+    },
+    {
+      "feature": "x",
+      "importance": 0.0018143068696775955
+    },
+    {
+      "feature": "angle",
+      "importance": 0.001447024752117008
+    },
+    {
+      "feature": "dt_prev",
+      "importance": 0.0012799782179645596
+    },
+    {
+      "feature": "shot_type_c=slap",
+      "importance": 0.001034309999889793
+    },
+    {
+      "feature": "opp_skaters",
+      "importance": 0.0007903112403358226
+    },
+    {
+      "feature": "off_wing",
+      "importance": 0.0007478207314424076
+    },
+    {
+      "feature": "prev_y_abs_same",
+      "importance": 0.0006772657096881333
+    },
+    {
+      "feature": "strength=5v5",
+      "importance": 0.0006193808161383448
+    },
+    {
+      "feature": "shot_type_c=wrist",
+      "importance": 0.0005538845345031315
+    },
+    {
+      "feature": "dist*backhand",
+      "importance": 0.0004947744546761704
+    },
+    {
+      "feature": "speed_prev",
+      "importance": 0.0003878357247519837
+    },
+    {
+      "feature": "shot_type_c=wrap-around",
+      "importance": 0.00030522955985938977
+    }
+  ],
+  "test_calibration_by_strength": {
+    "F0": [
+      {
+        "group": "4v4_3v3",
+        "n": 7268,
+        "goals": 784,
+        "xg": 813.8747566319022,
+        "xg_over_goals": 1.0381055569284467
+      },
+      {
+        "group": "5v5",
+        "n": 265965,
+        "goals": 15912,
+        "xg": 17825.08977981401,
+        "xg_over_goals": 1.1202293727887136
+      },
+      {
+        "group": "PK",
+        "n": 7680,
+        "goals": 560,
+        "xg": 573.6508568003864,
+        "xg_over_goals": 1.02437653000069
+      },
+      {
+        "group": "PP",
+        "n": 47285,
+        "goals": 4682,
+        "xg": 5581.200158492933,
+        "xg_over_goals": 1.1920547113397977
+      },
+      {
+        "group": "pulled",
+        "n": 8236,
+        "goals": 656,
+        "xg": 876.7530036795858,
+        "xg_over_goals": 1.33651372512132
+      }
+    ],
+    "F1": [
+      {
+        "group": "4v4_3v3",
+        "n": 7268,
+        "goals": 784,
+        "xg": 836.883411805842,
+        "xg_over_goals": 1.0674533313850025
+      },
+      {
+        "group": "5v5",
+        "n": 265965,
+        "goals": 15912,
+        "xg": 17785.838837252762,
+        "xg_over_goals": 1.117762621747911
+      },
+      {
+        "group": "PK",
+        "n": 7680,
+        "goals": 560,
+        "xg": 574.1738613669859,
+        "xg_over_goals": 1.0253104667267605
+      },
+      {
+        "group": "PP",
+        "n": 47285,
+        "goals": 4682,
+        "xg": 5609.880111625456,
+        "xg_over_goals": 1.1981802886854882
+      },
+      {
+        "group": "pulled",
+        "n": 8236,
+        "goals": 656,
+        "xg": 879.753115089091,
+        "xg_over_goals": 1.34108706568459
+      }
+    ]
+  },
+  "test_calibration_by_type": {
+    "F0": [
+      {
+        "group": "backhand",
+        "n": 23961,
+        "goals": 1932,
+        "xg": 2577.928461932013,
+        "xg_over_goals": 1.3343315020352033
+      },
+      {
+        "group": "deflected",
+        "n": 6070,
+        "goals": 593,
+        "xg": 853.5868073931304,
+        "xg_over_goals": 1.4394381237658185
+      },
+      {
+        "group": "other",
+        "n": 2954,
+        "goals": 372,
+        "xg": 567.0589569831627,
+        "xg_over_goals": 1.5243520349009752
+      },
+      {
+        "group": "slap",
+        "n": 39799,
+        "goals": 1921,
+        "xg": 2015.6946149979733,
+        "xg_over_goals": 1.0492944377917612
+      },
+      {
+        "group": "snap",
+        "n": 66575,
+        "goals": 5629,
+        "xg": 5646.938630988275,
+        "xg_over_goals": 1.0031868237676806
+      },
+      {
+        "group": "tip-in",
+        "n": 30592,
+        "goals": 2325,
+        "xg": 3430.478676435186,
+        "xg_over_goals": 1.4754746995420156
+      },
+      {
+        "group": "wrap-around",
+        "n": 2440,
+        "goals": 123,
+        "xg": 171.41375911849528,
+        "xg_over_goals": 1.3936077977113437
+      },
+      {
+        "group": "wrist",
+        "n": 164043,
+        "goals": 9699,
+        "xg": 10407.468647570586,
+        "xg_over_goals": 1.0730455353717483
+      }
+    ],
+    "F1": [
+      {
+        "group": "backhand",
+        "n": 23961,
+        "goals": 1932,
+        "xg": 2580.3158352780333,
+        "xg_over_goals": 1.335567202524862
+      },
+      {
+        "group": "deflected",
+        "n": 6070,
+        "goals": 593,
+        "xg": 843.0921283938189,
+        "xg_over_goals": 1.4217405200570303
+      },
+      {
+        "group": "other",
+        "n": 2954,
+        "goals": 372,
+        "xg": 554.3923089534912,
+        "xg_over_goals": 1.490301905788955
+      },
+      {
+        "group": "slap",
+        "n": 39799,
+        "goals": 1921,
+        "xg": 2023.9566460541935,
+        "xg_over_goals": 1.0535953389142079
+      },
+      {
+        "group": "snap",
+        "n": 66575,
+        "goals": 5629,
+        "xg": 5632.130130522065,
+        "xg_over_goals": 1.0005560722192335
+      },
+      {
+        "group": "tip-in",
+        "n": 30592,
+        "goals": 2325,
+        "xg": 3456.456145856346,
+        "xg_over_goals": 1.4866478046693963
+      },
+      {
+        "group": "wrap-around",
+        "n": 2440,
+        "goals": 123,
+        "xg": 175.04772158743876,
+        "xg_over_goals": 1.4231522080279573
+      },
+      {
+        "group": "wrist",
+        "n": 164043,
+        "goals": 9699,
+        "xg": 10421.138420494732,
+        "xg_over_goals": 1.0744549356113755
+      }
+    ]
+  },
+  "crossfit": {
+    "feature_set": "F1",
+    "n": 947091,
+    "goals": 63239,
+    "sum_xg": 63732.65116248038,
+    "log_loss": 0.21544686402340066,
+    "brier": 0.058043873390529424,
+    "auc": 0.7645869037935976,
+    "calib_in_large": 1.0078061190480618,
+    "ece": 0.0007771615840320266,
+    "calib_slope": 1.0049641304145787
+  },
+  "crossfit_v1_reference": {
+    "n": 947091,
+    "goals": 63239,
+    "sum_xg": 63756.86684190909,
+    "log_loss": 0.2163068141234691,
+    "brier": 0.05827794724139387,
+    "auc": 0.7620713983060188,
+    "calib_in_large": 1.008189042235157,
+    "ece": 0.000809165784804447,
+    "calib_slope": 1.0034692684588944
+  },
+  "crossfit_by_season": [
+    {
+      "group": "2017",
+      "n": 111715,
+      "goals": 7097,
+      "xg": 7062.134200339549,
+      "xg_over_goals": 0.995087248180858
+    },
+    {
+      "group": "2018",
+      "n": 109579,
+      "goals": 7167,
+      "xg": 6917.520001159932,
+      "xg_over_goals": 0.9651904564196919
+    },
+    {
+      "group": "2019",
+      "n": 92580,
+      "goals": 6128,
+      "xg": 6024.332425029048,
+      "xg_over_goals": 0.9830829675308499
+    },
+    {
+      "group": "2020",
+      "n": 70881,
+      "goals": 4769,
+      "xg": 4636.762946848196,
+      "xg_over_goals": 0.9722715342520857
+    },
+    {
+      "group": "2021",
+      "n": 112555,
+      "goals": 7674,
+      "xg": 7692.592954702261,
+      "xg_over_goals": 1.002422850495473
+    },
+    {
+      "group": "2022",
+      "n": 113347,
+      "goals": 7810,
+      "xg": 8093.032822424628,
+      "xg_over_goals": 1.036239798005714
+    },
+    {
+      "group": "2023",
+      "n": 114052,
+      "goals": 7639,
+      "xg": 7683.813702604387,
+      "xg_over_goals": 1.0058664357382363
+    },
+    {
+      "group": "2024",
+      "n": 111293,
+      "goals": 7377,
+      "xg": 7470.951288421791,
+      "xg_over_goals": 1.0127357040018694
+    },
+    {
+      "group": "2025",
+      "n": 111089,
+      "goals": 7578,
+      "xg": 8151.510820950798,
+      "xg_over_goals": 1.075681026781578
+    }
+  ],
+  "crossfit_by_strength": [
+    {
+      "group": "4v4_3v3",
+      "n": 21269,
+      "goals": 2237,
+      "xg": 2282.840621502655,
+      "xg_over_goals": 1.020492007824164
+    },
+    {
+      "group": "5v5",
+      "n": 747925,
+      "goals": 44539,
+      "xg": 45060.35184819082,
+      "xg_over_goals": 1.0117055131051622
+    },
+    {
+      "group": "PK",
+      "n": 23817,
+      "goals": 1700,
+      "xg": 1687.3755856927069,
+      "xg_over_goals": 0.9925738739368863
+    },
+    {
+      "group": "PP",
+      "n": 133265,
+      "goals": 13013,
+      "xg": 12968.529973476789,
+      "xg_over_goals": 0.9965826460829008
+    },
+    {
+      "group": "pulled",
+      "n": 20815,
+      "goals": 1750,
+      "xg": 1733.5531336174297,
+      "xg_over_goals": 0.9906017906385313
+    }
+  ],
+  "F4": {
+    "sum_xg_over_goals_5v5": 1.0117055131051613,
+    "pass": true
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "input": "fin_nuts_window_2023_2025.npz",
+  "n_shots": 336434,
+  "multi_season": true,
+  "fixed_sigma": {
+    "shooter": {
+      "n": 1164,
+      "corr_means": 0.9994224269970183,
+      "mean_abs_diff_means": 0.0021240668921841898,
+      "sd_ratio_laplace_over_nuts_median": 1.0002180061932986,
+      "sd_ratio_p05_p95": [
+        0.9553716908680774,
+        1.0523378999246857
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.14756488276874916
+    },
+    "goalie": {
+      "n": 132,
+      "corr_means": 0.9987653341973685,
+      "mean_abs_diff_means": 0.00046643510514531017,
+      "sd_ratio_laplace_over_nuts_median": 0.998643896832063,
+      "sd_ratio_p05_p95": [
+        0.9473225664349344,
+        1.0644534174885338
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.033009936477298
+    },
+    "seconds": 333.6915452480316,
+    "divergences": 0,
+    "max_r_hat": 1.0018442869186401,
+    "min_n_eff": 1792.5310104666898
+  },
+  "free_sigma": {
+    "sigma_posterior": {
+      "sd_d_D": {
+        "mean": 0.18409448862075806,
+        "sd": 0.05315034091472626
+      },
+      "sd_d_F": {
+        "mean": 0.049943361431360245,
+        "sd": 0.02615678869187832
+      },
+      "sd_e": {
+        "mean": 0.060685139149427414,
+        "sd": 0.016457734629511833
+      },
+      "sd_u_D": {
+        "mean": 0.13789260387420654,
+        "sd": 0.05456569790840149
+      },
+      "sd_u_F": {
+        "mean": 0.16830070316791534,
+        "sd": 0.011939474381506443
+      },
+      "sd_v": {
+        "mean": 0.03209448605775833,
+        "sd": 0.01796584203839302
+      }
+    },
+    "shooter": {
+      "n": 1164,
+      "corr_means": 0.9960992469920925,
+      "mean_abs_diff_means": 0.005048099955730894,
+      "sd_ratio_laplace_over_nuts_median": 0.9989293192912102,
+      "sd_ratio_p05_p95": [
+        0.9378183549139887,
+        1.1159773344376254
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.14236198365688324
+    },
+    "goalie": {
+      "n": 132,
+      "corr_means": 0.9971551109322938,
+      "mean_abs_diff_means": 0.0007035548314236284,
+      "sd_ratio_laplace_over_nuts_median": 0.9794746627371546,
+      "sd_ratio_p05_p95": [
+        0.8960599358909185,
+        1.07724818720263
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.034686699509620667
+    },
+    "seconds": 360.26669788360596,
+    "divergences": 6,
+    "max_r_hat": 1.0924748182296753,
+    "min_n_eff": 65.8187115462782
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "input": "fin_nuts_season_2024.npz",
+  "n_shots": 111293,
+  "multi_season": false,
+  "fixed_sigma": {
+    "shooter": {
+      "n": 899,
+      "corr_means": 0.9987571096451701,
+      "mean_abs_diff_means": 0.002436360864978518,
+      "sd_ratio_laplace_over_nuts_median": 1.0011144788862798,
+      "sd_ratio_p05_p95": [
+        0.9585558144797763,
+        1.0408582188185558
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.15628528940854364
+    },
+    "goalie": {
+      "n": 103,
+      "corr_means": 0.9994586945396252,
+      "mean_abs_diff_means": 0.0012044021437999201,
+      "sd_ratio_laplace_over_nuts_median": 1.0053769278638076,
+      "sd_ratio_p05_p95": [
+        0.9727314202021078,
+        1.04316506728279
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.07343891834703144
+    },
+    "seconds": 57.508342266082764,
+    "divergences": 0,
+    "max_r_hat": 1.0037524700164795,
+    "min_n_eff": 1314.7690548228206
+  },
+  "free_sigma": {
+    "sigma_posterior": {
+      "sd_u_D": {
+        "mean": 0.15379978716373444,
+        "sd": 0.06639549881219864
+      },
+      "sd_u_F": {
+        "mean": 0.1641601324081421,
+        "sd": 0.02180219069123268
+      },
+      "sd_v": {
+        "mean": 0.08920884877443314,
+        "sd": 0.02147282287478447
+      }
+    },
+    "shooter": {
+      "n": 899,
+      "corr_means": 0.9973979687040194,
+      "mean_abs_diff_means": 0.0030573240771270683,
+      "sd_ratio_laplace_over_nuts_median": 1.0018484406950923,
+      "sd_ratio_p05_p95": [
+        0.9448050376514218,
+        1.080650599156325
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.15582919120788574
+    },
+    "goalie": {
+      "n": 103,
+      "corr_means": 0.9993781581014294,
+      "mean_abs_diff_means": 0.001355014394992848,
+      "sd_ratio_laplace_over_nuts_median": 0.9788451121765709,
+      "sd_ratio_p05_p95": [
+        0.9256995689625335,
+        1.0391378671479599
+      ],
+      "nuts_mean_inside_laplace95": 1.0,
+      "sd_nuts_median": 0.07410335540771484
+    },
+    "seconds": 55.29475164413452,
+    "divergences": 0,
+    "max_r_hat": 1.0030927658081055,
+    "min_n_eff": 348.545378442046
+  }
+}
