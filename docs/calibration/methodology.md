@@ -87,6 +87,31 @@ weights (F vs D) as a diagnostic.
 differential only as a reported check. New components enter automatically when their `<name>_gar` (and an
 unshrunk `<name>_raw_gar`) columns exist.
 
+## 5b. All-strength extension (v2), written 2026-09-29 before it was fitted
+
+The special-teams components (`docs/specialteams/methodology.md`) make an all-strength calibration possible. It is a
+separate step beside the 5v5 calibration above, which is unchanged and stays the published `total_gar_cal`.
+
+* **Identity.** `GD_k = a + Σ_c w_c S_ck + e_k` with `GD` = all goals for minus against in the team-season (every event
+  strength except shootouts; empty-net goals included, since the extra-attacker states belong to PP and PK), 284
+  team-seasons, ten components: possession, defense, finishing (5v5), turnover (TO-RA), faceoffs, **penalties**, and the four
+  special-teams components. Penalties enter here because their value is realized through special-teams time, which the
+  all-strength target counts (in v1 they were checked separately).
+* **Unshrunk analogues.** Penalties: the class-cost-weighted drawn minus taken counts above the fringe rate, with no
+  empirical-Bayes shrinkage (`pen_raw_gar`). Special-teams components: the RAPM part is used as published (like DPM, it
+  has no unshrunk analogue) plus the finishing part recomputed unshrunk as goals minus xG_f above the fringe pool's rate
+  per attempt in that state. Possession, defense, finishing, turnover and faceoff are as in §2.
+* **Estimation, decision rule and gates.** As §2, §3 and §4 (ridge toward 1, λ by leave-one-season-out CV, adopt only if
+  paired z > 2, CAL-3 to CAL-5 with the all-strength total). Applied columns: `<component>_gar_cal_all`,
+  `total_gar_all_cal_all`, written to `player_value_calibrated_all` beside a ridge-weighted variant. If weights are set
+  to 1, the applied all-strength total equals `total_gar_all` exactly.
+* **Player-level check.** Same design as §2 on next-season on-ice goal differential per 60 over all modeled strengths
+  (5v5 stints plus special-teams stints), predictors per all-strength minute, team-season fixed effects, teammate
+  context (mean of the other skaters on the ice, whatever the state).
+* **Stated in advance.** The 4v4 and 3v3 weights are weakly identified (team-season standard deviation of the summed value
+  is below one goal), so the ridge will hold them near 1; PP and PK special-teams RAPM is shrunk, so shrinkage
+  compression can inflate their team-level slopes (the ST-4 slopes were PP 1.11 and PK 0.52 on shrunk sums).
+
 ## 6. Limitations stated in advance
 
 * 284 team-seasons give wide intervals; weights near 1 are the expected outcome unless the data disagree strongly.
@@ -101,3 +126,12 @@ unshrunk `<name>_raw_gar`) columns exist.
 1. **Ridge-weighted variant published (added after the team-level result, z = 1.69 < 2).** The rule keeps all weights at 1. So that the alternative is auditable, the ridge-weighted total is still published as `total_gar_ridge`, and the player-level forward check (§4) was run on it. This does not change the decision. CAL-3 fails for this variant (paired z = -5.60 on goals), which independently supports not adopting it.
 2. **Post-hoc variant comparison (`src/calibration/variants.py`, not pre-registered).** After the forward component slopes showed a negative turnover slope, alternative totals (dropping or swapping single components) were compared with the current total on the same forward check. This is exploratory: it was run once, on the same data that motivated it, and it changes no default. Results are in `reports/metrics/cal_variants.json` and the narrative of the validation report.
 3. **Default turnover component changed to TO-RA (user decision, 2026-09-29).** The first calibration run (original turnover charge) showed that a total with TO-RA predicted next-season results much better (paired z +8.9 goals, +7.4 xG) than the total with the original charge. The valuation layer now uses TO-RA as `to_gar`; the original is `to_gar_orig` and the total with it is `total_gar_to_orig`. The whole calibration was rerun on the new default; all numbers in the report are from that rerun. The decision rule was not changed (weights stay at 1; z = 1.50).
+4. **All-strength player check adjusted for deployment (§5b, after seeing the raw result).** The pre-registered all-strength player
+   check regressed next-season on-ice goal differential per 60 over all modeled strengths on the total rate. It failed CAL-3
+   (paired z = −10.82). The raw outcome contains a deployment effect the design missed: power-play stints have a positive league
+   mean goal differential and penalty-kill stints a negative one, independent of player skill (the penalty-kill component's
+   forward slope was −2.98 on that outcome). The corrected check subtracts each stint's league mean for the side's state cell
+   (5v5, power play, penalty kill, 4v4, 3v3) and adds the player's next-season minute shares by state as controls
+   (`cal_player_all.json`, key `deployment_adjusted`). Both results are reported; the decision rule for adopting weights (§3,
+   team level) is unchanged. Under the adjusted check CAL-3 passes (goals z = −1.03, xG z = +4.17).
+5. **Thin adoption margin for the all-strength weights (recorded, no change made).** Adopted by the pre-registered rule with z = 2.17 (threshold 2). The margin is thin.

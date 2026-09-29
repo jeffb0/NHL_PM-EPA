@@ -31,6 +31,19 @@ def team_gd_st(proc) -> pl.DataFrame:
             .with_columns((pl.col("gf") - pl.col("ga")).alias("st_gd")).join(abbr, on="team_id").select("season", "team", "st_gd"))
 
 
+def team_gd_all(proc) -> pl.DataFrame:
+    """season, team (abbrev), gd_all = goals for - against at every event strength (shootouts are not in the event strengths)."""
+    games = pl.read_parquet(proc / "games.parquet")
+    abbr = pl.concat([games.select(pl.col("home_id").alias("team_id"), pl.col("home_abbrev").alias("team")),
+                      games.select(pl.col("away_id").alias("team_id"), pl.col("away_abbrev").alias("team"))]).unique("team_id")
+    goals = pl.read_parquet(proc / "events.parquet", columns=["season", "type", "team_id", "opp_team_id", "strength"]).filter(
+        (pl.col("type") == "goal") & pl.col("strength").is_in(["5v5", "PP", "PK", "4v4", "3v3", "EN"]))
+    gf = goals.group_by("season", "team_id").agg(pl.len().cast(pl.Int64).alias("gf"))
+    ga = goals.group_by("season", pl.col("opp_team_id").alias("team_id")).agg(pl.len().cast(pl.Int64).alias("ga"))
+    return (gf.join(ga, on=["season", "team_id"], how="full", coalesce=True).fill_null(0)
+            .with_columns((pl.col("gf") - pl.col("ga")).alias("gd_all")).join(abbr, on="team_id").select("season", "team", "gd_all"))
+
+
 def team_sums(t: pl.DataFrame, cols: list[str]) -> pl.DataFrame:
     """Sum player-season columns to team-season by primary team (``team`` column)."""
     return t.group_by("season", "team").agg(*[pl.col(c).sum() for c in cols])

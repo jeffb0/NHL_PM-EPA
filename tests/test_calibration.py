@@ -70,3 +70,16 @@ def test_team_table_sums_unshrunk_and_shrunk_columns_by_primary_team(tmp_path):
     j = team.team_table(t, tmp_path)
     a = j.filter(pl.col("team") == "AAA").row(0, named=True)
     assert a["pm_raw_gar"] == pytest.approx(3.0) and a["gd5"] == 2 and j.filter(pl.col("team") == "BBB")["gd5"][0] == -2   # 3 goals for, 1 against
+
+
+def test_apply_weights_all():
+    import polars as pl
+
+    from src.calibration.team import SHR, apply_weights_all
+    comps = ["pm", "pen", "pp"]
+    t = pl.DataFrame({SHR["pm"]: [1.0, 2.0], SHR["pen"]: [0.5, -0.5], SHR["pp"]: [2.0, 1.0], "pm_gar_sd": [0.1, 0.1], "pen_gar_sd": [0.1, 0.1], "st_pp_gar_sd": [0.1, 0.1]})
+    t = t.with_columns((pl.col("pm_gar") + pl.col("pen_gar") + pl.col("st_pp_gar")).alias("total_gar_all"))
+    same = apply_weights_all(t, {c: 1.0 for c in comps}, 5.9, "cal")
+    assert same["cal_change_gar"].abs().max() < 1e-12
+    w = apply_weights_all(t, {"pm": 2.0, "pen": 1.0, "pp": 0.5}, 5.9, "ridge")
+    assert abs(w["total_gar_all_ridge"][0] - (2.0 * 1.0 + 0.5 + 0.5 * 2.0)) < 1e-12 and abs(w["ridge_change_gar"][0] - (3.5 - 3.5)) < 1e-12

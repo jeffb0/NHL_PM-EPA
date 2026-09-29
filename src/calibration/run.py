@@ -1,6 +1,6 @@
 """Joint calibration end to end:  python -m src.calibration.run [--only STEP ...]
 
-Steps: team -> player -> report. Needs the integrated table (``python -m src.valuation.run``).
+Steps: team -> player -> team_all -> player_all -> report (the last two are the all-strength extension, methodology §5b). Needs the integrated table (``python -m src.valuation.run``).
 Writes reports/metrics/cal_*.json and data/outputs/player_value_calibrated.csv (methodology in docs/calibration/).
 """
 
@@ -18,7 +18,7 @@ from src.calibration import unshrunk
 from src.config import load_config
 
 log = logging.getLogger("calibration")
-STEPS = ["team", "player", "report"]
+STEPS = ["team", "player", "team_all", "player_all", "report"]
 
 
 def _paths(cfg):
@@ -60,6 +60,50 @@ def step_player(cfg):
     log.info("player-level forward check: %d player-seasons; own slope (goals) %.2f; calibrated-better z %.2f", res["n_player_seasons"], res["y_gd"]["calibrated"]["own_slope"], res["y_gd"]["paired_z_calibrated_better"])
 
 
+def step_team_all(cfg):
+    """All-strength extension (methodology §5b): ten components against all-strength goal differential."""
+    proc, out_dir, met = _paths(cfg)
+    if not (proc / "st_rapm_player_season.parquet").exists():
+        log.warning("special-teams outputs missing: skipping the all-strength calibration")
+        return
+    t = unshrunk.build(proc, all_strength=True)
+    j = tm.team_table(t, proc, tm.COMPS_ALL, target="gd_all")
+    res = tm.calibrate(j, tm.COMPS_ALL, boot=1000, seed=cfg.seed, target="gd_all")
+    res["shrunk_ols"] = tm.shrunk_ols(j, tm.COMPS_ALL, target="gd_all")
+    res["n_team_seasons"] = j.height
+    res["sd_team_gd_all"] = float(j["gd_all"].std())
+    gpw = json.loads((met / "val_gpw.json").read_text())["goals_per_win"]
+    w = res["weights_applied"]
+    res["gate_CAL4_pass"] = bool(all(0.5 <= v <= 2.0 for v in w.values()))
+    tc = tm.apply_weights_all(t, w, gpw, "cal")
+    tc = tm.apply_weights_all(tc, res["weights_ridge"], gpw, "ridge")
+    q = tc.filter(pl.col("toi_5v5") >= cfg.valuation.min_toi)
+    res["mean_abs_change_gar_ridge_qualified"] = float(q["ridge_change_gar"].abs().mean())
+    res["gate_CAL5_pass"] = bool((not res["adopt"]) == (tc["cal_change_gar"].abs().max() < 1e-9))
+    tc.write_parquet(proc / "player_value_calibrated_all.parquet")
+    tc.write_csv(out_dir / "player_value_calibrated_all.csv")
+    (met / "cal_team_all.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")
+    log.info("all-strength calibration: lambda=%.3g weights %s; paired z vs ones %.2f -> %s", res["lambda"], {k: round(v, 2) for k, v in res["weights_ridge"].items()},
+             res["paired_z_calibrated_vs_ones"], "ADOPTED" if res["adopt"] else "weights set to 1")
+
+
+def step_player_all(cfg):
+    proc, _, met = _paths(cfg)
+    if not (proc / "player_value_calibrated_all.parquet").exists():
+        return
+    t = pl.read_parquet(proc / "player_value_calibrated_all.parquet")
+    rates = pl_.rate_table_all(t, tm.COMPS_ALL)
+    oi = pl_.onice_forward_all(proc, rates)
+    d = pl_.dataset(t, oi, rates, tm.COMPS_ALL, min_minutes=250.0)
+    res = pl_.evaluate(d, tm.COMPS_ALL)                         # as pre-registered: raw all-strength on-ice differential per 60
+    res["gate_CAL3_pass"] = bool(res["y_gd"]["paired_z_calibrated_better"] > -2.0)
+    adj = pl_.evaluate(d, tm.COMPS_ALL, ys=("y_gd_adj", "y_xgd_adj"), controls=("sh_pp", "sh_pk", "sh_o"))   # deployment-adjusted (methodology §7 deviation 4)
+    res["deployment_adjusted"] = adj
+    res["gate_CAL3_pass_adjusted"] = bool(adj["y_gd_adj"]["paired_z_calibrated_better"] > -2.0)
+    (met / "cal_player_all.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")
+    log.info("all-strength player check: %d player-seasons; own slope (goals) %.2f; ridge-better z %.2f", res["n_player_seasons"], res["y_gd"]["calibrated"]["own_slope"], res["y_gd"]["paired_z_calibrated_better"])
+
+
 def run_steps(steps: list[str]) -> None:
     cfg = load_config()
     for s in steps:
@@ -67,6 +111,8 @@ def run_steps(steps: list[str]) -> None:
         if s == "report":
             from src.calibration.report import run
             run()
+            from src.calibration.report_all import run as run_all
+            run_all()
         else:
             globals()[f"step_{s}"](cfg)
 

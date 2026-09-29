@@ -152,6 +152,10 @@ Are the six components each worth one goal per goal? Team-level slopes for the *
 
 The ridge weights (possession 1.53, defense 1.09, finishing 0.82, turnover 1.15, faceoff 1.10) are published as a variant (`total_gar_ridge`) and validated, but not applied. `python -m src.calibration.run` (or `make calibration`) writes `data/outputs/player_value_calibrated.csv`. Docs: [methodology & pre-registration](docs/calibration/methodology.md) · [validation report](reports/calibration/validation_report.md).
 
+### All-strength extension of the calibration
+
+With special teams in place, the same calibration runs on ten components (the five 5v5 components, penalties, PP, PK, 4v4, 3v3) against all-strength goal differential. The pre-registered rule **adopts** the ridge weights, narrowly (z = 2.17 against a threshold of 2): possession 1.42, defense 1.20, finishing 0.78, turnover 1.22, faceoffs 1.02, penalties 0.94, PP 1.31, PK 1.10, 4v4 0.96, 3v3 1.05. The player-level check as pre-registered fails (z = −10.8) because the raw all-strength outcome rewards power-play time and penalizes penalty-kill time whatever the skill; with a deployment adjustment, logged as a deviation, the calibrated total is no worse on goals (z = −1.0) and better on xG (z = +4.2). Both `total_gar_all` (uncalibrated) and `total_gar_all_cal` (calibrated) are in `player_value_calibrated_all.csv`; because the margin is thin, treat the calibrated column as an alternative until new data confirm it. [Report](reports/calibration/validation_report_all.md).
+
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
 
 Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.

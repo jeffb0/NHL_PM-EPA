@@ -15,13 +15,19 @@ from src.valuation import recon
 COMPS = ["pm", "def", "fin", "to", "fo"]
 RAW = {"pm": "pm_raw_gar", "def": "def_gar", "fin": "fin_raw_gar", "to": "to_raw_gar", "fo": "fo_raw_gar"}
 SHR = {"pm": "pm_gar", "def": "def_gar", "fin": "fin_gar", "to": "to_gar", "fo": "fo_gar"}
+# all-strength extension (methodology §5b): penalties and the four special-teams components
+COMPS_ALL = COMPS + ["pen", "pp", "pk", "4v4", "3v3"]
+RAW |= {"pen": "pen_raw_gar", **{c: f"st_{c}_raw_gar" for c in ("pp", "pk", "4v4", "3v3")}}
+SHR |= {"pen": "pen_gar", **{c: f"st_{c}_gar" for c in ("pp", "pk", "4v4", "3v3")}}
 LAMBDAS = np.geomspace(1e1, 1e6, 26)
 
 
-def team_table(t: pl.DataFrame, proc, comps: list[str] = COMPS) -> pl.DataFrame:
+def team_table(t: pl.DataFrame, proc, comps: list[str] = COMPS, target: str = "gd5") -> pl.DataFrame:
+    """Team-season sums of the raw and shrunk components joined to the goal-differential target (``gd5`` or ``gd_all``)."""
     cols = sorted(set(RAW[c] for c in comps) | set(SHR[c] for c in comps))
     s = recon.team_sums(t, cols)
-    return s.join(recon.team_gd5(proc), on=["season", "team"]).sort("season", "team")
+    gd = recon.team_gd5(proc) if target == "gd5" else recon.team_gd_all(proc)
+    return s.join(gd, on=["season", "team"]).sort("season", "team")
 
 
 def xg_to_goals_factor(proc) -> dict:
@@ -61,9 +67,9 @@ def loso_cv(X: np.ndarray, y: np.ndarray, season: np.ndarray, lams: np.ndarray) 
     return {"lams": grid, "sq_err": err, "total": err.sum(1)}
 
 
-def calibrate(j: pl.DataFrame, comps: list[str], boot: int, seed: int) -> dict:
+def calibrate(j: pl.DataFrame, comps: list[str], boot: int, seed: int, target: str = "gd5") -> dict:
     cols = [RAW[c] for c in comps]
-    X, y, season = j.select(cols).to_numpy(), j["gd5"].to_numpy().astype(float), j["season"].to_numpy()
+    X, y, season = j.select(cols).to_numpy(), j[target].to_numpy().astype(float), j["season"].to_numpy()
     cv = loso_cv(X, y, season, LAMBDAS)
     best = int(np.argmin(cv["total"][:-1]))
     lam = float(LAMBDAS[best])
@@ -72,7 +78,7 @@ def calibrate(j: pl.DataFrame, comps: list[str], boot: int, seed: int) -> dict:
     a, w = ridge_to_one(X, y, lam)
     rng = np.random.default_rng(seed)
     bw = np.array([ridge_to_one(X[k], y[k], lam)[1] for k in (rng.integers(0, len(y), len(y)) for _ in range(boot))])
-    ols = recon.regress(j, cols)
+    ols = recon.regress(j, cols, y=target)
     adopt = bool(z > 2.0)
     return {"comps": comps, "lambda": lam, "lambda_grid_edge": bool(best in (0, len(LAMBDAS) - 1)), "weights_ridge": dict(zip(comps, w.tolist())),
             "weights_ci95": {c: [float(np.quantile(bw[:, i], 0.025)), float(np.quantile(bw[:, i], 0.975))] for i, c in enumerate(comps)},
@@ -81,9 +87,20 @@ def calibrate(j: pl.DataFrame, comps: list[str], boot: int, seed: int) -> dict:
             "unshrunk_ols": {"r2": ols["r2"], "n": ols["n"], "slopes": {c: ols["slopes"][RAW[c]] for c in comps}}}
 
 
-def shrunk_ols(j: pl.DataFrame, comps: list[str]) -> dict:
-    r = recon.regress(j, [SHR[c] for c in comps])
+def shrunk_ols(j: pl.DataFrame, comps: list[str], target: str = "gd5") -> dict:
+    r = recon.regress(j, [SHR[c] for c in comps], y=target)
     return {"r2": r["r2"], "slopes": {c: r["slopes"][SHR[c]] for c in comps}}
+
+
+def apply_weights_all(t: pl.DataFrame, weights: dict[str, float], gpw: float, tag: str) -> pl.DataFrame:
+    """All-strength version: every component in ``weights`` (penalties and special teams included) times its weight, summed to
+    ``total_gar_all_<tag>``; the change is measured against ``total_gar_all``."""
+    cols = {c: f"{SHR[c]}_{tag}" for c in weights}
+    t = t.with_columns(*[(pl.col(SHR[c]) * weights[c]).alias(cols[c]) for c in weights],
+                       *[(pl.col(f"{SHR[c]}_sd") * weights[c]).alias(f"{cols[c]}_sd") for c in weights if f"{SHR[c]}_sd" in t.columns])
+    sds = [pl.col(f"{cols[c]}_sd") ** 2 for c in weights if f"{cols[c]}_sd" in t.columns]
+    return t.with_columns(pl.sum_horizontal([pl.col(v) for v in cols.values()]).alias(f"total_gar_all_{tag}"), pl.sum_horizontal(sds).sqrt().alias(f"total_gar_all_{tag}_sd")).with_columns(
+        (pl.col(f"total_gar_all_{tag}") / gpw).alias(f"total_war_all_{tag}"), (pl.col(f"total_gar_all_{tag}") - pl.col("total_gar_all")).alias(f"{tag}_change_gar"))
 
 
 def apply_weights(t: pl.DataFrame, weights: dict[str, float], gpw: float, tag: str = "cal") -> pl.DataFrame:
