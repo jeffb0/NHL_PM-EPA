@@ -26,7 +26,7 @@ from src.config import ROOT, load_config
 log = logging.getLogger("pipeline")
 
 STEPS = ["ingest", "parse", "onice", "possessions", "xg", "value", "epa", "metrics", "validate", "ablations", "examples", "figures", "report",
-         "defense", "finishing", "components", "specialteams", "valuation", "calibration"]
+         "defense", "finishing", "components", "specialteams", "valuation", "calibration", "wholemodel"]
 
 
 def step(name: str) -> None:
@@ -98,6 +98,9 @@ def step(name: str) -> None:
         from src.calibration.run import STEPS as CAL_STEPS
         from src.calibration.run import run_steps as run_cal
         run_cal(CAL_STEPS)
+    elif name == "wholemodel":  # whole-model validation (docs/wholemodel/methodology.md)
+        from src.wholemodel.run import run as run_wm
+        run_wm()
     log.info("%s done in %.0fs", name, time.time() - t0)
 
 

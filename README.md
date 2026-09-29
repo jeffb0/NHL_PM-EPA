@@ -169,6 +169,20 @@ Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, 
 
 Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season): mostly shrinkage and finishing. `python -m src.specialteams.run` (or `make specialteams`) then `python -m src.valuation.run`. Docs: [methodology & pre-registration](docs/specialteams/methodology.md) · [validation report](reports/specialteams/validation_report.md).
 
+## Whole-model validation (v1.0)
+
+Does the published total (`total_gar_all`, weights 1) predict next-season team goal differential, and does it add information beyond simple baselines? Six out-of-sample seasons (189 team-seasons), expanding-window OLS with the actual roster, and a goalie proxy in every model.
+
+| Result | Value |
+|---|---|
+| Total vs goalie-proxy-only baseline | RMSE 39.9 vs 48.8 goals, out-of-sample R² 0.33, z = 4.6, better in all 6 seasons |
+| Calibration slope of actual on predicted (slope fixed at 1) | 1.16 ± 0.10 |
+| Versus simple baselines | **no better**: prior team goal differential 39.4, naive roster-weighted on-ice xG 38.9 (WM-2 fails); adds to team history at z = 1.94 (WM-3 just misses) |
+| Leakage-clean total | forecasts worse (43.5); confounded with shrinkage, so unresolved without a rolling refit (WM-5 fails as pre-registered) |
+| Calibrated vs uncalibrated total | indistinguishable (z = 0.38): supports keeping the uncalibrated default |
+
+The total is best read as a decomposition of team results into player-level credit on one scale, not as a forecast that beats a team's own recent results. [Report](reports/wholemodel/validation_report.md) · [methodology & pre-registration](docs/wholemodel/methodology.md). `python -m src.wholemodel.run`.
+
 ## Using PM-EPA responsibly
 
 * **EV = 5v5.** Qualify at ≥ 500 5v5 minutes and **read the 95% CI before the rank**.
