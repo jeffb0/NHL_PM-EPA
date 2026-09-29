@@ -19,13 +19,20 @@ SHR = {"pm": "pm_gar", "def": "def_gar", "fin": "fin_gar", "to": "to_gar", "fo":
 COMPS_ALL = COMPS + ["pen", "pp", "pk", "4v4", "3v3"]
 RAW |= {"pen": "pen_raw_gar", **{c: f"st_{c}_raw_gar" for c in ("pp", "pk", "4v4", "3v3")}}
 SHR |= {"pen": "pen_gar", **{c: f"st_{c}_gar" for c in ("pp", "pk", "4v4", "3v3")}}
+# goalie extension (methodology §5c): the team's goalie value, summed over shots faced by the defending team
+COMPS_ALL_GK = COMPS_ALL + ["gk"]
+RAW |= {"gk": "gk_raw_gar"}
+SHR |= {"gk": "gk_gar"}
 LAMBDAS = np.geomspace(1e1, 1e6, 26)
 
 
 def team_table(t: pl.DataFrame, proc, comps: list[str] = COMPS, target: str = "gd5") -> pl.DataFrame:
     """Team-season sums of the raw and shrunk components joined to the goal-differential target (``gd5`` or ``gd_all``)."""
-    cols = sorted(set(RAW[c] for c in comps) | set(SHR[c] for c in comps))
+    skater = [c for c in comps if c != "gk"]
+    cols = sorted(set(RAW[c] for c in skater) | set(SHR[c] for c in skater))
     s = recon.team_sums(t, cols)
+    if "gk" in comps:
+        s = s.join(pl.read_parquet(proc / "goalie_team_season.parquet").select("season", "team", "gk_gar", "gk_raw_gar"), on=["season", "team"], how="left").with_columns(pl.col("gk_gar").fill_null(0.0), pl.col("gk_raw_gar").fill_null(0.0))
     gd = recon.team_gd5(proc) if target == "gd5" else recon.team_gd_all(proc)
     return s.join(gd, on=["season", "team"]).sort("season", "team")
 

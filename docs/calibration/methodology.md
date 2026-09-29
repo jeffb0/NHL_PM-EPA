@@ -112,6 +112,27 @@ separate step beside the 5v5 calibration above, which is unchanged and stays the
   is below one goal), so the ridge will hold them near 1; PP and PK special-teams RAPM is shrunk, so shrinkage
   compression can inflate their team-level slopes (the ST-4 slopes were PP 1.11 and PK 0.52 on shrunk sums).
 
+## 5c. Goalie in the joint calibration (v3), written 2026-09-29 before it was fitted
+
+With the goaltending component (`docs/goaltending`), the all-strength identity of §5b gains an eleventh regressor, the team's goalie value. The v2
+calibration stays as published; v3 is a separate step writing suffixed outputs.
+
+* **Identity.** `GD_k = a + Σ_c w_c S_ck + w_gk S_gk,k + e_k`, all-strength goal differential, 284 team-seasons, the ten components of §5b plus
+  `gk`. `S_gk,k` is the team's goalie value in goals above replacement, summed over the shots the team's goalies faced (assigned to the defending team,
+  so a goalie who changes teams is split correctly; no primary-team assignment is involved).
+* **Unshrunk analogue.** `Σ (p_replacement − goal)` over the team's unblocked shots faced: the goals a replacement goalie would have been expected to
+  allow (shot xG, shooter shift and the replacement effect) minus the goals actually allowed. The shrunk value is `Σ (p_replacement − p_goalie)`
+  from the mixed model. **Stated in advance:** the unshrunk goalie sum is mechanically part of team goal differential, so its slope is near 1 by
+  construction; the goalie weight is a scale check, not an independent identification. The shrunk goalie slope is expected above 1 (shrinkage
+  compression, as for the skater components).
+* **Estimation, decision rule and gates.** As §5b (ridge toward 1, λ by leave-one-season-out CV, adopt only if paired z > 2 against all ones). The
+  decision is on the joint eleven-weight vector against all ones, and additionally the v3 CV error is compared with v2's (reported). CAL-3 to CAL-5
+  as in §5b for the skater totals (deployment-adjusted CAL-3 is the operative version, §7 deviation 4). CAL-4 includes the goalie weight.
+* **Application.** Skater weights multiply the skater columns as in §5b (`total_gar_all_cal` in the v3 table); the goalie weight multiplies
+  `goalie_gar` in a goalie table (`goalie_gar_cal`). Nothing else changes.
+* **Reported, not gated:** the change in each skater weight from v2 to v3 (the goalie regressor removes goaltending variance from the residual, so skater
+  weights are better identified); the team-level R² with and without the goalie.
+
 ## 6. Limitations stated in advance
 
 * 284 team-seasons give wide intervals; weights near 1 are the expected outcome unless the data disagree strongly.

@@ -185,9 +185,11 @@ def step_final(cfg):
                             pl.Series("var", p["full"] * (1 - p["full"])))
         g = d.group_by("goalie", "season").agg(pl.len().alias("shots"), pl.col("y").sum().alias("goals"), pl.col("p_base").sum().alias("expected_goals"),
                                                (pl.col("p_base") - pl.col("p_full")).sum().alias("gsaa"), (pl.col("p_rep") - pl.col("p_full")).sum().alias("goalie_gar"), (pl.col("p_base") - pl.col("p_rep")).sum().alias("rep_saved"), pl.col("var").sum().alias("W"), pl.col("team_id").mode().first().alias("team_id"))
-        tabs[name] = (g, mode, lay)
+        tt = d.group_by("team_id", "season").agg(pl.len().alias("shots"), (pl.col("p_rep") - pl.col("p_full")).sum().alias("gk_gar"), (pl.col("p_rep") - pl.col("y")).sum().alias("gk_raw_gar"),
+                                                 (pl.col("p_base") - pl.col("p_full")).sum().alias("gk_gsaa"))
+        tabs[name] = (g, mode, lay, tt)
     name = tune["variant"]
-    g, mode, lay = tabs[name]
+    g, mode, lay, team_tab = tabs[name]
     V = mode.posterior_cov()
     ucol = g["goalie"].replace_strict(lay.goalie, default=-1, return_dtype=pl.Int64).to_numpy()
     dcol = (g["goalie"] * 10000 + g["season"]).replace_strict(lay.goalie_season, default=-1, return_dtype=pl.Int64).to_numpy()
@@ -199,6 +201,8 @@ def step_final(cfg):
     players = pl.read_parquet(proc / "players.parquet").select(pl.col("player_id").alias("goalie"), (pl.col("first_name") + " " + pl.col("last_name")).alias("player_name"))
     out = g.join(players, on="goalie", how="left").join(abbr, on="team_id", how="left").rename({"goalie": "player_id"}).with_columns(pl.col("player_id").cast(pl.Int64), pl.col("season").cast(pl.Int64))
     out = out.select("player_id", "player_name", "team", "season", "shots", "goals", "expected_goals", "gsaa", "goalie_gar", "gsaa_sd", "goalie_wins", "goalie_wins_sd", "fringe", "raw_goals_minus_expected").sort("season", "goalie_gar", descending=[False, True])
+    (team_tab.join(abbr, on="team_id").drop("team_id").with_columns(pl.col("season").cast(pl.Int64))
+     .write_parquet(proc / "goalie_team_season.parquet"))     # goalie value by defending team-season (shrunk gk_gar; unshrunk gk_raw_gar): the joint calibration's regressors
     out.write_parquet(proc / "goalie_player_season.parquet")
     out.write_csv(out_dir / "goalie_player_season.csv")
     # G1 vs G2 agreement (goalie-season saved per shot)
