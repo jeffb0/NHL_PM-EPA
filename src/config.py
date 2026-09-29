@@ -152,6 +152,21 @@ class SpecialTeamsCfg(_Strict):
     workers: int = 12
 
 
+class GoaltendingCfg(_Strict):
+    sigma_seasons: list[int]
+    validation_fold: int
+    test_folds: list[int]
+    fringe_shots: int = 500
+    min_shots_yoy: int = 500
+    min_shots_next: int = 400
+    starter_shots: int = 1500
+    z_threshold: float = 2.0
+    yoy_min: float = 0.15
+    slope_band: list[float]
+    em_iters: int = 30
+    em_tol_sd: float = 1e-4
+
+
 class Config(_Strict):
     seed: int
     data: DataCfg
@@ -167,6 +182,7 @@ class Config(_Strict):
     valuation: ValuationCfg | None = None
     components: ComponentsCfg | None = None
     specialteams: SpecialTeamsCfg | None = None
+    goaltending: GoaltendingCfg | None = None
 
     def path(self, rel: str) -> Path:
         p = ROOT / rel

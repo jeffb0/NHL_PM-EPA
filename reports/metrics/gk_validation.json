@@ -1,0 +1,81 @@
+{
+  "GK1": {
+    "coverage": 0.9997786176251996,
+    "pass": true
+  },
+  "GK3": {
+    "mean_improvement_per_game": 0.0039367410810204765,
+    "z": 2.7487630742599536,
+    "n_games": 3936,
+    "pass": true,
+    "test_folds": [
+      2023,
+      2024,
+      2025
+    ],
+    "with_prior_fringe_status": {
+      "mean_improvement_per_game": -0.0015897234129785718,
+      "z": -0.6850991766956364,
+      "n_games": 3936
+    }
+  },
+  "GK4": {
+    "slope": 0.909141377565586,
+    "se": 0.1708410141089246,
+    "n_goalie_seasons": 562,
+    "intercept": 0.0009470755224344655,
+    "pass": true,
+    "with_prior_fringe_status": {
+      "slope": 0.3034514415429746,
+      "se": 0.08463974870379654,
+      "n_goalie_seasons": 562,
+      "intercept": 0.001787118136978542
+    }
+  },
+  "variant": "G1",
+  "GK2": {
+    "yoy_shrunk": {
+      "r": 0.13145715642798503,
+      "n": 439
+    },
+    "yoy_raw_goals_minus_xg": {
+      "r": 0.0027196800236694726,
+      "n": 439
+    },
+    "pass": false
+  },
+  "summary": {
+    "starters": 273,
+    "mean_gar_starters": 20.95063216091568,
+    "sd_gar_starters": 8.555089029650707,
+    "sd_gar_starters_wins": 1.4510232677060508,
+    "mean_sd_starters": 6.3300037286767665,
+    "final": {
+      "variant": "G1",
+      "replacement_saved_per_100_shots": -0.8771383752558679,
+      "corr_G1_G2": 0.9867496418576663,
+      "n_goalie_seasons": 897
+    },
+    "sd": {
+      "u": 0.0588129375148133,
+      "d": 0.053150229603122975
+    },
+    "validation": {
+      "G1_vs_baseline": {
+        "mean_improvement_per_game": 0.003959944415388768,
+        "z": 1.7392350571859,
+        "n_games": 1312
+      },
+      "G2_vs_baseline": {
+        "mean_improvement_per_game": 0.004439599764856303,
+        "z": 2.1829568928959353,
+        "n_games": 1312
+      },
+      "G2_vs_G1": {
+        "mean_improvement_per_game": 0.0004796553494675351,
+        "z": 1.4321447336662494,
+        "n_games": 1312
+      }
+    }
+  }
+}

@@ -40,6 +40,20 @@ def goalie_term(proc, k: float = GOALIE_K) -> pl.DataFrame:
     return j.group_by("season", "team").agg((pl.col("n_team") * pl.col("rate_prev")).sum().alias("G"))
 
 
+def goalie_roll(proc) -> pl.DataFrame | None:
+    """season T, team: sum over goalies of shots faced in T x the goalie's rolling season-(T-1) persistent goals saved per shot
+    (goalies with no prior estimate get the fold's replacement rate). Rates come from folds refit on data through T-1 only."""
+    path = proc / "gk_rolling_rates.parquet"
+    if not path.exists():
+        return None
+    rates = pl.read_parquet(path)
+    rep = rates.group_by("season").agg(pl.col("rep_v").first())
+    faced = pl.read_parquet(proc / "gk_shots.parquet", columns=["season", "goalie", "team_id"]).group_by("season", "goalie", "team_id").agg(pl.len().alias("n"))
+    j = (faced.join(rates.select("goalie", "season", "rate_v"), on=["goalie", "season"], how="left").join(rep, on="season", how="left")
+         .with_columns(pl.coalesce("rate_v", "rep_v").alias("r")).join(_abbr(proc), on="team_id"))
+    return j.group_by("season", "team").agg((pl.col("n") * pl.col("r")).sum().alias("G_roll"))
+
+
 def onice_xgd_rate(proc) -> pl.DataFrame:
     """Raw on-ice all-strength xG differential per minute by player-season (5v5 and special-teams stints), for the naive baseline B3."""
     from src.defense.stints import COMPONENTS as LEDGER
@@ -89,6 +103,9 @@ def build(proc) -> pl.DataFrame:
     df = (gd.join(sums, on=["season", "team"]).join(no, on=["season", "team"], how="left").join(goalie_term(proc), on=["season", "team"], how="left")
           .join(pg, on=["season", "team"]).with_columns(pl.col("S_no_oracle").fill_null(0.0), pl.col("G").fill_null(0.0))
           .with_columns((pl.col("gd_pg_prev") * pl.col("gp")).alias("B_gd"), (pl.col("xgd_pg_prev") * pl.col("gp")).alias("B_xgd")))
+    gr = goalie_roll(proc)
+    if gr is not None:              # rolling goalie component (src/goaltending); replaces the crude proxy G in the goaltending-aware models
+        df = df.join(gr, on=["season", "team"], how="left").with_columns(pl.col("G_roll").fill_null(0.0))
     return df.sort("season", "team")
 
 

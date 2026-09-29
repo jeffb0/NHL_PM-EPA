@@ -169,6 +169,20 @@ Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, 
 
 Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season): mostly shrinkage and finishing. `python -m src.specialteams.run` (or `make specialteams`) then `python -m src.valuation.run`. Docs: [methodology & pre-registration](docs/specialteams/methodology.md) · [validation report](reports/specialteams/validation_report.md).
 
+## Goaltending (v1.0)
+
+`goalie_gar` (goals above replacement, all strengths) in `goalie_player_season.csv`, a separate table because goalies are not in the skater stints. A logistic mixed model on unblocked shots: xG offset plus the shooter's fitted shift, season × strength effect, persistent and season-deviation goalie effects, and an unpenalized replacement effect for goalie-seasons under 500 shots (replacement goalie ≈ 0.88 goals per 100 shots worse than average).
+
+| Gate | Result |
+|---|---|
+| Goal attribution | 99.98% ✅ |
+| Beats the goalie-free baseline on test folds (rolling refits, no future data) | z = 2.75 ✅ |
+| Forward calibration slope | 0.91 ± 0.17 ✅ |
+| Year-over-year stability of single-season effects | r = 0.13 (gate 0.15) ❌ |
+| Rolling goalie term vs the crude proxy at predicting team goal differential | z = 1.02 ❌ |
+
+Goalie values are strongly shrunk and uncertain (mean posterior SD 6.3 goals against a spread of 8.6 among starters), and the replacement convention drives the absolute level: read them for ranking goalies, less for absolute totals. The whole-model conclusions are unchanged with the component in place of the proxy. [Report](reports/goaltending/validation_report.md) · [methodology & pre-registration](docs/goaltending/methodology.md). `python -m src.goaltending.run`.
+
 ## Whole-model validation (v1.0)
 
 Does the published total (`total_gar_all`, weights 1) predict next-season team goal differential, and does it add information beyond simple baselines? Six out-of-sample seasons (189 team-seasons), expanding-window OLS with the actual roster, and a goalie proxy in every model.

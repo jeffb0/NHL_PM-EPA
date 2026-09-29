@@ -42,6 +42,13 @@ def run() -> dict:
     P = {"B0": fit(df, ["G"], TEST_SEASONS), "B1": fit(df, ["G", "B_gd"], TEST_SEASONS), "B2": fit(df, ["G", "B_xgd"], TEST_SEASONS), "B3": fit(df, ["G", "S_naive"], TEST_SEASONS),
          "M": fit(df, ["G", "S_headline"], TEST_SEASONS), "M+B1": fit(df, ["G", "S_headline", "B_gd"], TEST_SEASONS), "M_fixed": fit(df, ["G"], TEST_SEASONS, fixed_slope="S_headline"),
          "M_no_oracle": fit(df, ["G", "S_no_oracle"], TEST_SEASONS), "constant": fit(df, [], TEST_SEASONS)}
+    if "G_roll" in df.columns:      # same models with the rolling goalie component in place of the proxy (docs/goaltending/methodology.md §7)
+        PG = {"B0_roll": fit(df, ["G_roll"], TEST_SEASONS), "B1_roll": fit(df, ["G_roll", "B_gd"], TEST_SEASONS), "B3_roll": fit(df, ["G_roll", "S_naive"], TEST_SEASONS),
+              "M_roll": fit(df, ["G_roll", "S_headline"], TEST_SEASONS), "M+B1_roll": fit(df, ["G_roll", "S_headline", "B_gd"], TEST_SEASONS)}
+        gk = {"rmse": {k: summarize(v, P["B0"])["rmse"] for k, v in {**{k: P[k] for k in ("B0", "B1", "B3", "M", "M+B1")}, **PG}.items()},
+              "B0_roll_vs_B0": paired(PG["B0_roll"], P["B0"]), "M_roll_vs_B0_roll": paired(PG["M_roll"], PG["B0_roll"]), "M_roll_vs_B3_roll": paired(PG["M_roll"], PG["B3_roll"]),
+              "M_roll_vs_B1_roll": paired(PG["M_roll"], PG["B1_roll"]), "M+B1_roll_vs_B1_roll": paired(PG["M+B1_roll"], PG["B1_roll"]), "M_roll_vs_M": paired(PG["M_roll"], P["M"])}
+        (met / "gk_wholemodel.json").write_text(json.dumps(gk, indent=2, default=float), encoding="utf-8")
     res: dict = {"n_test": P["M"].height, "test_seasons": TEST_SEASONS}
     res["models"] = {k: summarize(v, P["B0"]) for k, v in P.items()}
     res["paired"] = {"M_vs_B0": paired(P["M"], P["B0"]), "M_vs_B3": paired(P["M"], P["B3"]), "M+B1_vs_B1": paired(P["M+B1"], P["B1"]), "M_vs_B1": paired(P["M"], P["B1"]), "M_vs_B2": paired(P["M"], P["B2"]),

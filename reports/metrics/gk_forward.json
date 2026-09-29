@@ -1,0 +1,113 @@
+{
+  "folds": [
+    {
+      "train_end": 2017,
+      "test_season": 2018,
+      "logloss_baseline": 0.21114994020470915,
+      "logloss_model": 0.21115026484075342,
+      "z_with_status": -0.14146982172008585,
+      "mean_improvement_per_game": -2.7988173454828165e-05,
+      "z": -0.016348682801764967,
+      "n_games": 1271
+    },
+    {
+      "train_end": 2018,
+      "test_season": 2019,
+      "logloss_baseline": 0.21100781601189741,
+      "logloss_model": 0.21097374834145805,
+      "z_with_status": -2.334521892096056,
+      "mean_improvement_per_game": 0.002914139713353796,
+      "z": 1.4136559556948756,
+      "n_games": 1082
+    },
+    {
+      "train_end": 2019,
+      "test_season": 2020,
+      "logloss_baseline": 0.2129354194290763,
+      "logloss_model": 0.21288477357527397,
+      "z_with_status": -1.03612650275196,
+      "mean_improvement_per_game": 0.0041357474232265904,
+      "z": 1.9775139856050208,
+      "n_games": 868
+    },
+    {
+      "train_end": 2020,
+      "test_season": 2021,
+      "logloss_baseline": 0.21854592958371555,
+      "logloss_model": 0.21848578809049563,
+      "z_with_status": -0.48863068623923545,
+      "mean_improvement_per_game": 0.005159470860798091,
+      "z": 2.592224563373135,
+      "n_games": 1312
+    },
+    {
+      "train_end": 2021,
+      "test_season": 2022,
+      "logloss_baseline": 0.220321624894542,
+      "logloss_model": 0.22026718954712293,
+      "z_with_status": -2.4692910621261106,
+      "mean_improvement_per_game": 0.004702807411515938,
+      "z": 2.0130351965256863,
+      "n_games": 1312
+    },
+    {
+      "train_end": 2022,
+      "test_season": 2023,
+      "logloss_baseline": 0.2120371148331487,
+      "logloss_model": 0.21206047949096715,
+      "z_with_status": -1.196292995635848,
+      "mean_improvement_per_game": -0.002031086854813127,
+      "z": -0.8169975547214603,
+      "n_games": 1312
+    },
+    {
+      "train_end": 2023,
+      "test_season": 2024,
+      "logloss_baseline": 0.21224584536592278,
+      "logloss_model": 0.21218485262629383,
+      "z_with_status": 1.3300388681011044,
+      "mean_improvement_per_game": 0.00517383000878618,
+      "z": 2.0667021232779184,
+      "n_games": 1312
+    },
+    {
+      "train_end": 2024,
+      "test_season": 2025,
+      "logloss_baseline": 0.21956501133468356,
+      "logloss_model": 0.21946264535896245,
+      "z_with_status": -1.0949736018504168,
+      "mean_improvement_per_game": 0.008667480089088377,
+      "z": 3.545317628386599,
+      "n_games": 1312
+    }
+  ],
+  "GK3": {
+    "mean_improvement_per_game": 0.0039367410810204765,
+    "z": 2.7487630742599536,
+    "n_games": 3936,
+    "pass": true,
+    "test_folds": [
+      2023,
+      2024,
+      2025
+    ],
+    "with_prior_fringe_status": {
+      "mean_improvement_per_game": -0.0015897234129785718,
+      "z": -0.6850991766956364,
+      "n_games": 3936
+    }
+  },
+  "GK4": {
+    "slope": 0.909141377565586,
+    "se": 0.1708410141089246,
+    "n_goalie_seasons": 562,
+    "intercept": 0.0009470755224344655,
+    "pass": true,
+    "with_prior_fringe_status": {
+      "slope": 0.3034514415429746,
+      "se": 0.08463974870379654,
+      "n_goalie_seasons": 562,
+      "intercept": 0.001787118136978542
+    }
+  }
+}

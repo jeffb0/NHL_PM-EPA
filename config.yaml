@@ -125,6 +125,21 @@ specialteams:
   slope_band: [0.5, 2.0]
   workers: 12
 
+goaltending:
+  # Goalie component. Spec + pre-registered gates: docs/goaltending/methodology.md.
+  sigma_seasons: [2017, 2018, 2019, 2020, 2021]   # variance components (EM) are fit on these seasons only
+  validation_fold: 2022
+  test_folds: [2023, 2024, 2025]
+  fringe_shots: 500            # goalie-seasons with fewer shots faced are the replacement pool
+  min_shots_yoy: 500
+  min_shots_next: 400
+  starter_shots: 1500
+  z_threshold: 2.0
+  yoy_min: 0.15
+  slope_band: [0.7, 1.4]
+  em_iters: 30
+  em_tol_sd: 0.0001
+
 valuation:
   # Replacement level and integration. Spec: docs/finishing/methodology.md §8-§9.
   regular_forwards: 12         # per team-season, ranked by all-strength TOI; the rest are fringe
