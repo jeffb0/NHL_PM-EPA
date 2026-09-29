@@ -168,8 +168,8 @@ def reconcile(t: pl.DataFrame, proc) -> dict:
     all_comps = [f"{n}_gar" for n in CORE + [c[:-4] for c in t.columns if c in ("to_gar", "fo_gar", "pen_gar")]]
     comps = [c for c in all_comps if c != "pen_gar"]                 # 5v5 target: penalties are realized on special teams (checked separately)
     raw_cols = [c for c in ("pm_raw_gar", "def_gar", "fin_gar", "to_raw_gar", "fo_gar") if c in t.columns]
-    has_ra = "to_ra_gar" in t.columns
-    sums = t.group_by("season", "team").agg(*[pl.col(c).sum().alias(c) for c in dict.fromkeys([*all_comps, "total_gar", *extra, *raw_cols, *(["to_ra_gar"] if has_ra else [])])])
+    has_orig = "to_gar_orig" in t.columns
+    sums = t.group_by("season", "team").agg(*[pl.col(c).sum().alias(c) for c in dict.fromkeys([*all_comps, "total_gar", *extra, *raw_cols, *(["to_gar_orig"] if has_orig else [])])])
     j = gd.join(sums, on=["season", "team"]).filter(pl.col("gd5").is_not_null()).join(recon.team_gd_st(proc), on=["season", "team"], how="left")
     y = j["gd5"].to_numpy().astype(float)
     out = {"n_team_seasons": int(j.height), "components": comps}
@@ -189,8 +189,8 @@ def reconcile(t: pl.DataFrame, proc) -> dict:
     if "pen_gar" in j.columns:
         r = recon.regress(j, ["pen_gar"], y="st_gd")
         out["penalty_vs_special_teams_gd"] = {"slope": r["slopes"]["pen_gar"]["slope"], "se": r["slopes"]["pen_gar"]["se"], "r2": r["r2"], "sd_st_gd": float(j["st_gd"].std())}
-    if has_ra:
-        out["joint_to_ra"] = joint(["to_ra_gar" if c == "to_gar" else c for c in comps])
+    if has_orig:      # the original (not role-adjusted) turnover charge in place of the default TO-RA
+        out["joint_to_orig"] = joint(["to_gar_orig" if c == "to_gar" else c for c in comps])
     out["joint_core"] = joint([f"{n}_gar" for n in CORE])       # the three earlier components only (continuity with the earlier report)
     out["sd_team_5v5_gd"] = float(y.std())
     out["sd_sum_total_gar"] = float(j["total_gar"].std())

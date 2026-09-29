@@ -7,7 +7,7 @@
     python -m src.pipeline --smoke               # tiny end-to-end run on a few games (CI / quickstart)
 
 Steps (in order): ingest, parse, onice, possessions, xg, value, epa, metrics, validate,
-ablations, examples, figures, report, defense, finishing, components, valuation. Every step reads/writes Parquet under data/ and is
+ablations, examples, figures, report, defense, finishing, components, valuation, calibration. Every step reads/writes Parquet under data/ and is
 deterministic given config.yaml (seeded).
 """
 
@@ -26,7 +26,7 @@ from src.config import ROOT, load_config
 log = logging.getLogger("pipeline")
 
 STEPS = ["ingest", "parse", "onice", "possessions", "xg", "value", "epa", "metrics", "validate", "ablations", "examples", "figures", "report",
-         "defense", "finishing", "components", "valuation"]
+         "defense", "finishing", "components", "valuation", "calibration"]
 
 
 def step(name: str) -> None:
@@ -90,6 +90,10 @@ def step(name: str) -> None:
         from src.valuation.run import STEPS as VAL_STEPS
         from src.valuation.run import run_steps as run_val
         run_val(VAL_STEPS)
+    elif name == "calibration":  # joint calibration of component scales (docs/calibration/methodology.md)
+        from src.calibration.run import STEPS as CAL_STEPS
+        from src.calibration.run import run_steps as run_cal
+        run_cal(CAL_STEPS)
     log.info("%s done in %.0fs", name, time.time() - t0)
 
 

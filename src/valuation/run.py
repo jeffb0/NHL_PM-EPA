@@ -42,7 +42,17 @@ def load_extras(proc) -> dict[str, pl.DataFrame]:
     """Turnover, faceoff and penalty components (src/components), when they have been built."""
     spec = {"to": ("to_player_season.parquet", ["to_gar", "to_gar_sd", "to_gar_unadj", "to_rate_per60", "to_rep_per60"]), "fo": ("fo_player_season.parquet", ["fo_gar", "fo_gar_sd", "fo_draws", "fo_gaa"]),
             "pen": ("pen_player_season.parquet", ["pen_gar", "pen_gar_sd", "drawn_per60_post", "taken_per60_post"])}
-    return {k: pl.read_parquet(proc / f).select("player_id", "season", *cols) for k, (f, cols) in spec.items() if (proc / f).exists()}
+    out = {k: pl.read_parquet(proc / f).select("player_id", "season", *cols) for k, (f, cols) in spec.items() if (proc / f).exists()}
+    ra_path = proc / "to_ra_player_season.parquet"
+    if "to" in out and ra_path.exists():
+        # DEFAULT (user decision, 2026-09-29): the role-adjusted turnover component (TO-RA) is the turnover component. The
+        # original charge stays as the memo columns `to_gar_orig` (and the total with it, `total_gar_to_orig`).
+        ra = pl.read_parquet(ra_path).select("player_id", "season", "to_ra_gar", "to_ra_gar_sd", "to_ra_rep_per60", "resid60", "inv60")
+        out["to"] = (out["to"].rename({"to_gar": "to_gar_orig", "to_gar_sd": "to_gar_orig_sd"}).drop("to_rate_per60", "to_rep_per60")
+                     .join(ra, on=["player_id", "season"], how="left")
+                     .rename({"to_ra_gar": "to_gar", "to_ra_gar_sd": "to_gar_sd", "to_ra_rep_per60": "to_rep_per60", "resid60": "to_rate_per60"})
+                     .with_columns(pl.col("to_gar_orig").fill_null(0.0), pl.col("to_gar_orig_sd").fill_null(0.0)))
+    return out
 
 
 def build_table(cfg, n_f: int, n_d: int, ps, dpm, shifts, fin_ps, sel, gpw: float, refit_cache: dict):
@@ -68,11 +78,8 @@ def build_table(cfg, n_f: int, n_d: int, ps, dpm, shifts, fin_ps, sel, gpw: floa
                          pl.col("fin_gar_other").alias("fin_gar_other_strengths_memo"), pl.col("attempts_other").alias("fin_attempts_other_memo"))
     t = cb.combine(ps.join(st.select("player_id", "season", "fringe"), on=["player_id", "season"], how="left"), pm, dp, fin, sd, memo, gpw, load_extras(_paths(cfg)[0]))
     t = t.join(st.select("player_id", "season", "fringe"), on=["player_id", "season"], how="left") if "fringe" not in t.columns else t
-    ra_path = _paths(cfg)[0] / "to_ra_player_season.parquet"
-    if ra_path.exists() and "to_gar" in t.columns:   # role-adjusted turnover variant: memo columns, and the total with it substituted for TO
-        ra = pl.read_parquet(ra_path).select("player_id", "season", "to_ra_gar", "to_ra_gar_sd", "inv60")
-        t = t.join(ra, on=["player_id", "season"], how="left").with_columns(pl.col("to_ra_gar").fill_null(0.0), pl.col("to_ra_gar_sd").fill_null(0.0))
-        t = t.with_columns((pl.col("total_gar") - pl.col("to_gar") + pl.col("to_ra_gar")).alias("total_gar_to_ra"))
+    if "to_gar_orig" in t.columns:   # the original (not role-adjusted) turnover charge, as a variant total
+        t = t.with_columns((pl.col("total_gar") - pl.col("to_gar") + pl.col("to_gar_orig")).alias("total_gar_to_orig"))
     return t, rep_pm, fr
 
 
@@ -89,7 +96,7 @@ def step_combine(cfg):
     t, rep_pm, fr = build_table(cfg, vc.regular_forwards, vc.regular_defense, ps, dpm, shifts, fin_ps, sel, gpw, cache)
     keep = ["player_id", "player_name", "team", "position", "pos_group", "season", "toi_5v5", "fringe",
             "pm_gar", "def_gar", "fin_gar", "to_gar", "fo_gar", "pen_gar", "total_gar", "total_gar_lo", "total_gar_hi", "total_war", "total_war_sd",
-            "pm_wins", "def_wins", "fin_wins", "to_wins", "fo_wins", "pen_wins", "pm_gar_sd", "def_gar_sd", "fin_gar_sd", "to_gar_sd", "fo_gar_sd", "pen_gar_sd", "total_gar_sd", "to_gar_unadj", "to_ra_gar", "to_ra_gar_sd", "total_gar_to_ra", "inv60", "fo_draws", "drawn_per60_post", "taken_per60_post", "def_gar_perseason", "total_gar_perseason",
+            "pm_wins", "def_wins", "fin_wins", "to_wins", "fo_wins", "pen_wins", "pm_gar_sd", "def_gar_sd", "fin_gar_sd", "to_gar_sd", "fo_gar_sd", "pen_gar_sd", "total_gar_sd", "to_gar_unadj", "to_gar_orig", "to_gar_orig_sd", "total_gar_to_orig", "inv60", "fo_draws", "drawn_per60_post", "taken_per60_post", "def_gar_perseason", "total_gar_perseason",
             "pm_post_per60", "pm_rep_per60", "dpm_var_per60", "dpm_rep_per60", "pm_shrink_B",
             "fin_attempts_5v5", "raw_g_minus_xg_5v5", "fin_gaa_5v5", "fin_gar_other_strengths_memo", "fin_attempts_other_memo",
             "pm_epa_per60_ev", "dpm_val_per60", "qualified_ev"]

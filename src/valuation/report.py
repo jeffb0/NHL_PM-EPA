@@ -56,10 +56,10 @@ def run() -> None:
             "A slope near 1 means the components are on the goal scale. **Slopes are reported, not used to rescale.**", "",
             _table([{"regressor": k, "slope": com["reconciliation"][k]["slope"], "r": com["reconciliation"][k]["r"]} for k in ("total_gar", "total_gar_perseason", "pm_gar", "def_gar", "fin_gar", "to_gar", "fo_gar") if k in com["reconciliation"]], 3), "",
             "Joint regressions (slope ± SE), 5v5 components only (penalties are realized on special teams and are checked against special-teams goal differential below):", "",
-            _table([{"regression": name, "R²": r["r2"], **{c.replace("_raw_gar", "").replace("to_ra_gar", "to").replace("_gar", ""): f"{s['slope']:.2f} ± {s['se']:.2f}" for c, s in r["slopes"].items()}}
+            _table([{"regression": name, "R²": r["r2"], **{c.replace("_raw_gar", "").replace("to_gar_orig", "to (original)").replace("_gar", ""): f"{s['slope']:.2f} ± {s['se']:.2f}" for c, s in r["slopes"].items()}}
                     for name, r in (("three components (PM, DPM, FIN)", com["reconciliation"]["joint_core"]), ("five 5v5 components, shrunk", com["reconciliation"]["joint"]),
                                     ("five 5v5 components, possession and turnover unshrunk", com["reconciliation"].get("joint_unshrunk")),
-                                    ("five 5v5 components, role-adjusted turnover (TO-RA) instead of TO", com["reconciliation"].get("joint_to_ra")))
+                                    ("five 5v5 components, original (not role-adjusted) turnover instead of the default TO-RA", com["reconciliation"].get("joint_to_orig")))
                     if r is not None], 3), "",
             f"SD of team 5v5 goal differential {com['reconciliation']['sd_team_5v5_gd']:.1f}; SD of summed player value {com['reconciliation']['sd_sum_total_gar']:.1f}.", ""]
     if "penalty_vs_special_teams_gd" in com["reconciliation"]:

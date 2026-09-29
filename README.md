@@ -137,7 +137,20 @@ The named slices of 5v5 value that PM-EPA, DPM and FIN leave unclaimed. **Turnov
 | Faceoff skill vs no taker / vs raw win rate, next season | z = 24.5 / 12.4; a win is worth 0.0245 xG |
 | Penalty cost per 5v5 minor | 0.175 xG; drawn and taken both repeatable (YOY 0.48, 0.52) |
 
-**Caveat:** the turnover component is right at team level but biased in allocation against puck-dominant players (giveaways are recorded, successful plays are not). A role-adjusted variant (`to_ra_gar`, `total_gar_to_ra`) compares players with similar observed puck involvement; it mitigates part of the bias (modestly) and passes its gates. `python -m src.components.run` then `python -m src.valuation.run` (or `make components valuation`) put all six components in `player_value_season.csv`. Docs: [methodology & pre-registration](docs/components/methodology.md) · [validation report](reports/components/validation_report.md) · [model card](reports/components/model_card.md).
+**Caveat:** the turnover component is right at team level but biased in allocation against puck-dominant players (giveaways are recorded, successful plays are not). The role-adjusted version (TO-RA) compares players with similar observed puck involvement; it mitigates part of the bias (modestly), passes its gates and is the default `to_gar` in the combined table (the original charge is `to_gar_orig`, total `total_gar_to_orig`). `python -m src.components.run` then `python -m src.valuation.run` (or `make components valuation`) put all six components in `player_value_season.csv`. Docs: [methodology & pre-registration](docs/components/methodology.md) · [validation report](reports/components/validation_report.md) · [model card](reports/components/model_card.md).
+
+## Joint calibration of component scales (v1.0)
+
+Are the six components each worth one goal per goal? Team-level slopes for the *shrunk* components mix genuine scale error with **shrinkage compression** (independent-player priors shrink effects shared across a team), so the calibration is estimated on the *unshrunk* components at team level with a ridge prior toward 1 (λ by leave-one-season-out cross-validation), and applied to the shrunk player values only if it improves held-out prediction (paired z > 2). Player-level effects are checked out of sample on next-season on-ice results with team-season fixed effects and a teammate-context control.
+
+| Check | Result |
+|---|---|
+| Unshrunk team-level slopes (5v5 goal differential, 284 team-seasons) | possession 2.01 ± 0.28, defense 1.14 ± 0.16, finishing 0.80 ± 0.09, turnover 0.61 ± 0.41, faceoff 1.10 ± 0.65 |
+| The same components shrunk | finishing 1.80, turnover 1.51, faceoff 1.99: shrinkage compression, not scale error |
+| xG-to-goals factor (team goal differential on xG differential) | 1.03 ± 0.05 |
+| Pre-registered decision (calibrated vs all-ones, held-out season error) | z = 1.69 < 2: **all weights stay at 1** |
+
+The ridge weights (possession 1.80, defense 1.14, finishing 0.80, turnover 0.81, faceoff 1.13) are published as a variant (`total_gar_ridge`) and validated, but not applied. `python -m src.calibration.run` (or `make calibration`) writes `data/outputs/player_value_calibrated.csv`. Docs: [methodology & pre-registration](docs/calibration/methodology.md) · [validation report](reports/calibration/validation_report.md).
 
 ## Using PM-EPA responsibly
 

@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 UV ?= uv
 
-.PHONY: install ingest all pipeline defense finishing components valuation test lint smoke notebooks clean
+.PHONY: install ingest all pipeline defense finishing components valuation calibration test lint smoke notebooks clean
 
 install:            ## create .venv (Python 3.11) and install pinned deps
 	$(UV) venv --python 3.11 .venv
@@ -26,6 +26,9 @@ components:         ## turnover cost, faceoffs, penalties at 5v5 (needs the epa/
 
 valuation:          ## replacement level, goals per win, combined component table (needs finishing and components)
 	$(PY) -m src.valuation.run
+
+calibration:        ## joint calibration of component scales (needs valuation)
+	$(PY) -m src.calibration.run
 
 test:
 	$(PY) -m pytest tests -q

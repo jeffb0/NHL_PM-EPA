@@ -203,6 +203,11 @@ skill, so the adjustment also removes some genuine skill; TO-RA is a like-for-li
    Involvement explains 11% (F) and 6% (D) of the variance in the charge, so the effect is modest (rank correlation with
    TO 0.93 / 0.96; totals correlate 0.999; the mean change in total ranges from -0.06 goals for the least-involved quintile
    to +0.24 for the most-involved). With TO-RA substituted in the team-level regression R² is 0.473 (0.464 with TO) and
-   the TO-RA slope is 2.19 ± 0.68. TO remains the default; `to_ra_gar` and `total_gar_to_ra` are variants.
+   the TO-RA slope is 2.19 ± 0.68. *(Superseded by deviation 9.)*
+9. **TO-RA became the default turnover component (model owner's decision, 2026-09-29).** The joint calibration
+   (docs/calibration) found that a total with TO-RA predicts next-season within-team results much better than one with the
+   original charge (paired z +8.9 goals). In the valuation layer `to_gar` is now TO-RA; the original charge is `to_gar_orig`
+   and the total with it is `total_gar_to_orig`. TO-RA remains not accounting-consistent (§8b caveat). The turnover
+   component's forward slope is still negative, and the model owner plans to revisit turnover in the whole-model validation.
 6. **Sensitivity analysis scope.** The regular/fringe cutoff sensitivity covers the possession, defense and
    finishing components; the turnover, faceoff and penalty replacement stays at the default cutoff.

@@ -1,0 +1,38 @@
+{
+  "without turnover cost": {
+    "own_slope_goals": 0.973593015787937,
+    "own_se": 0.06357463051214286,
+    "paired_z_goals": 5.710262648250639,
+    "paired_z_xg": 3.8960579545257437
+  },
+  "with original (not role-adjusted) turnover": {
+    "own_slope_goals": 0.9200213469501115,
+    "own_se": 0.0676586958380304,
+    "paired_z_goals": -8.897568130618895,
+    "paired_z_xg": -7.391029998752981
+  },
+  "without faceoffs": {
+    "own_slope_goals": 0.9833812883112225,
+    "own_se": 0.06927000161169664,
+    "paired_z_goals": 2.1464728261084436,
+    "paired_z_xg": 0.6823874976779718
+  },
+  "without penalties": {
+    "own_slope_goals": 0.9405333409823353,
+    "own_se": 0.07156475785535704,
+    "paired_z_goals": -5.690184889382366,
+    "paired_z_xg": -3.9358452621164646
+  },
+  "without turnover and penalties": {
+    "own_slope_goals": 1.0019673694753455,
+    "own_se": 0.06915425575865253,
+    "paired_z_goals": 0.6123531650855316,
+    "paired_z_xg": 0.3719882599610182
+  },
+  "without turnover, faceoffs, penalties": {
+    "own_slope_goals": 1.0684283275441593,
+    "own_se": 0.0728296701074871,
+    "paired_z_goals": 2.828816982556036,
+    "paired_z_xg": 1.3452454796782762
+  }
+}

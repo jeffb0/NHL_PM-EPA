@@ -4,7 +4,7 @@ Components: possession (PM-EPA, shrunk), defense (DPM valuation rate, refit with
 
 ## Goals per win (derived from the data)
 
-**5.90 goals per win** (95% CI 5.66–6.13; R² 0.91; 284 team-seasons, 2017-18 to 2025-26). OLS through the origin of (wins − GP/2) on goal differential (shootouts excluded).
+**5.90 goals per win** (95% CI 5.69–6.13; R² 0.91; 284 team-seasons, 2017-18 to 2025-26). OLS through the origin of (wins − GP/2) on goal differential (shootouts excluded).
 
 | season | goals per win |
 |---|---|
@@ -40,9 +40,9 @@ The DPM rates come from the refit with unpenalized fringe-count covariates, so t
 
 ## Scale checks
 
-SD of goals above replacement among qualified skaters (≥ 500 5v5 min): pm_gar 0.37, def_gar 1.88, fin_gar 1.48, to_gar 0.39, fo_gar 0.52, pen_gar 0.49, total_gar 2.44.
+SD of goals above replacement among qualified skaters (≥ 500 5v5 min): pm_gar 0.37, def_gar 1.88, fin_gar 1.48, to_gar 0.35, fo_gar 0.52, pen_gar 0.49, total_gar 2.46.
 
-Correlation between components (qualified): pm_gar~def_gar -0.02, pm_gar~fin_gar 0.39, pm_gar~to_gar -0.03, pm_gar~fo_gar 0.10, pm_gar~pen_gar 0.25, def_gar~fin_gar -0.28, def_gar~to_gar 0.27, def_gar~fo_gar 0.03, def_gar~pen_gar 0.01, fin_gar~to_gar -0.47, fin_gar~fo_gar 0.15, fin_gar~pen_gar 0.25, to_gar~fo_gar -0.13, to_gar~pen_gar -0.12, fo_gar~pen_gar -0.02.
+Correlation between components (qualified): pm_gar~def_gar -0.02, pm_gar~fin_gar 0.39, pm_gar~to_gar 0.12, pm_gar~fo_gar 0.10, pm_gar~pen_gar 0.25, def_gar~fin_gar -0.28, def_gar~to_gar 0.24, def_gar~fo_gar 0.03, def_gar~pen_gar 0.01, fin_gar~to_gar -0.35, fin_gar~fo_gar 0.15, fin_gar~pen_gar 0.25, to_gar~fo_gar -0.15, to_gar~pen_gar -0.06, fo_gar~pen_gar -0.02.
 
 ### Team reconciliation
 
@@ -50,24 +50,24 @@ Correlation between components (qualified): pm_gar~def_gar -0.02, pm_gar~fin_gar
 
 | regressor | slope | r |
 |---|---|---|
-| total_gar | 1.330 | 0.657 |
-| total_gar_perseason | 1.465 | 0.688 |
+| total_gar | 1.321 | 0.663 |
+| total_gar_perseason | 1.459 | 0.695 |
 | pm_gar | 3.968 | 0.457 |
 | def_gar | 1.745 | 0.515 |
 | fin_gar | 2.471 | 0.468 |
-| to_gar | 2.691 | 0.222 |
+| to_gar | 3.895 | 0.320 |
 | fo_gar | 3.195 | 0.192 |
 
 Joint regressions (slope ± SE), 5v5 components only (penalties are realized on special teams and are checked against special-teams goal differential below):
 
-| regression | R² | pm | def | fin | to | fo |
-|---|---|---|---|---|---|---|
-| three components (PM, DPM, FIN) | 0.448 | 2.04 ± 0.43 | 1.30 ± 0.16 | 1.61 ± 0.25 | — | — |
-| five 5v5 components, shrunk | 0.464 | 1.53 ± 0.47 | 1.14 ± 0.17 | 1.80 ± 0.26 | 1.51 ± 0.66 | 1.99 ± 0.80 |
-| five 5v5 components, possession and turnover unshrunk | 0.479 | 1.16 ± 0.31 | 1.11 ± 0.16 | 1.79 ± 0.25 | 1.18 ± 0.44 | 1.88 ± 0.79 |
-| five 5v5 components, role-adjusted turnover (TO-RA) instead of TO | 0.473 | 1.20 ± 0.48 | 1.07 ± 0.17 | 1.87 ± 0.26 | 2.19 ± 0.68 | 2.07 ± 0.78 |
+| regression | R² | pm | def | fin | to | fo | to (original) |
+|---|---|---|---|---|---|---|---|
+| three components (PM, DPM, FIN) | 0.448 | 2.04 ± 0.43 | 1.30 ± 0.16 | 1.61 ± 0.25 | — | — | — |
+| five 5v5 components, shrunk | 0.473 | 1.20 ± 0.48 | 1.07 ± 0.17 | 1.87 ± 0.26 | 2.19 ± 0.68 | 2.07 ± 0.78 | — |
+| five 5v5 components, possession and turnover unshrunk | 0.492 | 0.92 ± 0.32 | 1.04 ± 0.16 | 1.86 ± 0.25 | 1.61 ± 0.43 | 1.95 ± 0.76 | — |
+| five 5v5 components, original (not role-adjusted) turnover instead of the default TO-RA | 0.464 | 1.53 ± 0.47 | 1.14 ± 0.17 | 1.80 ± 0.26 | — | 1.99 ± 0.80 | 1.51 ± 0.66 |
 
-SD of team 5v5 goal differential 30.9; SD of summed player value 15.3.
+SD of team 5v5 goal differential 30.9; SD of summed player value 15.5.
 
 Penalty check against special-teams goal differential (non-5v5 goals): slope 1.35 ± 0.51, R² 0.025 (special-teams GD SD 15.9).
 
@@ -84,36 +84,36 @@ Penalty check against special-teams goal differential (non-5v5 goals): slope 1.3
 
 | player_name | team | position | toi_5v5 | pm_gar | def_gar | fin_gar | to_gar | fo_gar | pen_gar | total_gar | total_gar_lo | total_gar_hi | total_war |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Moritz Seider | DET | D | 1564.53 | 0.07 | 9.87 | 0.50 | 0.07 | 0.00 | 0.57 | 11.08 | 6.64 | 15.53 | 1.88 |
-| Jason Robertson | DAL | L | 1214.32 | 0.81 | 1.43 | 9.28 | -0.98 | -0.00 | 0.52 | 11.07 | 5.91 | 16.23 | 1.88 |
-| Adam Pelech | NYI | D | 1389.98 | 0.39 | 10.12 | -0.13 | 0.55 | 0.00 | -0.18 | 10.74 | 7.46 | 14.03 | 1.82 |
-| Ryan O'Reilly | NSH | C | 1140.72 | 0.95 | 3.34 | 3.10 | 0.07 | 1.79 | 0.46 | 9.72 | 5.63 | 13.80 | 1.65 |
-| Anze Kopitar | LAK | C | 947.27 | 0.54 | 3.63 | 3.03 | -0.11 | 2.00 | 0.25 | 9.33 | 6.23 | 12.44 | 1.58 |
-| Artem Zub | OTT | D | 1343.18 | 0.38 | 8.65 | 0.46 | 0.29 | 0.00 | -0.56 | 9.21 | 5.83 | 12.60 | 1.56 |
-| Jordan Kyrou | STL | R | 911.22 | 0.59 | 3.75 | 4.19 | -0.18 | -0.02 | 0.60 | 8.93 | 5.36 | 12.50 | 1.51 |
-| Jonas Brodin | MIN | D | 1078.12 | 0.07 | 7.22 | 0.32 | 0.64 | 0.00 | 0.56 | 8.81 | 6.04 | 11.58 | 1.49 |
-| Jack Eichel | VGK | C | 1073.72 | 0.14 | 4.28 | 4.33 | -1.12 | 0.26 | 0.79 | 8.67 | 4.66 | 12.68 | 1.47 |
-| Cale Makar | COL | D | 1289.12 | 1.79 | 3.38 | 2.28 | 0.32 | 0.00 | 0.85 | 8.62 | 5.00 | 12.23 | 1.46 |
-| Nick Suzuki | MTL | C | 1195.08 | 0.43 | 3.26 | 3.95 | -0.12 | 0.93 | 0.09 | 8.54 | 4.65 | 12.42 | 1.45 |
-| Esa Lindell | DAL | D | 1417.27 | 0.36 | 7.78 | 0.35 | -0.43 | 0.00 | 0.44 | 8.50 | 5.33 | 11.67 | 1.44 |
-| Kirill Kaprizov | MIN | L | 1291.72 | 0.84 | 1.42 | 6.48 | -0.93 | -0.00 | 0.61 | 8.42 | 3.69 | 13.16 | 1.43 |
-| Jared Spurgeon | MIN | D | 1229.12 | 0.39 | 5.99 | 0.75 | 0.53 | 0.00 | 0.66 | 8.32 | 5.63 | 11.00 | 1.41 |
-| Colton Parayko | STL | D | 1412.45 | 0.40 | 5.81 | 0.53 | 0.07 | 0.00 | 1.49 | 8.31 | 4.96 | 11.65 | 1.41 |
+| Jason Robertson | DAL | L | 1214.32 | 0.81 | 1.43 | 9.28 | -0.51 | -0.00 | 0.52 | 11.53 | 6.37 | 16.69 | 1.96 |
+| Moritz Seider | DET | D | 1564.53 | 0.07 | 9.87 | 0.50 | 0.20 | 0.00 | 0.57 | 11.21 | 6.77 | 15.65 | 1.90 |
+| Adam Pelech | NYI | D | 1389.98 | 0.39 | 10.12 | -0.13 | 0.72 | 0.00 | -0.18 | 10.91 | 7.63 | 14.20 | 1.85 |
+| Ryan O'Reilly | NSH | C | 1140.72 | 0.95 | 3.34 | 3.10 | 0.03 | 1.79 | 0.46 | 9.67 | 5.59 | 13.75 | 1.64 |
+| Anze Kopitar | LAK | C | 947.27 | 0.54 | 3.63 | 3.03 | -0.16 | 2.00 | 0.25 | 9.28 | 6.18 | 12.39 | 1.57 |
+| Artem Zub | OTT | D | 1343.18 | 0.38 | 8.65 | 0.46 | 0.34 | 0.00 | -0.56 | 9.27 | 5.89 | 12.65 | 1.57 |
+| Jordan Kyrou | STL | R | 911.22 | 0.59 | 3.75 | 4.19 | 0.10 | -0.02 | 0.60 | 9.21 | 5.64 | 12.78 | 1.56 |
+| Jack Eichel | VGK | C | 1073.72 | 0.14 | 4.28 | 4.33 | -0.75 | 0.26 | 0.79 | 9.05 | 5.04 | 13.06 | 1.53 |
+| Kirill Kaprizov | MIN | L | 1291.72 | 0.84 | 1.42 | 6.48 | -0.54 | -0.00 | 0.61 | 8.82 | 4.08 | 13.55 | 1.50 |
+| Jonas Brodin | MIN | D | 1078.12 | 0.07 | 7.22 | 0.32 | 0.63 | 0.00 | 0.56 | 8.80 | 6.03 | 11.57 | 1.49 |
+| Cale Makar | COL | D | 1289.12 | 1.79 | 3.38 | 2.28 | 0.49 | 0.00 | 0.85 | 8.79 | 5.18 | 12.41 | 1.49 |
+| Nick Suzuki | MTL | C | 1195.08 | 0.43 | 3.26 | 3.95 | -0.02 | 0.93 | 0.09 | 8.64 | 4.76 | 12.53 | 1.47 |
+| Auston Matthews | TOR | C | 910.02 | 0.97 | -0.44 | 5.67 | -0.03 | 2.04 | 0.26 | 8.47 | 4.15 | 12.79 | 1.44 |
+| Esa Lindell | DAL | D | 1417.27 | 0.36 | 7.78 | 0.35 | -0.50 | 0.00 | 0.44 | 8.43 | 5.27 | 11.60 | 1.43 |
+| Colton Parayko | STL | D | 1412.45 | 0.40 | 5.81 | 0.53 | 0.15 | 0.00 | 1.49 | 8.38 | 5.04 | 11.72 | 1.42 |
 
 **Bottom 10**
 
 | player_name | team | position | toi_5v5 | pm_gar | def_gar | fin_gar | to_gar | fo_gar | pen_gar | total_gar | total_gar_lo | total_gar_hi | total_war |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Ben Chiarot | DET | D | 1462.78 | -0.03 | -3.06 | 0.49 | 0.31 | 0.00 | -0.31 | -2.60 | -7.06 | 1.85 | -0.44 |
-| Logan Mailloux | STL | D | 989.28 | 0.12 | -2.80 | 0.39 | -0.10 | 0.00 | -0.24 | -2.63 | -5.65 | 0.39 | -0.45 |
-| Andrei Svechnikov | CAR | R | 1024.47 | 0.61 | -3.69 | 1.79 | -0.71 | -0.02 | -0.68 | -2.71 | -6.89 | 1.48 | -0.46 |
-| Josh Anderson | MTL | R | 794.73 | 0.41 | -3.77 | 0.70 | -0.18 | 0.02 | -0.06 | -2.86 | -5.65 | -0.08 | -0.49 |
-| Evander Kane | VAN | L | 988.98 | 0.53 | -4.89 | 1.64 | -0.76 | -0.02 | 0.04 | -3.46 | -7.68 | 0.76 | -0.59 |
-| Connor Bedard | CHI | C | 1090.98 | 0.63 | -6.48 | 3.03 | -0.56 | -0.66 | 0.52 | -3.52 | -8.51 | 1.47 | -0.60 |
-| Max Domi | TOR | C | 1009.70 | -0.51 | -3.30 | 0.88 | -1.03 | 0.13 | -0.01 | -3.83 | -7.24 | -0.42 | -0.65 |
-| Artyom Levshunov | CHI | D | 1025.97 | 0.13 | -3.83 | 0.01 | -0.34 | 0.00 | -0.09 | -4.13 | -7.02 | -1.24 | -0.70 |
-| John Klingberg | SJS | D | 921.27 | 0.09 | -6.58 | 0.44 | -0.27 | 0.00 | 0.24 | -6.08 | -9.10 | -3.06 | -1.03 |
-| Tony DeAngelo | NYI | D | 1242.42 | 0.37 | -8.70 | 0.49 | -0.22 | 0.00 | -0.05 | -8.10 | -11.68 | -4.53 | -1.37 |
+| Ben Chiarot | DET | D | 1462.78 | -0.03 | -3.06 | 0.49 | 0.36 | 0.00 | -0.31 | -2.55 | -7.00 | 1.91 | -0.43 |
+| Logan Mailloux | STL | D | 989.28 | 0.12 | -2.80 | 0.39 | -0.02 | 0.00 | -0.24 | -2.55 | -5.57 | 0.47 | -0.43 |
+| Chandler Stephenson | SEA | C | 1094.05 | -0.76 | -4.59 | 1.69 | -0.77 | 0.89 | 0.95 | -2.60 | -5.69 | 0.49 | -0.44 |
+| Josh Anderson | MTL | R | 794.73 | 0.41 | -3.77 | 0.70 | -0.17 | 0.02 | -0.06 | -2.85 | -5.63 | -0.06 | -0.48 |
+| Evander Kane | VAN | L | 988.98 | 0.53 | -4.89 | 1.64 | -0.42 | -0.02 | 0.04 | -3.12 | -7.34 | 1.10 | -0.53 |
+| Connor Bedard | CHI | C | 1090.98 | 0.63 | -6.48 | 3.03 | -0.24 | -0.66 | 0.52 | -3.20 | -8.19 | 1.79 | -0.54 |
+| Max Domi | TOR | C | 1009.70 | -0.51 | -3.30 | 0.88 | -0.88 | 0.13 | -0.01 | -3.69 | -7.09 | -0.28 | -0.63 |
+| Artyom Levshunov | CHI | D | 1025.97 | 0.13 | -3.83 | 0.01 | -0.27 | 0.00 | -0.09 | -4.06 | -6.94 | -1.18 | -0.69 |
+| John Klingberg | SJS | D | 921.27 | 0.09 | -6.58 | 0.44 | -0.19 | 0.00 | 0.24 | -6.00 | -9.01 | -2.98 | -1.02 |
+| Tony DeAngelo | NYI | D | 1242.42 | 0.37 | -8.70 | 0.49 | -0.07 | 0.00 | -0.05 | -7.96 | -11.53 | -4.38 | -1.35 |
 
 ## Finishing vs raw G−xG, last three seasons pooled (2023-24 to 2025-26; ≥ 300 5v5 attempts)
 
