@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 UV ?= uv
 
-.PHONY: install ingest all pipeline defense finishing components specialteams goaltending valuation calibration test lint smoke notebooks clean
+.PHONY: install ingest all pipeline defense finishing components specialteams goaltending projection valuation calibration test lint smoke notebooks clean
 
 install:            ## create .venv (Python 3.11) and install pinned deps
 	$(UV) venv --python 3.11 .venv
@@ -29,6 +29,11 @@ specialteams:       ## power play, penalty kill, 4v4, 3v3 (needs the finishing s
 
 goaltending:        ## goalie component (needs the finishing step)
 	$(PY) -m src.goaltending.run
+
+projection:         ## rolling refits, then the projection and aging layer (needs valuation and calibration)
+	$(PY) -m src.wholemodel.rolling
+	$(PY) -m src.wholemodel.run
+	$(PY) -m src.projection.run
 
 valuation:          ## replacement level, goals per win, combined component table (needs finishing and components)
 	$(PY) -m src.valuation.run

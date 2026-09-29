@@ -169,6 +169,19 @@ Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, 
 
 Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season): mostly shrinkage and finishing. `python -m src.specialteams.run` (or `make specialteams`) then `python -m src.valuation.run`. Docs: [methodology & pre-registration](docs/specialteams/methodology.md) · [validation report](reports/specialteams/validation_report.md).
 
+## Projection and aging (v1.0)
+
+`data/outputs/player_projection.csv`: for each skater who played in 2025, projected rate (goals above replacement per 60 modeled minutes) for one, two and three seasons ahead with 80% intervals, projected minutes, goals above replacement and wins for the next season. `reports/projection/aging_curves.csv`: position-specific aging curves with bootstrap intervals. Weighted ridge on shrunk component histories (finishing and faceoffs are the rolling-refit values, so no leakage), age spline, height and weight; no EDGE features (none in the repository; `Spec.extra` accepts them).
+
+| Gate | Result |
+|---|---|
+| Beats position mean / Marcel (horizon 1, player level) | z = 10.6 / 5.2 ✅ |
+| Age terms help | z = 4.7 ✅ |
+| Calibration slope; 80% interval coverage | 0.93 ± 0.01; 78.9% ✅ |
+| **Team level: projected rates vs last season's rolling-refit rates** | RMSE 48.4 vs 44.9, z = −2.75 ❌ |
+
+The projections forecast next season's *value estimates*, which are persistent partly through the chained priors in the defensive and special-teams components. A results-trained variant (exploratory) does better at the team level (RMSE 42.4) but does not beat the prior team goal differential (41.4). Use the projections for ranking, aging and contract-length questions, not as validated team forecasts. [Report](reports/projection/validation_report.md) · [methodology & pre-registration](docs/projection/methodology.md). `python -m src.projection.run` (needs `python -m src.wholemodel.rolling` first).
+
 ## Goaltending (v1.0)
 
 `goalie_gar` (goals above replacement, all strengths) in `goalie_player_season.csv`, a separate table because goalies are not in the skater stints. A logistic mixed model on unblocked shots: xG offset plus the shooter's fitted shift, season × strength effect, persistent and season-deviation goalie effects, and an unpenalized replacement effect for goalie-seasons under 500 shots (replacement goalie ≈ 0.88 goals per 100 shots worse than average).

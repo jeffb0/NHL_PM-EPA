@@ -27,7 +27,7 @@ from src.finishing.run import load_table
 from src.specialteams.finish import class_gar
 
 log = logging.getLogger("wm_rolling")
-FOLDS = list(range(2017, 2025))
+FOLDS = list(range(2017, 2026))     # 2025 is the latest season: its fold is what the projection layer forecasts from
 
 
 def _dir(cfg):

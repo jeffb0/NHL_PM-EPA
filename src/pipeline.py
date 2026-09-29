@@ -26,7 +26,7 @@ from src.config import ROOT, load_config
 log = logging.getLogger("pipeline")
 
 STEPS = ["ingest", "parse", "onice", "possessions", "xg", "value", "epa", "metrics", "validate", "ablations", "examples", "figures", "report",
-         "defense", "finishing", "components", "specialteams", "goaltending", "valuation", "calibration", "wholemodel"]
+         "defense", "finishing", "components", "specialteams", "goaltending", "valuation", "calibration", "wholemodel", "projection"]
 
 
 def step(name: str) -> None:
@@ -105,6 +105,15 @@ def step(name: str) -> None:
     elif name == "wholemodel":  # whole-model validation (docs/wholemodel/methodology.md)
         from src.wholemodel.run import run as run_wm
         run_wm()
+    elif name == "projection":  # rolling refits (finishing, faceoffs), then the projection and aging layer (docs/projection/methodology.md)
+        from src.wholemodel import rolling
+        from src.wholemodel.run import run as run_wm
+        rolling.roll_fo(load_config(), rolling.FOLDS)
+        rolling.roll_fin(load_config(), rolling.FOLDS)
+        rolling.combine(load_config())
+        run_wm()
+        from src.projection.run import run as run_proj
+        run_proj()
     log.info("%s done in %.0fs", name, time.time() - t0)
 
 
@@ -143,3 +152,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
