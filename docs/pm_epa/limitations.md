@@ -51,6 +51,6 @@ V is estimated only from *alive* observations: starts and mids. Regions where th
 | R2 | **NHL EDGE puck/player tracking**: pressure, passing lanes, defender distances as state features (Fernández & Bornn-style space). | tracking feed | V(s) conditional on pressure; true "movement under pressure" value |
 | R3 | **Rink-adjusted turnovers**: scale giveaway/takeaway weights by rink index (Schuckers-style), estimated out of sample. | none (public) | Lower scorer bias in turnover components |
 | R4 | **Multi-possession value** (next-goal EP, Routley–Schulte style) replacing λ·V_opp. | none | Values forecheck/dump-and-chase strategies properly |
-| R5 | **Defensive PM-EPA**: the mirror metric. Opponent PM-EPA allowed while on ice, adjusted RAPM-style for teammates/opponents. | none | The defensive axis requested in brief §9.4 |
+| R5 | **Defensive PM-EPA**: the mirror metric. Opponent PM-EPA allowed while on ice, adjusted RAPM-style for teammates/opponents. **v1.0 built 2026-09-28**: [docs/defense](../defense/methodology.md). | none | The defensive axis requested in brief §9.4 |
 | R6 | **Hierarchical player model**: estimate player effects on segment Δ jointly with on-ice teammates (ridge / Bayesian), instead of fixed pool shares. | none | Principled, data-driven credit splitting; honest posterior intervals |
 | R7 | Playoff and cross-era validation. | none | Scope |

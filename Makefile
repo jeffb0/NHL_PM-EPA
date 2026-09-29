@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 UV ?= uv
 
-.PHONY: install ingest all pipeline test lint smoke notebooks clean
+.PHONY: install ingest all pipeline defense test lint smoke notebooks clean
 
 install:            ## create .venv (Python 3.11) and install pinned deps
 	$(UV) venv --python 3.11 .venv
@@ -14,6 +14,9 @@ pipeline:           ## everything after ingestion
 	$(PY) -m src.pipeline
 
 all: ingest pipeline test notebooks   ## full reproduction from scratch
+
+defense:            ## Defensive PM-EPA only (needs the epa step's credits)
+	$(PY) -m src.defense.run
 
 test:
 	$(PY) -m pytest tests -q

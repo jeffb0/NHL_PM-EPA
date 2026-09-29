@@ -98,7 +98,7 @@ def attribute(obs: pl.DataFrame, poss: pl.DataFrame, cfg_epa, cfg_poss, lam: flo
         pl.col("n_event_idx").alias("event_idx"), pl.col("n_onice").alias("onice"),
     )
     base = ["game_id", "season", "poss_id", "team_id", "strength", "event_idx"]
-    credits = [
+    moves = [
         transitions.filter(pl.col("seg_type") == "carry").select(base + [pl.col("start_player").alias("player_id"), pl.lit("carry").alias("component"), pl.col("delta").alias("value")]),
         transitions.filter((pl.col("seg_type") == "split") & (pl.col("w_start") > 0)).select(base + [pl.col("start_player").alias("player_id"), pl.lit("move_start").alias("component"), (pl.col("delta") * pl.col("w_start")).alias("value")]),
         transitions.filter((pl.col("seg_type") == "split") & (pl.col("w_end") > 0)).select(base + [pl.col("end_player").alias("player_id"), pl.lit("move_end").alias("component"), (pl.col("delta") * pl.col("w_end")).alias("value")]),
@@ -107,21 +107,22 @@ def attribute(obs: pl.DataFrame, poss: pl.DataFrame, cfg_epa, cfg_poss, lam: flo
     ]
 
     # ------------------------------------------------------------- possession starts
+    starts = []
     first = obs.filter(pl.col("role") == "start")
     # possessions whose start was not observed: the value at the first observation appears "from nowhere"
     no_start = obs.filter((pl.col("seq") == 0) & (pl.col("role") != "start"))
-    credits.append(no_start.select(base + [pl.lit(None, pl.Int64).alias("player_id"), pl.lit("unattributed").alias("component"), pl.col("v").alias("value")]))
-    credits.append(first.filter(pl.col("obs_kind") != "takeaway").select(base + [pl.lit(None, pl.Int64).alias("player_id"), pl.lit("unattributed").alias("component"), pl.col("v").alias("value")]))
+    starts.append(no_start.select(base + [pl.lit(None, pl.Int64).alias("player_id"), pl.lit("unattributed").alias("component"), pl.col("v").alias("value")]))
+    starts.append(first.filter(pl.col("obs_kind") != "takeaway").select(base + [pl.lit(None, pl.Int64).alias("player_id"), pl.lit("unattributed").alias("component"), pl.col("v").alias("value")]))
     tk = first.filter(pl.col("obs_kind") == "takeaway")
-    credits.append(tk.select(base + [pl.col("player_id"), pl.lit("takeaway").alias("component"), (pl.col("v") + lam * pl.col("v_cf")).alias("value")]))
+    starts.append(tk.select(base + [pl.col("player_id"), pl.lit("takeaway").alias("component"), (pl.col("v") + lam * pl.col("v_cf")).alias("value")]))
     # the loser's debit: booked to the losing possession if it was open, else to an orphan row; on-ice of the loser
     tk_loss = tk.select(
         "game_id", "season", "event_idx", pl.col("opp_team_id").alias("team_id"), flip_strength(pl.col("strength")).alias("strength"),
         pl.col("start_link").alias("poss_id"), (-(pl.col("v_cf") + lam * pl.col("v"))).alias("value"), pl.col("opp_onice").alias("onice"),
     )
-    credits.append(_pool(tk_loss, base, "takeaway_against", cfg_epa.onice_pool))
-
     # ------------------------------------------------------------- possession ends
+    # (the takeaway swing's debit is terminal for the losing possession)
+    credits = [_pool(tk_loss, base, "takeaway_against", cfg_epa.onice_pool)]
     last = obs.filter(pl.col("seq") == pl.col("seq").max().over("poss_id"))
     shot = last.filter(pl.col("end_type").is_in(list(SHOT_ENDS)) & (pl.col("obs_kind") == "shot"))
     v_att = pl.col("v_att").fill_null(pl.col("v")) if "v_att" in shot.columns else pl.col("v")
@@ -141,7 +142,12 @@ def attribute(obs: pl.DataFrame, poss: pl.DataFrame, cfg_epa, cfg_poss, lam: flo
     )
     credits.append(other.select(base + [pl.lit(None, pl.Int64).alias("player_id"), pl.lit("unattributed").alias("component"), (-pl.col("v")).alias("value")]))
     # a shot end whose shot observation is missing (no coordinates) -> unattributed remainder
-    credits = pl.concat([c.select(base + ["player_id", "component", "value"]).with_columns(pl.col("player_id").cast(pl.Int64), pl.col("poss_id").cast(pl.Int64)) for c in credits])
+    # phase (start / move / terminal) lets consumers such as the defensive model split a possession's ledger
+    credits = pl.concat([
+        c.select(base + ["player_id", "component", "value"]).with_columns(
+            pl.col("player_id").cast(pl.Int64), pl.col("poss_id").cast(pl.Int64), pl.lit(phase).alias("phase"))
+        for phase, frames in (("start", starts), ("move", moves), ("terminal", credits)) for c in frames
+    ])
     return transitions.drop("onice"), credits
 
 

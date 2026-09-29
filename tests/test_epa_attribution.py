@@ -149,6 +149,27 @@ def test_identity_components_sum_to_terminal_xg_when_lambda_zero():
     assert res["residual"].abs().max() < 1e-12
 
 
+def test_phase_tags_split_each_possession_into_start_move_terminal():
+    rows = [
+        o(1, 0, "start", "takeaway", 1, 100, 0.020, v_cf=0.012), o(1, 1, "end", "shot", 1, 106, 0.060, v_att=0.075),
+        o(5, 0, "start", "rebound", None, 500, 0.20), o(5, 1, "end", "shot", 3, 502, 0.09, v_att=0.10),
+        o(11, 0, "end", "shot", 4, 1100, 0.05),  # unobserved start
+        o(20, 0, "start", "faceoff", 21, 0, 0.03, team=20), o(20, 1, "end", "lost_takeaway", None, 5, 0.012, team=20),
+        o(21, 0, "start", "takeaway", 1, 5, 0.020, v_cf=0.012, start_link=20),
+    ]
+    poss = [{"poss_id": 1, "end_type": "shot_sog", "G": 0.08}, {"poss_id": 5, "end_type": "goal", "G": 0.25},
+            {"poss_id": 11, "end_type": "shot_miss", "G": 0.07}, {"poss_id": 20, "end_type": "takeaway_against", "G": 0.0},
+            {"poss_id": 21, "end_type": "period_end", "G": 0.0}]
+    _, cr, _ = run(rows, poss, lam=0.0)
+    ph = cr.group_by("poss_id", "phase").agg(pl.col("value").sum())
+    get = lambda p, f: ph.filter((pl.col("poss_id") == p) & (pl.col("phase") == f))["value"].sum()  # noqa: E731
+    assert set(cr["phase"].unique()) == {"start", "move", "terminal"}
+    assert get(1, "start") == pytest.approx(0.020) and get(1, "move") == pytest.approx(0.040) and get(1, "terminal") == pytest.approx(0.020)
+    assert get(5, "start") == pytest.approx(0.20) and get(5, "move") == pytest.approx(-0.11)  # rebound segment is movement
+    assert get(11, "start") == pytest.approx(0.05)  # unobserved start: value at first observation
+    assert get(20, "terminal") == pytest.approx(-0.012)  # takeaway debit ends the loser's possession
+
+
 def test_takeaway_swing_is_zero_sum_when_lambda_one():
     rows = [
         o(20, 0, "start", "faceoff", 21, 0, 0.03, team=20),

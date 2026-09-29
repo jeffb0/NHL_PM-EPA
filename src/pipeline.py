@@ -7,7 +7,7 @@
     python -m src.pipeline --smoke               # tiny end-to-end run on a few games (CI / quickstart)
 
 Steps (in order): ingest, parse, onice, possessions, xg, value, epa, metrics, validate,
-ablations, examples, figures, report. Every step reads/writes Parquet under data/ and is
+ablations, examples, figures, report, defense. Every step reads/writes Parquet under data/ and is
 deterministic given config.yaml (seeded).
 """
 
@@ -25,7 +25,8 @@ from src.config import ROOT, load_config
 
 log = logging.getLogger("pipeline")
 
-STEPS = ["ingest", "parse", "onice", "possessions", "xg", "value", "epa", "metrics", "validate", "ablations", "examples", "figures", "report"]
+STEPS = ["ingest", "parse", "onice", "possessions", "xg", "value", "epa", "metrics", "validate", "ablations", "examples", "figures", "report",
+         "defense"]
 
 
 def step(name: str) -> None:
@@ -73,6 +74,10 @@ def step(name: str) -> None:
     elif name == "report":
         from src.validation.report import run
         run()
+    elif name == "defense":  # Defensive PM-EPA (docs/defense/methodology.md); reads the lambda = 0 credits
+        from src.defense.run import STEPS as DEF_STEPS
+        from src.defense.run import run_steps
+        run_steps(DEF_STEPS)
     log.info("%s done in %.0fs", name, time.time() - t0)
 
 

@@ -18,7 +18,7 @@ log = logging.getLogger("smoke")
 
 
 def run(n_games: int = 25) -> None:
-    base = yaml.safe_load((ROOT / "config.yaml").read_text())
+    base = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     base["data"].update({
         "seasons": [2024, 2025], "raw_dir": "data/raw", "processed_dir": "data/smoke/processed",
         "value_dir": "data/smoke/value_surfaces", "output_dir": "data/smoke/outputs", "figures_dir": "reports/smoke/figures", "metrics_dir": "reports/smoke/metrics",
@@ -29,7 +29,7 @@ def run(n_games: int = 25) -> None:
     base["metrics"]["min_toi_ev"] = 20
     cfg_path = ROOT / "data/smoke/config.smoke.yaml"
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg_path.write_text(yaml.safe_dump(base))
+    cfg_path.write_text(yaml.safe_dump(base), encoding="utf-8")
     os.environ["PM_EPA_CONFIG"] = str(cfg_path)
 
     from src.ingestion.nhl_api import ingest
@@ -64,4 +64,12 @@ def run(n_games: int = 25) -> None:
     import polars as pl
     lb = pl.read_csv(ROOT / "data/smoke/outputs/pm_epa_player_leaderboards.csv")
     assert lb.height > 0 and lb["pm_epa_per60_ev"].is_not_null().any(), "smoke leaderboard empty"
-    log.info("SMOKE OK: %d player-season rows", lb.height)
+    # defensive model: stints + one ridge fit (selection needs several seasons, so it is not run here)
+    from src.defense import ridge
+    from src.defense import stints as dstints
+    proc = ROOT / "data/smoke/processed"
+    goalies = set(pl.read_parquet(proc / "players.parquet").filter(pl.col("position") == "G")["player_id"].to_list())
+    st, q = dstints.build(proc, [2024, 2025], goalies, 0.9, 2)
+    d = ridge.build_design(st, ["xg"])
+    assert st.height > 0 and ridge.fit(d, {"xg": 1000.0}).shape[0] == d.X.shape[1], "defense smoke failed"
+    log.info("SMOKE OK: %d player-season rows; %d defensive stints", lb.height, st.height)

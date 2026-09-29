@@ -90,6 +90,23 @@ class XgCfg(_Strict):
     rush_window_s: float = 4
 
 
+class DefenseCfg(_Strict):
+    min_match_rate: float = 0.9
+    alphas: list[float]
+    cv_seasons: list[int]
+    cv_folds: int = 5
+    core_components: list[str]
+    prior_rhos: list[float]
+    train_pairs: list[list[int]]
+    validation_pairs: list[list[int]]
+    test_pairs: list[list[int]]
+    window: int = 3
+    bootstrap_reps: int = 200
+    loss_bootstrap_reps: int = 500
+    min_toi: float = 500
+    workers: int = 12
+
+
 class Config(_Strict):
     seed: int
     data: DataCfg
@@ -100,6 +117,7 @@ class Config(_Strict):
     epa: EpaCfg
     metrics: MetricsCfg
     xg: XgCfg
+    defense: DefenseCfg | None = None
 
     def path(self, rel: str) -> Path:
         p = ROOT / rel
@@ -110,7 +128,7 @@ class Config(_Strict):
 def load_config(path: str | Path | None = None) -> Config:
     """Load config.yaml (or the file named by $PM_EPA_CONFIG, used by the smoke test)."""
     path = Path(path) if path else Path(os.environ.get("PM_EPA_CONFIG", ROOT / "config.yaml"))
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         return Config.model_validate(yaml.safe_load(fh))
 
 
