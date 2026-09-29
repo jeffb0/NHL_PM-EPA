@@ -26,7 +26,7 @@ NB = {
         ("code", "counts = ev.group_by('season', 'type').len().pivot(on='type', index='season', values='len').sort('season')\ncounts.select('season', 'giveaway', 'takeaway', 'hit', 'blocked-shot', 'missed-shot', 'shot-on-goal', 'goal')"),
         ("md", "Giveaways roughly double and takeaways fall from 2024-25: a recording change, handled as a separate **scoring regime**."),
         ("code", "sh = ev.filter(pl.col('type').is_in(['shot-on-goal','missed-shot','goal']))\nfig, ax = plt.subplots(figsize=(8,3.5))\nax.hexbin(sh['x'], sh['y'], gridsize=60, cmap='Blues', mincnt=1)\nax.set_title('Unblocked shot locations after normalization (attacking +x)'); ax.set_aspect('equal')"),
-        ("code", "print((proc / 'data_quality.md').read_text())"),
+        ("code", "print((proc / 'data_quality.md').read_text(encoding='utf-8'))"),
     ],
     "02_possession_chains.ipynb": [
         ("md", "# 02 · Possession chains\nInferred possessions, start/end types, and a hand-audit sample."),

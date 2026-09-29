@@ -85,9 +85,9 @@ def run() -> None:
         md.append(f"\nSum of all components = {tot:+.4f} (G = {p['G']:.4f}; they are equal when λ = 0, and differ by the λ-weighted opponent terms otherwise).\n")
     (cfg.path(cfg.data.metrics_dir) / "example_plays.json").write_text(json.dumps(out, indent=2))
     doc = ROOT / "docs/pm_epa/attribution_examples.md"
-    text = doc.read_text()
+    text = doc.read_text(encoding="utf-8")
     gen = f"{BEGIN}\n\n" + "\n".join(md) + f"\n{END}"
-    doc.write_text(re.sub(re.escape(BEGIN) + ".*?" + re.escape(END), lambda _: gen, text, flags=re.S))
+    doc.write_text(re.sub(re.escape(BEGIN) + ".*?" + re.escape(END), lambda _: gen, text, flags=re.S), encoding="utf-8")
     log.info("wrote %d real examples", len(out))
 
 

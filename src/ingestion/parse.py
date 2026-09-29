@@ -365,7 +365,7 @@ def _quality_report(ev: pl.DataFrame, direction: pl.DataFrame, games: pl.DataFra
         f"* Game-periods with undetermined direction: {direction.filter(pl.col('home_attack_sign').is_null()).height}",
         f"* Shifts parsed: {n_shifts}",
     ]
-    (out_dir / "data_quality.md").write_text("\n".join(lines))
+    (out_dir / "data_quality.md").write_text("\n".join(lines), encoding="utf-8")
     log.info("\n".join(lines))
 
 
