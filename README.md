@@ -182,6 +182,19 @@ Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season):
 
 The projections forecast next season's *value estimates* (player talent). Removing the chained priors in defense and special teams does not fix the team-level failure; exploratory diagnostics point to team context, since last season's rates alone forecast teams best. A results-trained variant (exploratory) does better at the team level (RMSE 42.4) but does not beat the prior team goal differential (41.4). Use the projections for ranking, aging and contract-length questions, not as validated team forecasts. [Report](reports/projection/validation_report.md) · [methodology & pre-registration](docs/projection/methodology.md). `python -m src.projection.run` (needs `python -m src.wholemodel.rolling` first).
 
+## Team context: "system / chemistry" (v1.0)
+
+How much of a player's value travels when he changes teams, and does the new team's context predict his next-season value? No coach data is in the repository, so context is the team-season (coaching, system, linemates and arena bundled).
+
+| Result | Value |
+|---|---|
+| Share of persistence that travels (movers vs stayers), total value | 91% published; **74%** with chain-free defense and special teams |
+| By component | possession 65%, turnover 64%, finishing/PP/PK about 85%, penalties 100% |
+| Movers: destination / origin context coefficient | +0.21 (t = 3.6) / −0.18 (t = −3.0); defensemen destination 0.39 (t = 4.4), forwards 0.07 (t = 0.9) |
+| Context features in the projection | movers z = 5.1, overall z = 3.6, stayers unchanged; team level RMSE 48.4 → 47.1 (z = 3.1), still short of last season's rates (44.9) |
+
+`python -m src.teamcontext.move --player "Name" --team XXX` projects a player under a destination team. All four pre-registered gates pass. Chemistry cannot be separated here from teammates or coaching; head-coach data would allow a same-team coaching-change test. [Report](reports/teamcontext/validation_report.md) · [methodology](docs/teamcontext/methodology.md). `python -m src.teamcontext.run`.
+
 ## Chain-free defense and special teams (v1.0)
 
 The defensive component and the special-teams RAPM use a chained prior, which makes their values persistent partly by construction. `data/processed/chainfree_values.parquet` holds ρ = 0 variants (`def_gar_rho0`, `st_<state>_rapm_gar_rho0`); the published defaults are unchanged.
