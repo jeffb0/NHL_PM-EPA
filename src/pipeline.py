@@ -7,7 +7,7 @@
     python -m src.pipeline --smoke               # tiny end-to-end run on a few games (CI / quickstart)
 
 Steps (in order): ingest, parse, onice, possessions, xg, value, epa, metrics, validate,
-ablations, examples, figures, report, defense, finishing, valuation. Every step reads/writes Parquet under data/ and is
+ablations, examples, figures, report, defense, finishing, components, valuation. Every step reads/writes Parquet under data/ and is
 deterministic given config.yaml (seeded).
 """
 
@@ -26,7 +26,7 @@ from src.config import ROOT, load_config
 log = logging.getLogger("pipeline")
 
 STEPS = ["ingest", "parse", "onice", "possessions", "xg", "value", "epa", "metrics", "validate", "ablations", "examples", "figures", "report",
-         "defense", "finishing", "valuation"]
+         "defense", "finishing", "components", "valuation"]
 
 
 def step(name: str) -> None:
@@ -82,6 +82,10 @@ def step(name: str) -> None:
         from src.finishing.run import STEPS as FIN_STEPS
         from src.finishing.run import run_steps as run_fin
         run_fin(FIN_STEPS)
+    elif name == "components":  # turnover cost, faceoffs, penalties at 5v5 (docs/components/methodology.md)
+        from src.components.run import STEPS as COMP_STEPS
+        from src.components.run import run_steps as run_comp
+        run_comp(COMP_STEPS)
     elif name == "valuation":  # replacement level, goals per win, combined component table
         from src.valuation.run import STEPS as VAL_STEPS
         from src.valuation.run import run_steps as run_val

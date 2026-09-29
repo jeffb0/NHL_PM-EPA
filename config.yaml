@@ -101,6 +101,13 @@ finishing:
   draws: 400                   # posterior draws per player for goals intervals
   workers: 12
 
+components:
+  # Turnover cost, faceoffs, penalties at 5v5. Spec + gates: docs/components/methodology.md.
+  bootstrap_reps: 500          # game-block bootstrap for the turnover per-60 SE
+  min_toi: 500                 # 5v5 minutes: qualified players (tau^2, YOY, next-season prediction)
+  min_draws_next: 300          # held-out draws for the faceoff calibration slope
+  penalty_cap_s: {2: 120, 4: 240, 5: 300}   # longest power play counted per penalty class
+
 valuation:
   # Replacement level and integration. Spec: docs/finishing/methodology.md §8-§9.
   regular_forwards: 12         # per team-season, ranked by all-strength TOI; the rest are fringe

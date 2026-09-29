@@ -20,9 +20,12 @@ from scipy import sparse
 from scipy.special import expit
 
 from src.defense import ridge
+from src.valuation import recon
 
 log = logging.getLogger(__name__)
-DPM_TARGETS = ["xg", "start_turnover", "start_faceoff"]
+# valuation-ready defense drops the slices claimed by the turnover and faceoff components (and the unobserved starts that
+# the turnover charge already covers; docs/components/methodology.md §2)
+DPM_TARGETS = ["xg", "start_turnover", "start_faceoff", "start_unobserved"]
 
 
 # ------------------------------------------------------------------ possession (PM-EPA)
@@ -75,11 +78,11 @@ def dpm_refit(stints: pl.DataFrame, status: pl.DataFrame, seasons: list[int], al
         beta = ridge.fit(d2, {t: alpha for t in DPM_TARGETS}, ridge.prior_vector(d2, prev, rho))
         coefs = ridge.coef_frame(d2, beta)
         f = beta[-4:, :]                     # rows [defF, defD, attF, attD] x targets
-        w = np.array([1.0, -1.0, -1.0])      # value-ready = xg - start_turnover - start_faceoff (raw xGA units)
+        w = np.array([1.0, -1.0, -1.0, -1.0])  # value-ready = xg - turnover - faceoff - unobserved starts (raw xGA units)
         c_f = {"F": float(f[0] @ w), "D": float(f[1] @ w)}
         fr.append({"season": s, "c_val_fringe_F": c_f["F"], "c_val_fringe_D": c_f["D"], "dpm_rep_per60_F": -c_f["F"], "dpm_rep_per60_D": -c_f["D"],
                    "n_stints": st.height, "att_fringe_F": float(f[2] @ w), "att_fringe_D": float(f[3] @ w)})
-        c_beta = coefs["def_xg"] - coefs["def_start_turnover"] - coefs["def_start_faceoff"]
+        c_beta = coefs["def_xg"] - coefs["def_start_turnover"] - coefs["def_start_faceoff"] - coefs["def_start_unobserved"]
         rows.append(coefs.select("player_id").with_columns(pl.Series("c_val_beta", c_beta), pl.lit(s, pl.Int64).alias("season")))
         prev = coefs
         log.info("DPM refit %d: fringe effect on defense (xGA/60 per fringe skater) F %.4f D %.4f", s, c_f["F"], c_f["D"])
@@ -124,7 +127,13 @@ def fin_from_shifts(shifts: pl.DataFrame, status: pl.DataFrame) -> pl.DataFrame:
 
 
 # ------------------------------------------------------------------ table
-def combine(ps: pl.DataFrame, pm: pl.DataFrame, dp: pl.DataFrame, fin: pl.DataFrame, fin_sd: pl.DataFrame | None, fin_memo: pl.DataFrame | None, gpw: float) -> pl.DataFrame:
+CORE = ["pm", "def", "fin"]
+
+
+def combine(ps: pl.DataFrame, pm: pl.DataFrame, dp: pl.DataFrame, fin: pl.DataFrame, fin_sd: pl.DataFrame | None, fin_memo: pl.DataFrame | None, gpw: float,
+            extras: dict[str, pl.DataFrame] | None = None) -> pl.DataFrame:
+    """Join the components and total them. ``extras`` = additional 5v5 components, each with player_id, season, `<name>_gar`, `<name>_gar_sd`."""
+    names = CORE + list((extras or {}).keys())
     spine = ps.select("player_id", "season", "player_name", "position", "pos_group", pl.col("primary_team").alias("team"), pl.col("toi_ev").alias("toi_5v5"), "gp", "pm_epa_per60_ev", "qualified_ev")
     t = (spine.join(pm, on=["player_id", "season"], how="left").join(dp, on=["player_id", "season"], how="left").join(fin, on=["player_id", "season"], how="left"))
     if fin_sd is not None:
@@ -133,15 +142,17 @@ def combine(ps: pl.DataFrame, pm: pl.DataFrame, dp: pl.DataFrame, fin: pl.DataFr
         t = t.with_columns(pl.lit(None, pl.Float64).alias("fin_gar_sd"))
     if fin_memo is not None:
         t = t.join(fin_memo, on=["player_id", "season"], how="left")
-    t = t.with_columns(pl.col("fin_gar").fill_null(0.0), pl.col("fin_gar_sd").fill_null(0.0), pl.col("pm_gar").fill_null(0.0), pl.col("def_gar").fill_null(0.0),
-                       pl.col("pm_gar_sd").fill_null(0.0), pl.col("def_gar_sd").fill_null(0.0))
-    t = t.with_columns((pl.col("pm_gar") + pl.col("def_gar") + pl.col("fin_gar")).alias("total_gar"),
-                       (pl.col("pm_gar_sd") ** 2 + pl.col("def_gar_sd") ** 2 + pl.col("fin_gar_sd") ** 2).sqrt().alias("total_gar_sd"))
+    for name, df in (extras or {}).items():
+        assert {f"{name}_gar", f"{name}_gar_sd"} <= set(df.columns), name
+        t = t.join(df, on=["player_id", "season"], how="left")      # all columns: value, sd and the component's memo columns
+    t = t.with_columns(*[pl.col(f"{n}_gar").fill_null(0.0) for n in names], *[pl.col(f"{n}_gar_sd").fill_null(0.0) for n in names])
+    t = t.with_columns(sum((pl.col(f"{n}_gar") for n in names), pl.lit(0.0)).alias("total_gar"),
+                       sum((pl.col(f"{n}_gar_sd") ** 2 for n in names), pl.lit(0.0)).sqrt().alias("total_gar_sd"))
     if "def_gar_perseason" in t.columns:  # alternative total with the per-season DPM replacement level
-        t = t.with_columns((pl.col("pm_gar") + pl.col("def_gar_perseason").fill_null(0.0) + pl.col("fin_gar")).alias("total_gar_perseason"))
+        t = t.with_columns((pl.col("total_gar") - pl.col("def_gar") + pl.col("def_gar_perseason").fill_null(0.0)).alias("total_gar_perseason"))
     t = t.with_columns((pl.col("total_gar") / gpw).alias("total_war"), (pl.col("total_gar_sd") / gpw).alias("total_war_sd"),
                        (pl.col("total_gar") - 1.96 * pl.col("total_gar_sd")).alias("total_gar_lo"), (pl.col("total_gar") + 1.96 * pl.col("total_gar_sd")).alias("total_gar_hi"))
-    t = t.with_columns(*[(pl.col(c) / gpw).alias(c.replace("_gar", "_wins")) for c in ("pm_gar", "def_gar", "fin_gar")])
+    t = t.with_columns(*[(pl.col(f"{n}_gar") / gpw).alias(f"{n}_wins") for n in names])
     return t.sort("season", "total_gar", descending=[False, True])
 
 
@@ -154,19 +165,33 @@ def reconcile(t: pl.DataFrame, proc) -> dict:
     ga = goals.group_by("season", pl.col("opp_team_id").alias("team_id")).agg(pl.len().cast(pl.Int64).alias("ga"))
     gd = gf.join(ga, on=["season", "team_id"], how="full", coalesce=True).fill_null(0).with_columns((pl.col("gf") - pl.col("ga")).alias("gd5")).join(abbr, on="team_id")
     extra = ["total_gar_perseason"] if "total_gar_perseason" in t.columns else []
-    sums = t.group_by("season", "team").agg(*[pl.col(c).sum().alias(c) for c in ("pm_gar", "def_gar", "fin_gar", "total_gar", *extra)])
-    j = gd.join(sums, on=["season", "team"]).filter(pl.col("gd5").is_not_null())
+    all_comps = [f"{n}_gar" for n in CORE + [c[:-4] for c in t.columns if c in ("to_gar", "fo_gar", "pen_gar")]]
+    comps = [c for c in all_comps if c != "pen_gar"]                 # 5v5 target: penalties are realized on special teams (checked separately)
+    raw_cols = [c for c in ("pm_raw_gar", "def_gar", "fin_gar", "to_raw_gar", "fo_gar") if c in t.columns]
+    has_ra = "to_ra_gar" in t.columns
+    sums = t.group_by("season", "team").agg(*[pl.col(c).sum().alias(c) for c in dict.fromkeys([*all_comps, "total_gar", *extra, *raw_cols, *(["to_ra_gar"] if has_ra else [])])])
+    j = gd.join(sums, on=["season", "team"]).filter(pl.col("gd5").is_not_null()).join(recon.team_gd_st(proc), on=["season", "team"], how="left")
     y = j["gd5"].to_numpy().astype(float)
-    out = {"n_team_seasons": int(j.height)}
-    for c in ("total_gar", "pm_gar", "def_gar", "fin_gar", *extra):
+    out = {"n_team_seasons": int(j.height), "components": comps}
+    for c in ("total_gar", *all_comps, *extra):
         x = j[c].to_numpy()
         A = np.column_stack([np.ones(len(x)), x])
         coef = np.linalg.lstsq(A, y, rcond=None)[0]
         out[c] = {"slope": float(coef[1]), "intercept": float(coef[0]), "r": float(np.corrcoef(x, y)[0, 1])}
-    X = np.column_stack([np.ones(j.height), j["pm_gar"].to_numpy(), j["def_gar"].to_numpy(), j["fin_gar"].to_numpy()])
-    coef = np.linalg.lstsq(X, y, rcond=None)[0]
-    res = y - X @ coef
-    out["joint"] = {"pm_slope": float(coef[1]), "def_slope": float(coef[2]), "fin_slope": float(coef[3]), "r2": float(1 - (res**2).sum() / ((y - y.mean()) ** 2).sum())}
+
+    def joint(cols: list[str]) -> dict:
+        r = recon.regress(j, cols)
+        return {"r2": r["r2"], "slopes": r["slopes"], **{f"{c[:-4]}_slope": v["slope"] for c, v in r["slopes"].items()}}
+
+    out["joint"] = joint(comps)
+    if len(raw_cols) > 3:      # the same regression with the unshrunk possession and turnover values (shrinkage compresses team sums)
+        out["joint_unshrunk"] = joint(raw_cols)
+    if "pen_gar" in j.columns:
+        r = recon.regress(j, ["pen_gar"], y="st_gd")
+        out["penalty_vs_special_teams_gd"] = {"slope": r["slopes"]["pen_gar"]["slope"], "se": r["slopes"]["pen_gar"]["se"], "r2": r["r2"], "sd_st_gd": float(j["st_gd"].std())}
+    if has_ra:
+        out["joint_to_ra"] = joint(["to_ra_gar" if c == "to_gar" else c for c in comps])
+    out["joint_core"] = joint([f"{n}_gar" for n in CORE])       # the three earlier components only (continuity with the earlier report)
     out["sd_team_5v5_gd"] = float(y.std())
     out["sd_sum_total_gar"] = float(j["total_gar"].std())
     return out

@@ -120,6 +120,13 @@ class FinishingCfg(_Strict):
     workers: int = 12
 
 
+class ComponentsCfg(_Strict):
+    bootstrap_reps: int = 500
+    min_toi: float = 500
+    min_draws_next: int = 300
+    penalty_cap_s: dict[int, int]
+
+
 class ValuationCfg(_Strict):
     regular_forwards: int = 12
     regular_defense: int = 6
@@ -141,6 +148,7 @@ class Config(_Strict):
     defense: DefenseCfg | None = None
     finishing: FinishingCfg | None = None
     valuation: ValuationCfg | None = None
+    components: ComponentsCfg | None = None
 
     def path(self, rel: str) -> Path:
         p = ROOT / rel

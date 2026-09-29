@@ -14,10 +14,10 @@ def _f(x, nd=3):
 
 
 def _table(rows: list[dict], nd: int = 3) -> str:
-    cols = list(rows[0])
+    cols = list(dict.fromkeys(k for r in rows for k in r))   # union of keys: rows may carry different columns
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:
-        lines.append("| " + " | ".join(_f(r[c], nd) for c in cols) + " |")
+        lines.append("| " + " | ".join(_f(r.get(c), nd) for c in cols) + " |")
     return "\n".join(lines)
 
 
@@ -31,8 +31,8 @@ def run() -> None:
     last = t["season"].max()
     vc = cfg.valuation
     out = ["# Integrated player value — goals and wins above replacement (5v5)", "",
-           "Components: possession (PM-EPA, shrunk), defense (DPM valuation rate, refit with a replacement group), finishing (FIN). "
-           "Spec: [methodology §8-§9](../../docs/finishing/methodology.md). All values are 5v5, in goals unless labeled wins; "
+           "Components: possession (PM-EPA, shrunk), defense (DPM valuation rate, refit with a replacement group), finishing (FIN), turnover cost (TO), faceoffs (FO) and penalties (PEN). "
+           "Spec: [finishing methodology §8-§9](../../docs/finishing/methodology.md) and [components methodology](../../docs/components/methodology.md). All values are 5v5, in goals unless labeled wins; "
            "intervals combine the component standard deviations assuming independence.", ""]
     out += ["## Goals per win (derived from the data)", "",
             f"**{gpw['goals_per_win']:.2f} goals per win** (95% CI {gpw['ci95'][0]:.2f}–{gpw['ci95'][1]:.2f}; R² {gpw['r2']:.2f}; {gpw['n_team_seasons']} team-seasons, 2017-18 to 2025-26). "
@@ -54,12 +54,20 @@ def run() -> None:
             "### Team reconciliation", "",
             f"{com['reconciliation']['n_team_seasons']} team-seasons: 5v5 goal differential regressed on the sum of player goals above replacement (by primary team). "
             "A slope near 1 means the components are on the goal scale. **Slopes are reported, not used to rescale.**", "",
-            _table([{"regressor": k, "slope": com["reconciliation"][k]["slope"], "r": com["reconciliation"][k]["r"]} for k in ("total_gar", "total_gar_perseason", "pm_gar", "def_gar", "fin_gar") if k in com["reconciliation"]], 3), "",
-            "Joint regression on the three components: " + ", ".join(f"{k} = {v:.2f}" for k, v in com["reconciliation"]["joint"].items()) + f". SD of team 5v5 goal differential {com['reconciliation']['sd_team_5v5_gd']:.1f}; "
-            f"SD of summed player value {com['reconciliation']['sd_sum_total_gar']:.1f}.", ""]
+            _table([{"regressor": k, "slope": com["reconciliation"][k]["slope"], "r": com["reconciliation"][k]["r"]} for k in ("total_gar", "total_gar_perseason", "pm_gar", "def_gar", "fin_gar", "to_gar", "fo_gar") if k in com["reconciliation"]], 3), "",
+            "Joint regressions (slope ± SE), 5v5 components only (penalties are realized on special teams and are checked against special-teams goal differential below):", "",
+            _table([{"regression": name, "R²": r["r2"], **{c.replace("_raw_gar", "").replace("to_ra_gar", "to").replace("_gar", ""): f"{s['slope']:.2f} ± {s['se']:.2f}" for c, s in r["slopes"].items()}}
+                    for name, r in (("three components (PM, DPM, FIN)", com["reconciliation"]["joint_core"]), ("five 5v5 components, shrunk", com["reconciliation"]["joint"]),
+                                    ("five 5v5 components, possession and turnover unshrunk", com["reconciliation"].get("joint_unshrunk")),
+                                    ("five 5v5 components, role-adjusted turnover (TO-RA) instead of TO", com["reconciliation"].get("joint_to_ra")))
+                    if r is not None], 3), "",
+            f"SD of team 5v5 goal differential {com['reconciliation']['sd_team_5v5_gd']:.1f}; SD of summed player value {com['reconciliation']['sd_sum_total_gar']:.1f}.", ""]
+    if "penalty_vs_special_teams_gd" in com["reconciliation"]:
+        pst = com["reconciliation"]["penalty_vs_special_teams_gd"]
+        out += [f"Penalty check against special-teams goal differential (non-5v5 goals): slope {pst['slope']:.2f} ± {pst['se']:.2f}, R² {pst['r2']:.3f} (special-teams GD SD {pst['sd_st_gd']:.1f}).", ""]
     out += ["## Sensitivity to the regular/fringe cutoff", "",
             _table([{"cutoff": k, "corr with baseline total": v["corr_total_gar"], "rank corr": v["rank_corr_spearman"], "mean shift (goals per 1000 min)": v["mean_shift_goals_per_1000min"]} for k, v in com["sensitivity"].items()], 3), ""]
-    cols = ["player_name", "team", "position", "toi_5v5", "pm_gar", "def_gar", "fin_gar", "total_gar", "total_gar_lo", "total_gar_hi", "total_war"]
+    cols = ["player_name", "team", "position", "toi_5v5", "pm_gar", "def_gar", "fin_gar", "to_gar", "fo_gar", "pen_gar", "total_gar", "total_gar_lo", "total_gar_hi", "total_war"]
     q = t.filter((pl.col("season") == last) & (pl.col("toi_5v5") >= vc.min_toi)).sort("total_gar", descending=True)
     out += [f"## Total value, {last}-{str(last + 1)[2:]} (≥ {vc.min_toi:.0f} 5v5 min)", "", "**Top 15**", "", _table(q.head(15).select(cols).to_dicts(), 2), "",
             "**Bottom 10**", "", _table(q.tail(10).select(cols).to_dicts(), 2), ""]
