@@ -107,9 +107,12 @@ def gram(d: Design, row_weight: np.ndarray | None = None) -> tuple[np.ndarray, n
     return A, np.asarray(d.X.T @ S)
 
 
+JITTER = 0.0  # added to the diagonal; 0 for the 5v5 models (unchanged), set by the special-teams fits whose thin states can leave empty covariate columns
+
+
 def solve(A: np.ndarray, B: np.ndarray, pen: np.ndarray, alpha: float, prior: np.ndarray | None = None) -> np.ndarray:
     rhs = B if prior is None else B + alpha * pen[:, None] * prior
-    c = linalg.cho_factor(A + alpha * np.diag(pen), lower=False, check_finite=False)
+    c = linalg.cho_factor(A + alpha * np.diag(pen) + (JITTER * np.eye(len(pen)) if JITTER else 0.0), lower=False, check_finite=False)
     return linalg.cho_solve(c, rhs, check_finite=False)
 
 

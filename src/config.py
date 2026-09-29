@@ -135,6 +135,23 @@ class ValuationCfg(_Strict):
     gpw_bootstrap: int = 1000
 
 
+class SpecialTeamsCfg(_Strict):
+    min_match_rate: float = 0.9
+    alphas: list[float]
+    cv_seasons: list[int]
+    cv_folds: int = 5
+    prior_rhos: list[float]
+    validation_pairs: list[list[int]]
+    test_pairs: list[list[int]]
+    bootstrap_reps: int = 100
+    z_threshold: float = 2.0
+    min_minutes: float = 100        # class minutes in both seasons for the year-over-year check
+    min_minutes_thin: float = 15    # same, for 4v4 and 3v3 (nobody reaches 100 minutes in those states)
+    yoy_min: float = 0.20
+    slope_band: list[float]
+    workers: int = 12
+
+
 class Config(_Strict):
     seed: int
     data: DataCfg
@@ -149,6 +166,7 @@ class Config(_Strict):
     finishing: FinishingCfg | None = None
     valuation: ValuationCfg | None = None
     components: ComponentsCfg | None = None
+    specialteams: SpecialTeamsCfg | None = None
 
     def path(self, rel: str) -> Path:
         p = ROOT / rel

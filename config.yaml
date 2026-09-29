@@ -108,6 +108,23 @@ components:
   min_draws_next: 300          # held-out draws for the faceoff calibration slope
   penalty_cap_s: {2: 120, 4: 240, 5: 300}   # longest power play counted per penalty class
 
+specialteams:
+  # Power play, penalty kill, 4v4, 3v3. Spec + pre-registered gates: docs/specialteams/methodology.md.
+  min_match_rate: 0.9
+  alphas: [3, 10, 30, 100, 300, 1000, 3000]
+  cv_seasons: [2017, 2018, 2019, 2020, 2021]
+  cv_folds: 5
+  prior_rhos: [0.0, 0.5, 1.0]
+  validation_pairs: [[2021, 2022], [2022, 2023]]
+  test_pairs: [[2023, 2024], [2024, 2025]]
+  bootstrap_reps: 100
+  z_threshold: 2.0
+  min_minutes: 100
+  min_minutes_thin: 15
+  yoy_min: 0.20
+  slope_band: [0.5, 2.0]
+  workers: 12
+
 valuation:
   # Replacement level and integration. Spec: docs/finishing/methodology.md §8-§9.
   regular_forwards: 12         # per team-season, ranked by all-strength TOI; the rest are fringe

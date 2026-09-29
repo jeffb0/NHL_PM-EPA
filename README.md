@@ -145,12 +145,25 @@ Are the six components each worth one goal per goal? Team-level slopes for the *
 
 | Check | Result |
 |---|---|
-| Unshrunk team-level slopes (5v5 goal differential, 284 team-seasons) | possession 2.01 ± 0.28, defense 1.14 ± 0.16, finishing 0.80 ± 0.09, turnover 0.61 ± 0.41, faceoff 1.10 ± 0.65 |
-| The same components shrunk | finishing 1.80, turnover 1.51, faceoff 1.99: shrinkage compression, not scale error |
+| Unshrunk team-level slopes (5v5 goal differential, 284 team-seasons; turnover = TO-RA) | possession 1.79 ± 0.28, defense 1.05 ± 0.16, finishing 0.81 ± 0.08, turnover 1.18 ± 0.40, faceoff 1.32 ± 0.63 |
+| The same components shrunk | finishing 1.87, turnover 2.19, faceoff 2.07: shrinkage compression, not scale error |
 | xG-to-goals factor (team goal differential on xG differential) | 1.03 ± 0.05 |
-| Pre-registered decision (calibrated vs all-ones, held-out season error) | z = 1.69 < 2: **all weights stay at 1** |
+| Pre-registered decision (calibrated vs all-ones, held-out season error) | z = 1.50 < 2: **all weights stay at 1** |
 
-The ridge weights (possession 1.80, defense 1.14, finishing 0.80, turnover 0.81, faceoff 1.13) are published as a variant (`total_gar_ridge`) and validated, but not applied. `python -m src.calibration.run` (or `make calibration`) writes `data/outputs/player_value_calibrated.csv`. Docs: [methodology & pre-registration](docs/calibration/methodology.md) · [validation report](reports/calibration/validation_report.md).
+The ridge weights (possession 1.53, defense 1.09, finishing 0.82, turnover 1.15, faceoff 1.10) are published as a variant (`total_gar_ridge`) and validated, but not applied. `python -m src.calibration.run` (or `make calibration`) writes `data/outputs/player_value_calibrated.csv`. Docs: [methodology & pre-registration](docs/calibration/methodology.md) · [validation report](reports/calibration/validation_report.md).
+
+## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
+
+Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.
+
+| Gate (PP and PK are gated; 4v4 and 3v3 reported) | Result |
+|---|---|
+| Coverage of shot xG in valid stints | 97–98% in every state |
+| Beats the covariates-only baseline out of sample | PP/PK z = 6.6 (small effect: 0.19% lower MSE); 3v3 z = 2.8; 4v4 z = 0.5 |
+| Year-over-year stability ≥ 0.20 (F and D) | PK passes (0.30 / 0.22); **PP fails for defensemen (0.18)**; forwards 0.28 |
+| Team reconciliation slope in [0.5, 2.0] | PP 1.11, PK 0.52, 4v4 0.64, 3v3 0.59 |
+
+Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season): mostly shrinkage and finishing. `python -m src.specialteams.run` (or `make specialteams`) then `python -m src.valuation.run`. Docs: [methodology & pre-registration](docs/specialteams/methodology.md) · [validation report](reports/specialteams/validation_report.md).
 
 ## Using PM-EPA responsibly
 

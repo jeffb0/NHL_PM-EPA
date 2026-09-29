@@ -11,11 +11,11 @@
     "calibrated": {
       "own_slope": 0.8136943954245824,
       "own_se": 0.06462246569182738,
-      "teammate_slope": 6.206086718147929,
+      "teammate_slope": 6.20608671814793,
       "r2_within": 0.10543185022420087
     },
-    "paired_z_calibrated_better": -7.65657999838104,
-    "mean_sse_diff_per_team_season": -122.96312614458571,
+    "paired_z_calibrated_better": -7.6565799983810345,
+    "mean_sse_diff_per_team_season": -122.96312614458569,
     "forward_component_slopes": {
       "pm": {
         "slope": 1.9857516775442154,
@@ -51,13 +51,13 @@
       "r2_within": 0.16141061932470102
     },
     "calibrated": {
-      "own_slope": 0.59297633817354,
+      "own_slope": 0.5929763381735398,
       "own_se": 0.03538371303225311,
       "teammate_slope": 3.5285934284756446,
       "r2_within": 0.15749014388695193
     },
     "paired_z_calibrated_better": -1.6077144244370334,
-    "mean_sse_diff_per_team_season": -6.496752606284296,
+    "mean_sse_diff_per_team_season": -6.496752606284299,
     "forward_component_slopes": {
       "pm": {
         "slope": 2.7726640531000166,

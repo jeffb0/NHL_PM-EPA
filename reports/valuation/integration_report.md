@@ -4,7 +4,7 @@ Components: possession (PM-EPA, shrunk), defense (DPM valuation rate, refit with
 
 ## Goals per win (derived from the data)
 
-**5.90 goals per win** (95% CI 5.69–6.13; R² 0.91; 284 team-seasons, 2017-18 to 2025-26). OLS through the origin of (wins − GP/2) on goal differential (shootouts excluded).
+**5.90 goals per win** (95% CI 5.68–6.11; R² 0.91; 284 team-seasons, 2017-18 to 2025-26). OLS through the origin of (wins − GP/2) on goal differential (shootouts excluded).
 
 | season | goals per win |
 |---|---|

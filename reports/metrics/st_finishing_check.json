@@ -1,0 +1,11 @@
+{
+  "max_abs_diff_vs_fin_gar_other": 3.552713678800501e-15,
+  "share_of_abs_gar_in_other_class": 0.0009443354481246669,
+  "attempts_by_class": {
+    "3v3": 10724,
+    "other": 216,
+    "pp": 153859,
+    "pk": 23822,
+    "4v4": 10545
+  }
+}

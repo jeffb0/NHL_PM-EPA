@@ -100,6 +100,18 @@ def step_combine(cfg):
             "pm_post_per60", "pm_rep_per60", "dpm_var_per60", "dpm_rep_per60", "pm_shrink_B",
             "fin_attempts_5v5", "raw_g_minus_xg_5v5", "fin_gaa_5v5", "fin_gar_other_strengths_memo", "fin_attempts_other_memo",
             "pm_epa_per60_ev", "dpm_val_per60", "qualified_ev"]
+    st_cols: list[str] = []
+    if (proc / "st_rapm_player_season.parquet").exists() and (proc / "st_finishing.parquet").exists():   # special teams (src/specialteams): PP, PK, 4v4, 3v3
+        from src.specialteams.run import build_table as st_table
+        stt = st_table(cfg)
+        st_cols = [c for c in stt.columns if c.startswith("st_") and not c.endswith("_per60")]
+        t = t.join(stt.select("player_id", "season", *st_cols).with_columns(pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)), on=["player_id", "season"], how="left")
+        t = t.with_columns([pl.col(c).fill_null(0.0) for c in st_cols])
+        gars = [f"st_{c}_gar" for c in ("pp", "pk", "4v4", "3v3")]
+        t = t.with_columns((pl.col("total_gar") + pl.sum_horizontal(gars)).alias("total_gar_all"),
+                           (pl.col("total_gar_sd") ** 2 + pl.sum_horizontal([pl.col(f"{g}_sd") ** 2 for g in gars])).sqrt().alias("total_gar_all_sd"))
+        t = t.with_columns((pl.col("total_gar_all") / gpw).alias("total_war_all"))
+        keep += st_cols + ["total_gar_all", "total_gar_all_sd", "total_war_all"]
     t = t.with_columns(((pl.col("pm_epa_per60_ev") - pl.col("pm_rep_per60")) * pl.col("toi_5v5") / 60).fill_null(0.0).alias("pm_raw_gar"),
                        ((pl.col("to_rate_per60") - pl.col("to_rep_per60")) * pl.col("toi_5v5") / 60).fill_null(0.0).alias("to_raw_gar"))   # unshrunk memo values
     t = t.select([c for c in keep if c in t.columns] + ["pm_raw_gar", "to_raw_gar"])
