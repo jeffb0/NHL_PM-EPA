@@ -73,6 +73,15 @@ def run() -> dict:
         p = fit(df, ["G", k], TEST_SEASONS)
         var[name] = {**summarize(p, P["B0"]), "vs_headline": paired(P["M"], p), "vs_B0": paired(p, P["B0"])}     # vs_headline: positive favors the headline
     res["variants"] = var
+    # rolling-refit total (methodology §5b): the rule compares it with the headline
+    if "rolling_refit" in var:
+        Pr = {"M_rr": fit(df, ["G", "S_rolling_refit"], TEST_SEASONS), "M+B1_rr": fit(df, ["G", "S_rolling_refit", "B_gd"], TEST_SEASONS)}
+        rr = {"rmse": {k: summarize(v, P["B0"])["rmse"] for k, v in Pr.items()},
+              "headline_vs_rolling": var["rolling_refit"]["vs_headline"], "rolling_vs_B0": paired(Pr["M_rr"], P["B0"]), "rolling_vs_B1": paired(Pr["M_rr"], P["B1"]), "rolling_vs_B3": paired(Pr["M_rr"], P["B3"]),
+              "M+B1_rr_vs_B1": paired(Pr["M+B1_rr"], P["B1"])}
+        rr["headline_better_z"] = rr["headline_vs_rolling"]["z"]
+        rr["verdict"] = "leakage-sensitive" if rr["headline_better_z"] > 2 else "no leakage-driven advantage found"
+        res["rolling_refit"] = rr
     # gates
     g = {}
     g["WM1"] = {"z": res["paired"]["M_vs_B0"]["z"], "pass": bool(res["paired"]["M_vs_B0"]["z"] > 2)}

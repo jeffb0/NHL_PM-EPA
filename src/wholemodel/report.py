@@ -36,6 +36,15 @@ def run() -> None:
            "## By test season", "", _table([{"season": k, "MSE M": v["mse_M"], "MSE B0": v["mse_B0"], "MSE B1": v["mse_B1"]} for k, v in r["by_season"].items()], 0), "",
            "## Variants and drop-one (each replaces the total in M; `z vs headline` positive means the headline is better)", "",
            _table([{"total": VAR_NAMES.get(k, k.replace("drop_", "without ")), "RMSE": v["rmse"], "z vs headline": v["vs_headline"]["z"], "z vs B0": v["vs_B0"]["z"]} for k, v in r["variants"].items()], 2), ""]
+    if r.get("rolling_refit"):
+        rr = r["rolling_refit"]
+        out += ["## Rolling refit of finishing and faceoffs (methodology §5b)", "",
+                "The finishing and faceoff models, and the finishing part of the special-teams components, are refit on seasons up to each season only; the rolling-refit total replaces those parts in the headline total.", "",
+                _table([{"model": "M with the rolling-refit total", "RMSE (goals)": rr["rmse"]["M_rr"]}, {"model": "M with the headline total", "RMSE (goals)": r["models"]["M"]["rmse"]},
+                        {"model": "M+B1 with the rolling-refit total", "RMSE (goals)": rr["rmse"]["M+B1_rr"]}, {"model": "M+B1 with the headline total", "RMSE (goals)": r["models"]["M+B1"]["rmse"]},
+                        {"model": "B1 prior team goal differential", "RMSE (goals)": r["models"]["B1"]["rmse"]}, {"model": "B3 naive roster-weighted on-ice xG", "RMSE (goals)": r["models"]["B3"]["rmse"]}], 2), "",
+                _table([{"comparison": k.replace("_", " "), "mean difference": v["mean_diff"], "z": v["z"]} for k, v in rr.items() if isinstance(v, dict) and "z" in v], 2), "",
+                f"Pre-registered rule: headline better than the rolling-refit total with z > 2 means the headline is leakage-sensitive. Headline better by z = {rr['headline_better_z']:.2f}: **{rr['verdict']}**.", ""]
     nar = ROOT / "reports" / "wholemodel" / "narrative.md"
     if nar.exists():
         out += [nar.read_text(encoding="utf-8"), ""]

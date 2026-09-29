@@ -75,6 +75,24 @@ season-by-season improvement over B0.
 Reported, not gated: M versus B1 and B2; the variants; the no-oracle roster version; the fixed-slope MSE; ranked
 component contributions from the drop-one table.
 
+## 5b. Rolling refit of the persistent-effect components (written 2026-09-29, before it was run)
+
+The finishing and faceoff models use every season, so their season-(T−1) values can contain later information (§3). The
+rolling refit removes it directly: for each season E = 2017…2024 the finishing model and the faceoff model are refit on seasons
+up to E only, with the fitted variance components held at the values estimated on the original training seasons (as in those
+components' own forward folds; the shared hyperparameters are a residual, disclosed source of leakage). Season-E values come
+from that fit: 5v5 finishing, faceoffs, and the finishing part of the four special-teams components (from the fold's shot-level
+shifts). The **rolling-refit total** is the headline total with those parts replaced by the fold values; every other part of the
+total is unchanged.
+
+Rule (fixed here): the rolling-refit total replaces the headline in the M protocol and is compared with it by paired z.
+* If the headline is better with z > 2, the headline advantage is attributed to leakage and the headline is flagged
+  leakage-sensitive; the rolling-refit total then becomes the reference number for forecasting claims.
+* Otherwise no leakage-driven advantage is found.
+* Reported either way: the rolling-refit total against B0, B1, B3 and M+B1 (WM-1 to WM-3 for the clean total), and the
+  difference from the leakage-clean total of §3 (which mixes leakage with shrinkage).
+WM-5 keeps its pre-registered form (the §3 clean total); this section supersedes it as the evidence on leakage.
+
 ## 6. Limitations stated in advance
 
 * Team-season goal differential is noisy (about 250 team-seasons in total, 6 seasons in test); modest R² gains are expected.

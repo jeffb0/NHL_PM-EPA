@@ -71,7 +71,13 @@ def onice_xgd_rate(proc) -> pl.DataFrame:
 def variants(t: pl.DataFrame) -> dict[str, pl.Expr]:
     """Alternative totals (methodology §3), as expressions over the calibrated all-strength table."""
     tot = pl.col("total_gar_all")
-    out = {"headline": tot, "calibrated": pl.col("total_gar_all_cal"), "five_v_five_total": pl.col("total_gar"), "original_turnover": tot - pl.col("to_gar") + pl.col("to_gar_orig"),
+    if "roll_fin_gar" in t.columns:     # rolling-refit total (methodology §5b): persistent-effect components refit on data up to each season
+        st_fin = sum((pl.col(f"st_{c}_fin_gar") for c in ("pp", "pk", "4v4", "3v3")), pl.lit(0.0))
+        roll = pl.col("roll_fin_gar") + pl.col("roll_fo_gar") + sum((pl.col(f"roll_st_{c}_fin") for c in ("pp", "pk", "4v4", "3v3")), pl.lit(0.0))
+        rolling = {"rolling_refit": tot - pl.col("fin_gar") - pl.col("fo_gar") - st_fin + roll}
+    else:
+        rolling = {}
+    out = {**rolling, "headline": tot, "calibrated": pl.col("total_gar_all_cal"), "five_v_five_total": pl.col("total_gar"), "original_turnover": tot - pl.col("to_gar") + pl.col("to_gar_orig"),
            "leakage_clean": (pl.col("pm_gar") + pl.col("def_gar") + pl.col("fin_raw_gar") + pl.col("to_gar") + pl.col("fo_raw_gar") + pl.col("pen_gar")
                              + pl.col("st_pp_raw_gar") + pl.col("st_pk_raw_gar") + pl.col("st_4v4_raw_gar") + pl.col("st_3v3_raw_gar"))}
     # exploratory (added after the WM-5 result; methodology §8): no component that uses a persistent player effect fitted on every season
@@ -85,6 +91,12 @@ def variants(t: pl.DataFrame) -> dict[str, pl.Expr]:
 def build(proc) -> pl.DataFrame:
     """One row per team-season T with the target, the goalie proxy, baselines, and the roster-weighted sums for every variant."""
     t = pl.read_parquet(proc / "player_value_calibrated_all.parquet")
+    rp = proc / "wm_rolling_values.parquet"
+    if rp.exists():
+        roll = pl.read_parquet(rp)
+        rc = [c for c in roll.columns if c.startswith("roll_")]
+        t = (t.join(roll.with_columns(pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)), on=["player_id", "season"], how="left")
+             .with_columns([pl.col(c).fill_null(0.0) for c in rc]))
     m_all = pl.col("toi_5v5") + sum((pl.col(f"st_{c}_min") for c in ("pp", "pk", "4v4", "3v3")), pl.lit(0.0))
     var = variants(t)
     base = t.with_columns(m_all.alias("m")).filter(pl.col("m") > 0)

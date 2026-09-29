@@ -54,6 +54,7 @@ Paired comparisons (squared-error difference, positive favors the first-named mo
 
 | total | RMSE | z vs headline | z vs B0 |
 |---|---|---|---|
+| rolling_refit | 41.21 | 2.46 | 3.67 |
 | calibrated weights (total_gar_all_cal) | 39.99 | 0.38 | 4.51 |
 | 5v5 total only | 41.60 | 1.73 | 3.72 |
 | original (not role-adjusted) turnover | 40.09 | 3.00 | 4.53 |
@@ -70,6 +71,29 @@ Paired comparisons (squared-error difference, positive favors the first-named mo
 | without 4v4 | 39.88 | -1.23 | 4.59 |
 | without 3v3 | 39.92 | -0.31 | 4.55 |
 
+## Rolling refit of finishing and faceoffs (methodology §5b)
+
+The finishing and faceoff models, and the finishing part of the special-teams components, are refit on seasons up to each season only; the rolling-refit total replaces those parts in the headline total.
+
+| model | RMSE (goals) |
+|---|---|
+| M with the rolling-refit total | 41.21 |
+| M with the headline total | 39.94 |
+| M+B1 with the rolling-refit total | 38.15 |
+| M+B1 with the headline total | 37.68 |
+| B1 prior team goal differential | 39.38 |
+| B3 naive roster-weighted on-ice xG | 38.91 |
+
+| comparison | mean difference | z |
+|---|---|---|
+| headline vs rolling | 103.02 | 2.46 |
+| rolling vs B0 | 685.11 | 3.67 |
+| rolling vs B1 | -147.01 | -0.95 |
+| rolling vs B3 | -183.76 | -1.27 |
+| M+B1 rr vs B1 | 95.63 | 1.25 |
+
+Pre-registered rule: headline better than the rolling-refit total with z > 2 means the headline is leakage-sensitive. Headline better by z = 2.46: **leakage-sensitive**.
+
 ## Interpretation
 
 **What the total does.** Given the actual roster and usage, the summed season-(T−1) player values predict next-season team goal differential well beyond the goalie-proxy baseline: RMSE 39.9 goals against 48.8 (out-of-sample R² 0.33, z = 4.57), better in all six test seasons. With the slope fixed at 1 (no fitted scale at all) the RMSE is 39.7 and the calibration slope of actual on predicted is 1.16 ± 0.10, so the components are on the goal scale at the team level and, if anything, slightly conservative. Without the oracle roster (previous team, previous minutes) the RMSE is 44.5: roster turnover costs about 4.5 goals of accuracy.
@@ -78,7 +102,9 @@ Paired comparisons (squared-error difference, positive favors the first-named mo
 
 **Component checks at team level.** No single component is significant when dropped (each drop-one difference has |z| < 2; the largest are the faceoff component at 1.98, the power play at 1.79 and defense at 1.31, all favoring keeping them). Dropping turnover or 4v4 slightly improves the forecast (z −1.47 and −1.23), consistent with the earlier player-level finding that turnover is the weakest component; neither is significant. The default TO-RA is clearly better than the original turnover charge (headline better by z = 3.00). The calibrated total is indistinguishable from the uncalibrated one (z = 0.38), which supports keeping the uncalibrated total as the default. Adding special teams to the 5v5 total helps modestly (5v5 total alone RMSE 41.6, z = 1.73).
 
-**Leakage.** WM-5 fails as pre-registered: the clean total (season-only unshrunk finishing, faceoffs and special-teams finishing) forecasts worse (RMSE 43.5, z = 2.62 against the headline). That test confounds two things: the headline's finishing and faceoff components are fitted on all seasons (so they can carry information from later seasons), and they are also shrunk while the clean versions are not, so the clean total is simply noisier. An exploratory variant that drops every persistent-effect component (no finishing, faceoffs or ST finishing; leak-free by construction) has RMSE 41.1, a difference from the headline of z = 1.91. So the headline's edge over a leak-free total is at most about 1.2 goals of RMSE and is not significant, but leakage and real information cannot be separated here. A rolling refit of the finishing and faceoff models on data up to each season would resolve it.
+**Leakage.** WM-5 fails as pre-registered: the clean total (season-only unshrunk finishing, faceoffs and special-teams finishing) forecasts worse (RMSE 43.5, z = 2.62 against the headline). That test confounds two things: the headline's finishing and faceoff components are fitted on all seasons (so they can carry information from later seasons), and they are also shrunk while the clean versions are not, so the clean total is simply noisier. An exploratory variant that drops every persistent-effect component (no finishing, faceoffs or ST finishing; leak-free by construction) has RMSE 41.1, a difference from the headline of z = 1.91. The rolling refit (methodology §5b) resolves it: refitting the finishing and faceoff models (and the finishing part of the special-teams components) on data up to each season gives a total with RMSE 41.2 against the headline's 39.9, and the pre-registered rule (headline better by z > 2) is met (z = 2.46), so **the headline is leakage-sensitive**. About 1.3 goals of the headline's forecast accuracy came from information the season did not yet have. The rolling total agrees closely with the full-data values (correlation 0.93 for 5v5 finishing and 0.99 for faceoffs among skaters with 500+ minutes) but is less dispersed (SD 1.31 against 1.47 goals for finishing). It matches the exploratory leak-free variant that drops the persistent-effect components (RMSE 41.1), which says that once leakage is removed the finishing and faceoff components add essentially nothing to next-season team forecasts.
+
+**Forecasting claims should use the rolling-refit total.** Its RMSE is 41.2 (out-of-sample R² about 0.31 against the goalie-only baseline; z = 3.67 against B0). It does not beat the prior team goal differential (z = −0.95) or the naive roster-weighted on-ice xG baseline (z = −1.27), and it does not add to team history significantly (z = 1.25 with both). The gate outcomes WM-2 and WM-3 therefore hold, more clearly, for the clean version. Remaining leakage: the variance components of both models come from the 2017–2021 seasons and are shared by all folds; the other components use only past data apart from cross-fitted shot xG and pooled hyperparameters with no player identity.
 
 **The goalie proxy is weak.** It improves on an intercept only slightly (RMSE 48.8 against 49.5, z = 1.73). A real goaltending component would probably raise every model's ceiling; the remaining team-level error (RMSE near 38–40 goals against an SD of about 46) is largely goaltending, deployment and luck.
 

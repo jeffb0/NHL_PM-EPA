@@ -192,7 +192,8 @@ Does the published total (`total_gar_all`, weights 1) predict next-season team g
 | Total vs goalie-proxy-only baseline | RMSE 39.9 vs 48.8 goals, out-of-sample R² 0.33, z = 4.6, better in all 6 seasons |
 | Calibration slope of actual on predicted (slope fixed at 1) | 1.16 ± 0.10 |
 | Versus simple baselines | **no better**: prior team goal differential 39.4, naive roster-weighted on-ice xG 38.9 (WM-2 fails); adds to team history at z = 1.94 (WM-3 just misses) |
-| Leakage-clean total | forecasts worse (43.5); confounded with shrinkage, so unresolved without a rolling refit (WM-5 fails as pre-registered) |
+| Leakage-clean total | forecasts worse (43.5); confounded with shrinkage (WM-5 fails as pre-registered) |
+| **Rolling refit** of the finishing and faceoff models (fit on data up to each season only) | RMSE 41.2 vs the headline's 39.9; headline better by z = 2.46, so **the headline is leakage-sensitive**. Use the rolling-refit total for forecasting claims (R² 0.29 vs the goalie-only baseline); finishing and faceoffs add essentially nothing to next-season team forecasts once leakage is removed |
 | Calibrated vs uncalibrated total | indistinguishable (z = 0.38): supports keeping the uncalibrated default |
 
 The total is best read as a decomposition of team results into player-level credit on one scale, not as a forecast that beats a team's own recent results. [Report](reports/wholemodel/validation_report.md) · [methodology & pre-registration](docs/wholemodel/methodology.md). `python -m src.wholemodel.run`.
