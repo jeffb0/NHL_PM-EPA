@@ -88,7 +88,28 @@ defense:
   min_toi: 500                 # 5v5 minutes, qualification for YOY / leaderboards
   workers: 12
 
+finishing:
+  # Finishing talent (FIN). Spec + pre-registered decision rules: docs/finishing/methodology.md.
+  sigma_seasons: [2017, 2018, 2019, 2020, 2021]   # variance components (EM) are fit on these seasons only
+  validation_fold: 2022        # predict this season from a fit on earlier seasons (D-type)
+  test_folds: [2023, 2024, 2025]
+  se_threshold: 2.0            # paired-SE multiple required by D-xG / D-type / F1 / F2
+  em_iters: 60                 # SQUAREM cycles (3 EM evaluations each); plain EM converges at rate ~0.98-0.99
+  em_tol_sd: 0.0001              # absolute EM residual bound on the standard-deviation scale (logit units)
+  min_attempts_yoy: 200        # unblocked attempts per season for YOY / split-half
+  min_attempts_next: 100       # held-out attempts for the player-level calibration slope
+  draws: 400                   # posterior draws per player for goals intervals
+  workers: 12
+
+valuation:
+  # Replacement level and integration. Spec: docs/finishing/methodology.md §8-§9.
+  regular_forwards: 12         # per team-season, ranked by all-strength TOI; the rest are fringe
+  regular_defense: 6
+  sensitivity: [[11, 5], [13, 7]]
+  min_toi: 500                 # 5v5 minutes to count as "qualified" (tau^2 estimation)
+  gpw_bootstrap: 1000
+
 xg:
-  model: logit                 # logit | gbm (chosen in Phase 5 on validation season)
+  model: logit                 # dead key (the code compares logit and GBM and uses the winner); kept for schema compatibility
   calibrate: isotonic
   rush_window_s: 4

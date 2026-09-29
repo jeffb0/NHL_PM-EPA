@@ -107,6 +107,27 @@ class DefenseCfg(_Strict):
     workers: int = 12
 
 
+class FinishingCfg(_Strict):
+    sigma_seasons: list[int]
+    validation_fold: int
+    test_folds: list[int]
+    se_threshold: float = 2.0
+    em_iters: int = 12
+    em_tol_sd: float = 1e-4
+    min_attempts_yoy: int = 200
+    min_attempts_next: int = 100
+    draws: int = 400
+    workers: int = 12
+
+
+class ValuationCfg(_Strict):
+    regular_forwards: int = 12
+    regular_defense: int = 6
+    sensitivity: list[list[int]]
+    min_toi: float = 500
+    gpw_bootstrap: int = 1000
+
+
 class Config(_Strict):
     seed: int
     data: DataCfg
@@ -118,6 +139,8 @@ class Config(_Strict):
     metrics: MetricsCfg
     xg: XgCfg
     defense: DefenseCfg | None = None
+    finishing: FinishingCfg | None = None
+    valuation: ValuationCfg | None = None
 
     def path(self, rel: str) -> Path:
         p = ROOT / rel

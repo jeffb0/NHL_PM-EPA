@@ -1,0 +1,11 @@
+# Optional environment for the full-Bayes check of the finishing model (methodology §5, tier 2).
+# Kept separate from requirements.txt so the pinned production environment is untouched.
+#   uv venv --python 3.11 .venv-bayes
+#   uv pip install --python .venv-bayes/Scripts/python.exe -r requirements-bayes.txt
+# Then: python -m src.finishing.nuts_prep            (main env: exports data + Laplace fit)
+#       .venv-bayes/Scripts/python -m src.finishing.nuts_check   (this env: NUTS + comparison)
+jax==0.10.2
+jaxlib==0.10.2
+numpyro==0.22.0
+numpy==2.4.6
+scipy==1.17.1
