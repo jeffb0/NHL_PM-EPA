@@ -79,3 +79,10 @@ captured, or too noisy to add.
    `total_gar_all_tr` and `player_transition.csv` because they like how it orders defensemen; they are published as a judgment-based alternative, not as a
    validated improvement, and the default total is unchanged. A follow-up diagnostic (report, "What drives TR") found that TR is not a linemate or team artifact (correlations
    with teammates' and team offense are near zero) but that part of it is a top-end artifact of the linear orthogonalization.
+2. **Owner decision: `total_gar_all_tr` is the preferred (headline) skater total (2026-09-29).** After the diagnostic in the report, the model owner chose to
+   use the position-weighted total plus TR as the preferred view of skater value, on judgment (it orders elite offensive defensemen more plausibly), knowing that
+   TR-1, TR-2 and TR-3 fail. This overrides the §5 adoption rule and is **not** a validated improvement: defensemen's TR has year-over-year reliability 0.13, adds
+   nothing out of sample, and part of its effect on the very best defensemen is a top-end artifact of the linear orthogonalization. The weight on TR is the
+   fitted ridge weight (forwards 0.03, defensemen 1.04), so in practice the change is a defensemen adjustment. `total_gar_all`, `total_gar_all_pos` and
+   `total_gar_all_ridge` remain published; `player_value_all_in.csv` (which stacks skaters and goalies) is not rebuilt, so the preferred skater column lives in
+   `data/outputs/player_transition.csv`. Revisit if a tracking-based transition measure becomes available or if TR's reliability improves.
