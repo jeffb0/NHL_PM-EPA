@@ -110,10 +110,32 @@ def run() -> dict:
     tt.write_parquet(proc / "player_value_all_tr.parquet")
     tt.select("player_id", "player_name", "position", "season", "team", "toi_5v5", "pm_gar", "opm_gar", "tr_gar", "total_gar_all", "total_gar_all_ridge", "total_gar_all_tr", "tr_change_gar").write_csv(outdir / "player_transition.csv")
     _save(met / "tr_results.json", res)
+    _rebuild_all_in(proc, met, outdir, tt)
     log.info("gates %s | adopt %s", {k: v["pass"] for k, v in g.items()}, res["adopt"])
     from src.transition.report import run as report
     report()
     return res
+
+
+def _rebuild_all_in(proc, met, outdir, tt: pl.DataFrame):
+    """Owner decision (docs/transition §9, item 2): skaters' ``gar`` in player_value_all_in is the position-weighted total plus TR; goalies are unchanged.
+    ``gar_uncalibrated`` (skaters' uncalibrated total) and ``gar_pos_weighted`` stay beside it. Needs the calibration step's all-in file; rerunning is idempotent."""
+    p = proc / "player_value_all_in.parquet"
+    if not p.exists():
+        log.warning("player_value_all_in.parquet missing: run the calibration first")
+        return
+    a = pl.read_parquet(p)
+    sk = tt.select(pl.col("player_id").cast(pl.Int64), pl.col("season").cast(pl.Int64), pl.col("total_gar_all_ridge").alias("_pos"), pl.col("total_gar_all_tr").alias("_tr"))
+    a = a.drop([c for c in ("gar_pos_weighted", "basis") if c in a.columns]).join(sk, on=["player_id", "season"], how="left")
+    sel = (pl.col("role") == "skater") & pl.col("_tr").is_not_null()
+    a = a.with_columns(pl.when(sel).then(pl.col("_pos")).otherwise(pl.col("gar")).alias("gar_pos_weighted"), pl.when(sel).then(pl.col("_tr")).otherwise(pl.col("gar")).alias("gar"),
+                       pl.when(sel).then(pl.lit("position-weighted + TR")).when(pl.col("role") == "skater").then(pl.lit("uncalibrated (no TR row)")).otherwise(pl.lit("goalie value")).alias("basis")).drop("_pos", "_tr")
+    gpw = json.loads((met / "val_gpw.json").read_text())["goals_per_win"]
+    a = a.with_columns((pl.col("gar") / gpw).alias("wins"))
+    a = a.sort("season", "gar", descending=[False, True])
+    a.write_parquet(p)
+    a.write_csv(outdir / "player_value_all_in.csv")
+    log.info("player_value_all_in rebuilt: %d skater rows use position-weighted + TR", int(a.filter(pl.col("basis") == "position-weighted + TR").height))
 
 
 def main():
