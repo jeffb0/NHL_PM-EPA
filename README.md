@@ -186,6 +186,19 @@ Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season):
 
 The projections forecast next season's *value estimates* (player talent). Removing the chained priors in defense and special teams does not fix the team-level failure; exploratory diagnostics point to team context, since last season's rates alone forecast teams best. A results-trained variant (exploratory) does better at the team level (RMSE 42.4) but does not beat the prior team goal differential (41.4). Use the projections for ranking, aging and contract-length questions, not as validated team forecasts. [Report](reports/projection/validation_report.md) · [methodology & pre-registration](docs/projection/methodology.md). `python -m src.projection.run` (needs `python -m src.wholemodel.rolling` first).
 
+## NHL EDGE tracking features (v1.0)
+
+`python -m src.ingestion.edge` fetches EDGE season summaries per skater (max skating speed, bursts over 20 mph, distance, top shot speed, zone time) for 2021 to 2025 into `data/raw/edge/` and `data/processed/edge_player_season.parquet` (4,727 skater-seasons, 100% coverage of skaters with 300+ minutes). EDGE exists only from 2021-22.
+
+| Result | Value |
+|---|---|
+| Physical aging (27 to 33) | forwards lose 0.37 mph of top speed (0.26 to 0.47) and about 2.5 bursts per 60; defensemen 0.21 mph |
+| EDGE features in the projection (2024–2025 test, 1,348 player-seasons) | no improvement: MSE 0.0149 vs 0.0148, z = −0.63; players 30+ z = 0.30 |
+| Does speed explain the value aging curve? | no: the age effect is unchanged with EDGE features |
+| Is a speed drop a leading indicator? (exploratory) | no, 11 of 12 tests null |
+
+Physical decline is real and measurable, but the value history already reflects it; no defaults change. The test is small (five EDGE seasons) and should be repeated as seasons accumulate; the ingestion and the `Spec.extra` hook are ready. [Report](reports/edge/validation_report.md) · [methodology](docs/edge/methodology.md). `python -m src.edge.run`.
+
 ## Team context: "system / chemistry" (v1.0)
 
 How much of a player's value travels when he changes teams, and does the new team's context predict his next-season value? No coach data is in the repository, so context is the team-season (coaching, system, linemates and arena bundled).

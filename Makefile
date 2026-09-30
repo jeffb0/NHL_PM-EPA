@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 UV ?= uv
 
-.PHONY: install ingest all pipeline defense finishing components specialteams goaltending projection valuation calibration test lint smoke notebooks clean
+.PHONY: install ingest all pipeline defense finishing components specialteams goaltending projection edge valuation calibration test lint smoke notebooks clean
 
 install:            ## create .venv (Python 3.11) and install pinned deps
 	$(UV) venv --python 3.11 .venv
@@ -34,6 +34,10 @@ projection:         ## rolling refits, then the projection and aging layer (need
 	$(PY) -m src.wholemodel.rolling
 	$(PY) -m src.wholemodel.run
 	$(PY) -m src.projection.run
+
+edge:               ## fetch NHL EDGE tracking summaries (2021-22 onward, needs network) and run the aging/projection test
+	$(PY) -m src.ingestion.edge
+	$(PY) -m src.edge.run
 
 valuation:          ## replacement level, goals per win, combined component table (needs finishing and components)
 	$(PY) -m src.valuation.run
