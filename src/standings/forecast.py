@@ -46,7 +46,7 @@ def team_minutes(p: pl.DataFrame, res: pl.DataFrame, season: int) -> dict[str, f
     return {g: float(p.filter((pl.col("season") == season) & (pl.col("pos_group") == g))["m"].sum()) / tg * 82.0 for g in ("F", "D")}
 
 
-def goalie_value(gk: pl.DataFrame, T: int, rates: pl.DataFrame, per: pl.DataFrame, lg: pl.DataFrame) -> pl.DataFrame:
+def goalie_value(gk: pl.DataFrame, T: int, rates: pl.DataFrame, per: pl.DataFrame, lg: pl.DataFrame, max_goalies: int | None = None) -> pl.DataFrame:
     """Team goalie value (goals per 82 against an average goalie): expected shot share x shots x rolling persistent save rate, goalies on the opening roster."""
     g = gk.filter(pl.col("season") == T).select("team_id", "goalie")
     s1 = per.filter(pl.col("season") == T - 1).select("goalie", pl.col("shots").alias("s1"))
@@ -56,6 +56,8 @@ def goalie_value(gk: pl.DataFrame, T: int, rates: pl.DataFrame, per: pl.DataFram
     g = (g.join(s1, on="goalie", how="left").join(s2, on="goalie", how="left").join(r.select(pl.col("goalie").cast(pl.Int64), "rate_v"), on="goalie", how="left")
          .with_columns((pl.col("s1").fill_null(0.0) + 0.5 * pl.col("s2").fill_null(0.0)).alias("w"), pl.col("rate_v").fill_null(rep).alias("rate")))
     g = g.with_columns(pl.when(pl.col("w") <= 0).then(NEW_GOALIE_SHOTS).otherwise(pl.col("w")).alias("w"))
+    if max_goalies:                 # a published camp roster lists prospects and AHL goalies; the backtest's opening lineups had the two who dressed
+        g = g.filter(pl.col("w").rank("ordinal", descending=True).over("team_id") <= max_goalies)
     g = g.with_columns((pl.col("w") / pl.col("w").sum().over("team_id")).alias("share"))
     shots = float(lg.filter(pl.col("season") == T - 1)["shots82"].item())
     return g.group_by("team_id").agg((pl.col("share") * shots * pl.col("rate")).sum().alias("G"))

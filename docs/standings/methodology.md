@@ -95,3 +95,13 @@ it is not presented as adding information to them.
 ## 9. Deviations log
 
 *(any change to §3–§6 after results are seen is recorded here with its reason)*
+
+## 10. The 2026-27 forecast procedure (added 2026-09-30, after the backtest result, before any forecast was examined)
+
+* **Data.** `python -m src.ingestion.rosters_next 2026` snapshots the published NHL rosters (dated folders under `data/raw/rosters_next/2026/`, never overwritten). The forecast is rerun from the latest snapshot;
+  it should be rerun once after opening night with the dressed lineups, and each published forecast records which snapshot it used. The snapshot has no injury information.
+* **Model.** The primary forecast is M1 exactly as in §4, with the goal-differential-to-points map fitted on all seasons through 2025 and the interval from the standard deviation of M1's 2019–2025 errors. M3 and B2 are shown for reference, fitted on all earlier seasons.
+* **Differences from the backtest roster rule (implementation, logged):** (1) a published camp roster lists 22–33 players, not the players who dressed in two games, so the top 13 forwards and 7 defensemen by projected minutes are kept from the whole list;
+  (2) only each team's two goalies with the most prior shots (new goalies count as 600) are kept, because the list includes prospects and AHL goalies. Goalie rolling save rates for 2026 come from the goaltending model refitted on shots through 2025 (same settings as the forward step).
+* **Presentation rule from §6:** ST-3 failed, so the forecast is labelled as not adding validated information to last season's results; ST-4 slightly failed, so the forecast is slightly compressed (strong teams are under-predicted, weak teams over-predicted).
+* **Outputs:** `data/outputs/standings_2026_forecast.csv`, `standings_2026_players.csv` (each team's projected players, minutes and goals above replacement), `reports/standings/forecast_2026.md`.
