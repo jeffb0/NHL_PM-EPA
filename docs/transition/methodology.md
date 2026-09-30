@@ -84,5 +84,5 @@ captured, or too noisy to add.
    TR-1, TR-2 and TR-3 fail. This overrides the §5 adoption rule and is **not** a validated improvement: defensemen's TR has year-over-year reliability 0.13, adds
    nothing out of sample, and part of its effect on the very best defensemen is a top-end artifact of the linear orthogonalization. The weight on TR is the
    fitted ridge weight (forwards 0.03, defensemen 1.04), so in practice the change is a defensemen adjustment. `total_gar_all`, `total_gar_all_pos` and
-   `total_gar_all_ridge` remain published; `player_value_all_in.csv` (which stacks skaters and goalies) is not rebuilt, so the preferred skater column lives in
-   `data/outputs/player_transition.csv`. Revisit if a tracking-based transition measure becomes available or if TR's reliability improves.
+   `total_gar_all_ridge` remain published; `player_value_all_in.csv` (skaters and goalies) is rebuilt by `python -m src.transition.run`: skaters' `gar` is the
+   position-weighted total plus TR (`gar_pos_weighted` and `gar_uncalibrated` stay beside it, `basis` labels the rows); goalies are unchanged. Revisit if a tracking-based transition measure becomes available or if TR's reliability improves.
