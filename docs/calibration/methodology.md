@@ -133,6 +133,35 @@ calibration stays as published; v3 is a separate step writing suffixed outputs.
 * **Reported, not gated:** the change in each skater weight from v2 to v3 (the goalie regressor removes goaltending variance from the residual, so skater
   weights are better identified); the team-level R² with and without the goalie.
 
+## 5d. Position-specific weights (v4), written 2026-09-29 before it was fitted as a pre-registered spec
+
+**Why.** A model-owner review found a clear misfit: Josh Morrissey and Mason Appleton (2022) come out at the same total (2.73 goals above replacement)
+although Morrissey is an elite defenseman and Appleton a depth forward. Diagnostics found that defensemen's values are structurally compressed
+(possession value for defensemen has a standard deviation of 0.016 goals per 60 against 0.116 for defense; the D total tracks ice time and
+scoring only weakly, correlations 0.20 and 0.16 against 0.37 and 0.60 for forwards), and that the position-split team-level regression gives very
+different slopes by position (e.g. forwards' penalty-kill value −0.98 ± 0.35, defensemen's 3.16 ± 0.51). The pooled calibration cannot see this.
+
+**What was tried before this pre-registration (disclosed).** Four specifications were run once on the same data: pooled weights (v3), possession
+split by position, possession and defense split, and the seven main components split by position. Only the last improved held-out error
+(z = 2.24 against pooled, 2.27 against all ones); the first two were worse than pooled. Choosing the best of four is a forking path, so this spec is
+**exploratory**: it is registered here as the single v4 spec and judged by the rules below, and its evidence is weaker than that of a
+single pre-specified test. A block-specific shrinkage change to the special-teams RAPM was also tried and found not supported (held-out error
+flat, 357.19 against 357.22).
+
+**Spec.** The all-strength identity of §5c with the components possession, defense, finishing, turnover, penalties, power play and penalty kill each
+entering **twice** (forwards' team sum and defensemen's team sum), faceoffs, 4v4, 3v3 and the goalie pooled: 18 weights. Ridge toward 1, λ by
+leave-one-season-out CV, bootstrap intervals, as §2 to §3.
+* **Decision (D-cal-pos):** adopt the 18 weights iff the held-out error beats *both* the all-ones sum and the pooled ridge of §5c with paired z > 2.
+* **Application:** each player's component (the shrunk `*_gar` column) is multiplied by the weight for his position; applied weights are
+  clipped to [0, 3] (a component can be switched off, not reversed, and no more than tripled); unclipped weights are reported.
+* **Gates:** CAL-3 (deployment-adjusted player-level next-season check, no harm, z > −2) for the position-weighted total; CAL-5 (identical to the
+  uncalibrated total when weights are 1). Reported, not gated: the weights with intervals, the effect on defensemen relative to forwards, the
+  correlation of defensemen's totals with ice time and scoring before and after (an external-validity look, not a criterion), and the two
+  named players.
+* **Stated in advance:** the position-specific weights at the team level are identified from team-sum variation only (284 team-seasons), the F and D
+  sums are correlated, and a weight near 0 or above 2 says the component's *scale for that position* is off in the data, not that the component is
+  wrong for every player. Replacement-level offsets (constant per minute) cannot be separated from weights here.
+
 ## 6. Limitations stated in advance
 
 * 284 team-seasons give wide intervals; weights near 1 are the expected outcome unless the data disagree strongly.

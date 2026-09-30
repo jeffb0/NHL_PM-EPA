@@ -23,14 +23,29 @@ SHR |= {"pen": "pen_gar", **{c: f"st_{c}_gar" for c in ("pp", "pk", "4v4", "3v3"
 COMPS_ALL_GK = COMPS_ALL + ["gk"]
 RAW |= {"gk": "gk_raw_gar"}
 SHR |= {"gk": "gk_gar"}
+# position-specific weights (methodology §5d): seven main components enter twice (forwards' and defensemen's team sums)
+SPLIT = ["pm", "def", "fin", "to", "pen", "pp", "pk"]
+COMPS_POS = [f"{c}_{g}" for c in SPLIT for g in ("F", "D")] + ["fo", "4v4", "3v3", "gk"]
+for _c in SPLIT:
+    for _g in ("F", "D"):
+        RAW[f"{_c}_{_g}"] = f"{RAW[_c]}__{_g}"
+        SHR[f"{_c}_{_g}"] = f"{SHR[_c]}__{_g}"
 LAMBDAS = np.geomspace(1e1, 1e6, 26)
 
 
 def team_table(t: pl.DataFrame, proc, comps: list[str] = COMPS, target: str = "gd5") -> pl.DataFrame:
     """Team-season sums of the raw and shrunk components joined to the goal-differential target (``gd5`` or ``gd_all``)."""
-    skater = [c for c in comps if c != "gk"]
+    virtual = [c for c in comps if c.rsplit("_", 1)[-1] in ("F", "D") and c.rsplit("_", 1)[0] in SPLIT]
+    skater = [c for c in comps if c != "gk" and c not in virtual]
     cols = sorted(set(RAW[c] for c in skater) | set(SHR[c] for c in skater))
     s = recon.team_sums(t, cols)
+    for g in ("F", "D"):                       # position-specific team sums (weights by position, methodology §5d)
+        bases = sorted({c.rsplit("_", 1)[0] for c in virtual if c.endswith("_" + g)})
+        if bases:
+            cc = sorted({RAW[b] for b in bases} | {SHR[b] for b in bases})
+            sg = t.filter(pl.col("pos_group") == g).group_by("season", "team").agg([pl.col(x).sum().alias(f"{x}__{g}") for x in cc])
+            s = s.join(sg, on=["season", "team"], how="full", coalesce=True)
+    s = s.with_columns([pl.col(c).fill_null(0.0) for c in s.columns if c not in ("season", "team")])
     if "gk" in comps:
         s = s.join(pl.read_parquet(proc / "goalie_team_season.parquet").select("season", "team", "gk_gar", "gk_raw_gar"), on=["season", "team"], how="left").with_columns(pl.col("gk_gar").fill_null(0.0), pl.col("gk_raw_gar").fill_null(0.0))
     gd = recon.team_gd5(proc) if target == "gd5" else recon.team_gd_all(proc)
@@ -106,7 +121,8 @@ def apply_weights_all(t: pl.DataFrame, weights: dict[str, float], gpw: float, ta
     t = t.with_columns(*[(pl.col(SHR[c]) * weights[c]).alias(cols[c]) for c in weights],
                        *[(pl.col(f"{SHR[c]}_sd") * weights[c]).alias(f"{cols[c]}_sd") for c in weights if f"{SHR[c]}_sd" in t.columns])
     sds = [pl.col(f"{cols[c]}_sd") ** 2 for c in weights if f"{cols[c]}_sd" in t.columns]
-    return t.with_columns(pl.sum_horizontal([pl.col(v) for v in cols.values()]).alias(f"total_gar_all_{tag}"), pl.sum_horizontal(sds).sqrt().alias(f"total_gar_all_{tag}_sd")).with_columns(
+    sd_total = pl.sum_horizontal(sds).sqrt() if sds else pl.lit(0.0)
+    return t.with_columns(pl.sum_horizontal([pl.col(v) for v in cols.values()]).alias(f"total_gar_all_{tag}"), sd_total.alias(f"total_gar_all_{tag}_sd")).with_columns(
         (pl.col(f"total_gar_all_{tag}") / gpw).alias(f"total_war_all_{tag}"), (pl.col(f"total_gar_all_{tag}") - pl.col("total_gar_all")).alias(f"{tag}_change_gar"))
 
 
@@ -118,3 +134,26 @@ def apply_weights(t: pl.DataFrame, weights: dict[str, float], gpw: float, tag: s
     sds = [pl.col(f"{c}_gar_{tag}_sd") ** 2 for c in weights] + [pl.col("pen_gar_sd") ** 2]
     return t.with_columns(pl.sum_horizontal(parts).alias(f"total_gar_{tag}"), pl.sum_horizontal(sds).sqrt().alias(f"total_gar_{tag}_sd")).with_columns(
         (pl.col(f"total_gar_{tag}") / gpw).alias(f"total_war_{tag}"), (pl.col(f"total_gar_{tag}") - pl.col("total_gar")).alias(f"{tag}_change_gar"))
+
+
+def apply_weights_pos(t: pl.DataFrame, weights: dict[str, float], gpw: float, tag: str) -> pl.DataFrame:
+    """Position-specific version of ``apply_weights_all``: each split component's shrunk player column times the weight for his position
+    (``<c>_F`` / ``<c>_D``), pooled components times their single weight; summed to ``total_gar_all_<tag>``."""
+    cols = {}
+    exprs = []
+    sd_exprs = []
+    bases = list(dict.fromkeys(c.rsplit("_", 1)[0] if c.rsplit("_", 1)[-1] in ("F", "D") and c.rsplit("_", 1)[0] in SPLIT else c for c in weights if c != "gk"))
+    for b in bases:
+        if f"{b}_F" in weights:
+            w = pl.when(pl.col("pos_group") == "F").then(weights[f"{b}_F"]).otherwise(weights[f"{b}_D"])
+        else:
+            w = pl.lit(weights[b])
+        cols[b] = f"{SHR[b]}_{tag}"
+        exprs.append((pl.col(SHR[b]) * w).alias(cols[b]))
+        if f"{SHR[b]}_sd" in t.columns:
+            sd_exprs.append((pl.col(f"{SHR[b]}_sd") * w).alias(f"{cols[b]}_sd"))
+    t = t.with_columns(*exprs, *sd_exprs)
+    sds = [pl.col(f"{v}_sd") ** 2 for v in cols.values() if f"{v}_sd" in t.columns]
+    sd_total = pl.sum_horizontal(sds).sqrt() if sds else pl.lit(0.0)
+    return t.with_columns(pl.sum_horizontal([pl.col(v) for v in cols.values()]).alias(f"total_gar_all_{tag}"), sd_total.alias(f"total_gar_all_{tag}_sd")).with_columns(
+        (pl.col(f"total_gar_all_{tag}") / gpw).alias(f"total_war_all_{tag}"), (pl.col(f"total_gar_all_{tag}") - pl.col("total_gar_all")).alias(f"{tag}_change_gar"))

@@ -18,7 +18,7 @@ from src.calibration import unshrunk
 from src.config import load_config
 
 log = logging.getLogger("calibration")
-STEPS = ["team", "player", "team_all", "player_all", "team_gk", "player_gk", "report"]
+STEPS = ["team", "player", "team_all", "player_all", "team_gk", "player_gk", "team_pos", "player_pos", "report"]
 
 
 def _paths(cfg):
@@ -103,9 +103,9 @@ def _team_all(cfg, gk: bool = False):
              res["paired_z_calibrated_vs_ones"], "ADOPTED" if res["adopt"] else "weights set to 1")
 
 
-def _player_all(cfg, gk: bool = False):
+def _player_all(cfg, gk: bool = False, sfx_override: str | None = None):
     proc, _, met = _paths(cfg)
-    sfx = "_gk" if gk else ""
+    sfx = sfx_override if sfx_override is not None else ("_gk" if gk else "")
     if not (proc / f"player_value_calibrated_all{sfx}.parquet").exists():
         return
     t = pl.read_parquet(proc / f"player_value_calibrated_all{sfx}.parquet")
@@ -119,6 +119,60 @@ def _player_all(cfg, gk: bool = False):
     res["gate_CAL3_pass_adjusted"] = bool(adj["y_gd_adj"]["paired_z_calibrated_better"] > -2.0)
     (met / f"cal_player_all{sfx}.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")
     log.info("all-strength player check%s: %d player-seasons; own slope (goals) %.2f; ridge-better z %.2f", " with the goalie" if gk else "", res["n_player_seasons"], res["y_gd"]["calibrated"]["own_slope"], res["y_gd"]["paired_z_calibrated_better"])
+
+
+def _team_all_pos(cfg):
+    """Position-specific weights (methodology §5d): 18 weights, adoption needs paired z > 2 against all ones and against the pooled ridge (§5c)."""
+    import numpy as np
+    proc, out_dir, met = _paths(cfg)
+    if not (proc / "goalie_team_season.parquet").exists():
+        return
+    t = unshrunk.build(proc, all_strength=True)
+    jp = tm.team_table(t, proc, tm.COMPS_ALL_GK, target="gd_all")
+    js = tm.team_table(t, proc, tm.COMPS_POS, target="gd_all")
+    assert (jp["season"].to_list() == js["season"].to_list()) and (jp["team"].to_list() == js["team"].to_list())
+    y, season = js["gd_all"].to_numpy().astype(float), js["season"].to_numpy()
+    Xs, Xp = js.select([tm.RAW[c] for c in tm.COMPS_POS]).to_numpy(), jp.select([tm.RAW[c] for c in tm.COMPS_ALL_GK]).to_numpy()
+    cvs, cvp = tm.loso_cv(Xs, y, season, tm.LAMBDAS), tm.loso_cv(Xp, y, season, tm.LAMBDAS)
+    bs, bp = int(np.argmin(cvs["total"][:-1])), int(np.argmin(cvp["total"][:-1]))
+    lam = float(tm.LAMBDAS[bs])
+
+    def z(a, b):                                                  # positive = a has the larger error = b is better
+        d = a - b
+        return float(d.mean() / (d.std(ddof=1) / np.sqrt(len(d))))
+
+    z_ones, z_pool = z(cvs["sq_err"][-1], cvs["sq_err"][bs]), z(cvp["sq_err"][bp], cvs["sq_err"][bs])
+    adopt = bool(z_ones > 2 and z_pool > 2)
+    _, w = tm.ridge_to_one(Xs, y, lam)
+    rng = np.random.default_rng(cfg.seed)
+    bw = np.array([tm.ridge_to_one(Xs[k], y[k], lam)[1] for k in (rng.integers(0, len(y), len(y)) for _ in range(1000))])
+    ols = tm.recon.regress(js, [tm.RAW[c] for c in tm.COMPS_POS], y="gd_all")
+    shr = tm.recon.regress(js, [tm.SHR[c] for c in tm.COMPS_POS], y="gd_all")
+    wr = dict(zip(tm.COMPS_POS, w.tolist()))
+    wc = {c: float(np.clip(v, 0.0, 3.0)) for c, v in wr.items()}          # applied weights are clipped to [0, 3]
+    res = {"comps": tm.COMPS_POS, "lambda": lam, "n_team_seasons": js.height, "cv_mse_ones": float(cvs["sq_err"][-1].mean()), "cv_mse_position": float(cvs["sq_err"][bs].mean()), "cv_mse_pooled_ridge": float(cvp["sq_err"][bp].mean()),
+           "paired_z_vs_ones": z_ones, "paired_z_vs_pooled_ridge": z_pool, "adopt": adopt, "weights_ridge": wr, "weights_clipped": wc,
+           "weights_ci95": {c: [float(np.quantile(bw[:, i], 0.025)), float(np.quantile(bw[:, i], 0.975))] for i, c in enumerate(tm.COMPS_POS)},
+           "unshrunk_ols": {"r2": ols["r2"], "slopes": {c: ols["slopes"][tm.RAW[c]] for c in tm.COMPS_POS}}, "shrunk_ols": {"r2": shr["r2"], "slopes": {c: shr["slopes"][tm.SHR[c]] for c in tm.COMPS_POS}}}
+    gpw = json.loads((met / "val_gpw.json").read_text())["goals_per_win"]
+    applied = wc if adopt else {c: 1.0 for c in tm.COMPS_POS}
+    sk = lambda d: {k: v for k, v in d.items() if k != "gk"}   # noqa: E731
+    tc = tm.apply_weights_pos(t, sk(applied), gpw, "cal")
+    tc = tm.apply_weights_pos(tc, sk(wc), gpw, "ridge")
+    res["weights_applied"] = applied
+    res["gate_CAL5_pass"] = bool((not adopt) == (tc["cal_change_gar"].abs().max() < 1e-9))
+    tc.write_parquet(proc / "player_value_calibrated_all_pos.parquet")
+    tc.write_csv(out_dir / "player_value_calibrated_all_pos.csv")
+    (met / "cal_team_all_pos.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")
+    log.info("position-specific calibration: lambda=%.3g CV MSE ones %.1f pooled %.1f position %.1f; z vs ones %.2f vs pooled %.2f -> %s", lam, res["cv_mse_ones"], res["cv_mse_pooled_ridge"], res["cv_mse_position"], z_ones, z_pool, "ADOPTED" if adopt else "not adopted")
+
+
+def step_team_pos(cfg):
+    _team_all_pos(cfg)
+
+
+def step_player_pos(cfg):
+    _player_all(cfg, False, "_pos")
 
 
 def step_team_all(cfg):
@@ -147,6 +201,8 @@ def run_steps(steps: list[str]) -> None:
             from src.calibration.report_all import run as run_all
             run_all()
             run_all(gk=True)
+            from src.calibration.report_pos import run as run_pos
+            run_pos()
         else:
             globals()[f"step_{s}"](cfg)
 
