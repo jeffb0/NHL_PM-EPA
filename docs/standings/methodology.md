@@ -96,6 +96,10 @@ it is not presented as adding information to them.
 
 *(any change to §3–§6 after results are seen is recorded here with its reason)*
 
+1. **Primary forecast changed from M1 to M1 + C1 + C3 (2026-09-30).** After a separate pre-registered test of three improvements (docs/standings/improvements.md), the portable team residual (C1) and
+   deployment-aware minutes (C3) were implemented under that document's rules; the published 2026-27 forecast uses them (backtest RMSE 13.96 against 14.58 for M1; not a reliable improvement, z = 1.42; still not better than B2, z = −0.58).
+   M1 stays in the output for reference. The §6 gates were not re-run for the new primary; its calibration slope is 0.84 (inside the ST-4 band) and it still fails the spirit of ST-3 (it does not beat last season's goal differential).
+
 ## 10. The 2026-27 forecast procedure (added 2026-09-30, after the backtest result, before any forecast was examined)
 
 * **Data.** `python -m src.ingestion.rosters_next 2026` snapshots the published NHL rosters (dated folders under `data/raw/rosters_next/2026/`, never overwritten). The forecast is rerun from the latest snapshot;

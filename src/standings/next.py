@@ -16,11 +16,13 @@ from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
 from src.projection.model import Spec
+from src.standings import candidates as cd
 from src.standings import data as sd
 from src.standings import forecast as fc
 from src.standings import run as sr
 
 log = logging.getLogger("standings")
+PRESEL = {"F": 14, "D": 8}
 
 
 def load_snapshot(raw, season: int, stamp: str | None = None) -> tuple[pl.DataFrame, str]:
@@ -80,25 +82,41 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     models = pm.fit_models(pr.train_rows(fr_val, 1, season), M)
     mm = pr._minutes_fit(pr.train_rows(fr_min, 1, season))
     alloc = fc.allocate_minutes(d, pr._minutes_pred(mm, d), fc.team_minutes(p, res, last))
-    rate = pm.predict_models(models, alloc, M)
-    S = fc._skater_sum(alloc, rate, "S")
+    S = fc._skater_sum(alloc, pm.predict_models(models, alloc, M), "S")
+    # implemented improvements (docs/standings/improvements.md): C3 deployment-aware minutes, applied to a dressed-size pre-selection (14 F, 8 D) so the
+    # roster-relative feature is computed over a group like the backtest's opening lineups rather than a whole camp roster; C1 portable team residual
+    pre = (d.with_columns(pl.Series("_m", pr._minutes_pred(mm, d))).with_columns(pl.col("_m").rank("ordinal", descending=True).over("team_id", "pos_group").alias("_rk"))
+           .filter(pl.col("_rk") <= pl.col("pos_group").replace_strict(PRESEL, return_dtype=pl.Int64)).drop("_m", "_rk"))
+    mm3 = cd.minutes_fit_c3(pr.train_rows(fr_min, 1, season))
+    alloc3 = fc.allocate_minutes(pre, cd.minutes_pred_c3(mm3, pre), fc.team_minutes(p, res, last))
+    rate3 = pm.predict_models(models, alloc3, M)
+    S3 = fc._skater_sum(alloc3, rate3, "S_c3")
+    tres = cd.team_residual(proc, p, res)
+    Rc3 = cd.carried_residual(alloc3, p, tres, season).rename({"Rc": "Rc3"})
     per, lg = sd.goalie_usage(proc)
     rates = next_goalie_rates(proc, cfg, season)
     gk = snap.filter(pl.col("pos_group") == "G").select("team_id", pl.col("player_id").alias("goalie"), pl.lit(season, pl.Int64).alias("season"))
     G = fc.goalie_value(gk, season, rates, per, lg, max_goalies=2)
-    # player-level table for auditing
-    players = alloc.with_columns(pl.Series("proj_rate60", rate)).with_columns((pl.col("proj_rate60") * pl.col("mins") / 60).alias("proj_gar")).join(snap.select("player_id", "name", "team"), on="player_id", how="left")
-    players.select("team", "name", "pos_group", "age", "no_history", "mins", "proj_rate60", "proj_gar").sort("team", "proj_gar", descending=[False, True]).write_csv(outdir / f"standings_{season}_players.csv")
 
-    # points: M1 as pre-registered; references M3 (blend) and B2 (prior goal differential) with fits on all earlier seasons
+    # points: the primary is M1 with C1 and C3 (improvements.md §4); M1, M3 (blend) and B2 (prior goal differential) are shown for reference, all fitted on earlier seasons
     tab = pl.read_parquet(proc / "standings_table.parquet")
     act = tab.filter(pl.col("gp") > 0)
-    t = ids.join(S, on="team_id", how="left").join(G, on="team_id", how="left")
-    t = t.with_columns((pl.col("S") + pl.col("G")).alias("SG")).with_columns((pl.col("SG") - pl.col("SG").mean()).alias("SG_dm"))
     a, b = sr.ols(act["gd82"].to_numpy()[:, None], act["pts82"].to_numpy())
-    t = t.with_columns((a + b * pl.col("SG_dm")).alias("pts_M1"), (pl.col("SG_dm")).alias("gd_hat"))
-    resid = act.filter(pl.col("SG_dm").is_not_null())
-    sd_m1 = float((resid["pts82"] - (a + b * resid["SG_dm"])).std())
+    ct = pl.read_parquet(proc / "standings_candidates_table.parquet").filter((pl.col("gp") > 0) & pl.col("SG3_dm").is_not_null())
+    yc = (ct["pts82"].to_numpy() - (a + b * ct["SG3_dm"].to_numpy())) / b
+    c = float((ct["Rc3_dm"].to_numpy() * yc).sum() / (ct["Rc3_dm"].to_numpy() ** 2).sum())
+    cj = json.loads((cfg.path(cfg.data.metrics_dir) / "standings_candidates.json").read_text())
+    sd_new = float(cj["rmse"]["C1_C3"])                                                  # out-of-sample error of the implemented model, 2021-2025
+    # player-level table for auditing: projected rate, minutes, value and the carried share of last season's team residual
+    prev_rho = p.filter(pl.col("season") == last).select("player_id", "team").join(tres.filter(pl.col("season") == last).select("team", "rho"), on="team", how="left").select("player_id", "rho")
+    players = (alloc3.with_columns(pl.Series("proj_rate60", rate3)).with_columns((pl.col("proj_rate60") * pl.col("mins") / 60).alias("proj_gar"))
+               .join(prev_rho, on="player_id", how="left").with_columns((pl.col("rho").fill_null(0.0) * pl.col("mins") * c).alias("carried_residual")).join(snap.select("player_id", "name", "team"), on="player_id", how="left"))
+    players.select("team", "name", "pos_group", "age", "no_history", "mins", "proj_rate60", "proj_gar", "carried_residual").sort("team", "proj_gar", descending=[False, True]).write_csv(outdir / f"standings_{season}_players.csv")
+    t = ids.join(S, on="team_id", how="left").join(S3, on="team_id", how="left").join(Rc3, on="team_id", how="left").join(G, on="team_id", how="left")
+    t = t.with_columns((pl.col("S") + pl.col("G")).alias("SG"), (pl.col("S_c3") + pl.col("G")).alias("SG3")).with_columns(
+        *[(pl.col(x) - pl.col(x).mean()).alias(f"{x}_dm") for x in ("SG", "SG3", "Rc3")])
+    t = t.with_columns((pl.col("SG3_dm") + c * pl.col("Rc3_dm")).alias("gd_hat"), (c * pl.col("Rc3_dm")).alias("carried_residual"))
+    t = t.with_columns((a + b * pl.col("gd_hat")).alias("pts"), (a + b * pl.col("SG_dm")).alias("pts_M1"))
     prev = res.filter(pl.col("season") == last).select("team_id", pl.col("pts82").alias("pts82_last"), pl.col("gd82").alias("gd82_last"))
     t = t.join(prev, on="team_id")
     trf = act.filter(pl.col("SG_dm").is_not_null() & pl.col("gd82_prev").is_not_null())
@@ -108,18 +126,20 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     tp = act.filter(pl.col("gd82_prev").is_not_null())
     b2 = sr.ols(tp["gd82_prev"].to_numpy()[:, None], tp["pts82"].to_numpy())
     t = t.with_columns(pl.Series("pts_B2", sr._pred(b2, t["gd82_last"].to_numpy()[:, None])))
-    t = t.with_columns(pl.lit(sd_m1).alias("sd80_basis"), (pl.col("pts_M1") - 1.2815515655446004 * sd_m1).alias("pts_M1_lo80"), (pl.col("pts_M1") + 1.2815515655446004 * sd_m1).alias("pts_M1_hi80"))
-    t = t.with_columns(pl.col("pts_M1").rank("ordinal", descending=True).alias("rank_M1")).sort("rank_M1")
-    t.select("rank_M1", "team", "pts_M1", "pts_M1_lo80", "pts_M1_hi80", "pts_M3", "pts_B2", "pts82_last", "S", "G", "gd_hat").write_csv(outdir / f"standings_{season}_forecast.csv")
-    meta = {"season": season, "roster_snapshot": stamp, "goalies_per_team": 2, "sd_points_M1": sd_m1, "map_a": float(a), "map_b": float(b)}
+    z80 = 1.2815515655446004
+    t = t.with_columns(pl.lit(sd_new).alias("sd80_basis"), (pl.col("pts") - z80 * sd_new).alias("pts_lo80"), (pl.col("pts") + z80 * sd_new).alias("pts_hi80"))
+    t = t.with_columns(pl.col("pts").rank("ordinal", descending=True).alias("rank")).sort("rank")
+    t.select("rank", "team", "pts", "pts_lo80", "pts_hi80", "pts_M1", "pts_M3", "pts_B2", "pts82_last", "S_c3", "G", "carried_residual", "gd_hat").write_csv(outdir / f"standings_{season}_forecast.csv")
+    meta = {"season": season, "roster_snapshot": stamp, "goalies_per_team": 2, "model": "M1 + C1 (portable team residual) + C3 (deployment-aware minutes)", "c_residual": c,
+            "sd_points_out_of_sample": sd_new, "map_a": float(a), "map_b": float(b)}
     (cfg.path(cfg.data.metrics_dir) / f"standings_{season}_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    lines = [f"# {season}-{str(season + 1)[2:]} standings projection (first pass)", "",
-             f"Roster snapshot {stamp} (published rosters before opening night, {snap.height} players; top 13 forwards and 7 defensemen by projected minutes, two goalies per team). "
-             "Points per 82 games. **Status:** in the backtest this model matched but did not beat last season's goal differential (docs/standings, ST-3 failed, calibration slope 1.22), "
-             f"so treat M1 as a roster-based view with about ±{1.2816 * sd_m1:.0f} points of 80% uncertainty per team, not a validated improvement on last season's results. "
-             "M1 is the pre-registered primary; M3 (blend with last season's goal differential) and B2 (last season's goal differential alone) are shown for reference.", "",
-             "| rank | team | M1 | 80% range | M3 blend | B2 history | last season |", "|---|---|---|---|---|---|---|"]
-    lines += [f"| {r['rank_M1']} | {r['team']} | {r['pts_M1']:.0f} | {r['pts_M1_lo80']:.0f}–{r['pts_M1_hi80']:.0f} | {r['pts_M3']:.0f} | {r['pts_B2']:.0f} | {r['pts82_last']:.0f} |" for r in t.to_dicts()]
+    lines = [f"# {season}-{str(season + 1)[2:]} standings projection", "",
+             f"Roster snapshot {stamp} (published rosters before opening night, {snap.height} players; two goalies per team). Points per 82 games. "
+             "Model: projected player rates × deployment-aware minutes, plus goalies, plus each player's carried share of last season's unexplained team result (docs/standings/improvements.md). "
+             f"**Status:** in the backtest (2021–2025) this is 14.0 points RMSE, better than the original roster model (14.6) but still not better than last season's goal differential alone (13.7); "
+             f"80% ranges are ±{z80 * sd_new:.0f} points. M1 (the original roster model), M3 (blend) and B2 (last season's goal differential) are shown for reference.", "",
+             "| rank | team | points | 80% range | carried residual (goals) | M1 | M3 blend | B2 history | last season |", "|---|---|---|---|---|---|---|---|---|"]
+    lines += [f"| {r['rank']} | {r['team']} | {r['pts']:.0f} | {r['pts_lo80']:.0f}–{r['pts_hi80']:.0f} | {r['carried_residual']:+.1f} | {r['pts_M1']:.0f} | {r['pts_M3']:.0f} | {r['pts_B2']:.0f} | {r['pts82_last']:.0f} |" for r in t.to_dicts()]
     (cfg.path("reports/standings") / f"forecast_{season}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     log.info("forecast written for %d from snapshot %s", season, stamp)
     return t
