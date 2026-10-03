@@ -65,6 +65,10 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     raw = cfg.path(cfg.data.raw_dir)
     outdir = cfg.path(cfg.data.output_dir)
     snap, stamp = load_snapshot(raw, season, stamp)
+    ov = cfg.path("data/external/roster_overrides.json")                    # manual roster knowledge: players who will not play for their listed team
+    if ov.exists():
+        gone = [int(u["player_id"]) for u in json.loads(ov.read_text(encoding="utf-8")).get("unavailable", [])]
+        snap = snap.filter(~pl.col("player_id").is_in(gone))
     last = season - 1
     res = sd.results(proc)
     ids = res.filter(pl.col("season") == last).select("team", "team_id")

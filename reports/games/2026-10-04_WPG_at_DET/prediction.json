@@ -1,0 +1,39 @@
+{
+  "made": "2026-10-03",
+  "note": "Hellebuyck unavailable (roster_overrides.json); Skinner starts",
+  "main": {
+    "away": "WPG",
+    "home": "DET",
+    "date": "2026-10-04",
+    "p_home_win": 0.49197781643685995,
+    "p_away_win": 0.50802218356314,
+    "expected_margin_home": 0.008837804521143466,
+    "model_mu": 0.12504176145795665,
+    "avg_goals_per_team": 3.126905487804878,
+    "expected_goals_home": 3.13132439006545,
+    "expected_goals_away": 3.1224865855443062,
+    "teams": {
+      "DET": {
+        "goalie": "John Gibson",
+        "goalie_id": 8476434,
+        "previous_game_goalie": "John Gibson",
+        "games_played": 1,
+        "b2b": 0.0
+      },
+      "WPG": {
+        "goalie": "Stuart Skinner",
+        "goalie_id": 8479973,
+        "previous_game_goalie": "Stuart Skinner",
+        "games_played": 1,
+        "b2b": 0.0
+      }
+    },
+    "hyperparameters": {
+      "logloss_tune": 0.6690571544934322,
+      "lam": 0.04,
+      "alpha": 0.0,
+      "n0": 3000.0
+    },
+    "completed_games_this_season": 21
+  }
+}

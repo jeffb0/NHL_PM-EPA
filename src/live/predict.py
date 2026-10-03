@@ -1,0 +1,157 @@
+"""Forecast an upcoming game with the game model:  python -m src.live.predict <AWAY> <HOME> [YYYY-MM-DD] [season]
+
+Preseason ratings for the season (projection + carried team residual, goalie rolling rates through last season), updated with the season's completed games
+(docs/gamemodel: hyperparameters frozen, original rate model), then the logistic step fitted on 2019 to last season. The lineup is each team's previous game's;
+the starting goalie is the one with the most prior work unless named. Run src.live.update first so the season's games are current."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import sys
+
+import numpy as np
+import polars as pl
+
+from src.config import ROOT, load_config
+from src.gamemodel import data as gd_
+from src.gamemodel import model as gm
+from src.gamemodel import run as grun
+from src.projection import data as pd_
+from src.projection import model as pm
+from src.projection import run as pr
+from src.projection.model import Spec
+from src.standings import candidates as cd
+from src.standings import data as sd
+from src.standings import forecast as fc
+from src.standings.next import load_snapshot, next_goalie_rates
+
+log = logging.getLogger("live")
+LIVE = ROOT / "data/live/processed"
+UNBLOCKED = ["shot-on-goal", "missed-shot", "goal"]
+
+
+def live_games(season: int) -> gd_.Games:
+    """The season's completed games from the live tables, in the game model's format."""
+    g = pl.read_parquet(LIVE / "games.parquet").filter(pl.col("season") == season)
+    so = pl.col("last_period_type") == "SO"
+    g = g.with_columns(pl.when(so).then(0).otherwise(pl.col("home_final") - pl.col("away_final")).cast(pl.Float64).alias("gd"), (pl.col("home_final") > pl.col("away_final")).cast(pl.Float64).alias("home_win"),
+                       pl.col("game_date").str.to_date("%Y-%m-%d").alias("date"))
+    ev = pl.read_parquet(LIVE / "events.parquet", columns=["game_id", "event_idx", "player2"])
+    sh = pl.read_parquet(LIVE / "shots_xg.parquet").filter(pl.col("type").is_in(UNBLOCKED)).join(ev, on=["game_id", "event_idx"])
+    x = sh.group_by("game_id", "team_id").agg(pl.col("xg").sum())
+    g = (g.join(x.rename({"team_id": "home_id", "xg": "xh"}), on=["game_id", "home_id"]).join(x.rename({"team_id": "away_id", "xg": "xa"}), on=["game_id", "away_id"]).with_columns((pl.col("xh") - pl.col("xa")).alias("xgd")))
+    tg = pl.concat([g.select("game_id", "date", pl.col("home_id").alias("team_id")), g.select("game_id", "date", pl.col("away_id").alias("team_id"))]).sort("team_id", "date")
+    tg = tg.with_columns(((pl.col("date") - pl.col("date").shift(1).over("team_id")).dt.total_days() == 1).fill_null(False).cast(pl.Float64).alias("b2b"))
+    g = (g.join(tg.select("game_id", pl.col("team_id").alias("home_id"), pl.col("b2b").alias("b2b_home")), on=["game_id", "home_id"]).join(tg.select("game_id", pl.col("team_id").alias("away_id"), pl.col("b2b").alias("b2b_away")), on=["game_id", "away_id"]))
+    pg = pl.read_parquet(LIVE / "player_game.parquet").filter((pl.col("toi_all") > 0) & (pl.col("position") != "G"))
+    lu = pg.group_by("game_id", "team_id").agg(pl.col("player_id"), (pl.col("toi_all") / 60.0).alias("mins"))
+    lineups = {(r[0], r[1]): (np.asarray(r[2], dtype=np.int64), np.asarray(r[3], dtype=float)) for r in lu.iter_rows()}
+    # goalies: the starter is the goalie on the most shots on goal; every unblocked attempt against with a goalie in net is booked to him
+    teams = g.select("game_id", "home_id", "away_id")
+    ag = sh.filter(~pl.col("empty_net")).join(teams, on="game_id").with_columns(pl.when(pl.col("team_id") == pl.col("home_id")).then(pl.col("away_id")).otherwise(pl.col("home_id")).alias("def_id"))
+    start = (ag.filter(pl.col("player2").is_not_null() & pl.col("type").is_in(["shot-on-goal", "goal"])).group_by("game_id", "def_id", "player2").len().sort(["len", "player2"], descending=[True, False])
+             .unique(["game_id", "def_id"], keep="first", maintain_order=True))
+    tot = ag.group_by("game_id", "def_id").agg(pl.len().alias("n"), (pl.col("xg") - pl.col("goal")).sum().alias("saved")).join(start.select("game_id", "def_id", "player2"), on=["game_id", "def_id"])
+    goalies = {(r["game_id"], r["def_id"]): [(int(r["player2"]), float(r["n"]), float(r["saved"]))] for r in tot.iter_rows(named=True)}
+    g = g.sort("date", "game_id")
+    return gd_.Games(g.select("game_id", "season", "date", "home_id", "away_id", "home_abbrev", "away_abbrev", "gd", "xgd", "home_win", "b2b_home", "b2b_away"), lineups, goalies)
+
+
+def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> tuple[gd_.Priors, pl.DataFrame]:
+    """Preseason ratings for a season not yet in the historical tables: everyone on the published rosters or seen in a game this season."""
+    raw = cfg.path(cfg.data.raw_dir)
+    snap, _ = load_snapshot(raw, season)
+    p = pd_.panel(proc, pl.read_parquet(proc / "wm_rolling_values.parquet"))
+    res = sd.results(proc)
+    bio0 = pd_.player_bio(proc, raw)
+    nb = snap.select("player_id", "birth_date", "height_in", "weight_lb").unique("player_id")
+    bio = pl.concat([nb, bio0.filter(~pl.col("player_id").is_in(nb["player_id"]))])
+    seen = pl.read_parquet(LIVE / "player_game.parquet").filter(pl.col("position") != "G").select(pl.col("player_id").cast(pl.Int64), pl.when(pl.col("position") == "D").then(pl.lit("D")).otherwise(pl.lit("F")).alias("pos_group")).unique("player_id")
+    who = pl.concat([snap.filter(pl.col("pos_group") != "G").select("player_id", "pos_group"), seen]).unique("player_id").with_columns(pl.lit(0, pl.Int64).alias("team_id"))
+    d = fc.roster_frame(p, bio, who, season)
+    M = Spec()
+    rate = pm.predict_models(pm.fit_models(pr.train_rows(pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR), 1, season), M), d, M)
+    resid = cd.team_residual(proc, p, res)
+    prev = p.filter(pl.col("season") == season - 1).select("player_id", "team").join(resid.filter(pl.col("season") == season - 1).select("team", "rho"), on="team", how="left").select("player_id", "rho")
+    rho = d.select("player_id").join(prev, on="player_id", how="left")["rho"].fill_null(0.0).to_numpy()
+    tl = pl.read_parquet(proc / "player_game.parquet", columns=["player_id", "season", "toi_all"]).filter((pl.col("season") == season - 1) & (pl.col("toi_all") > 0)).group_by("player_id").agg((pl.col("toi_all").mean() / 60).alias("m"))
+    rates = next_goalie_rates(proc, cfg, season)
+    _, lg = sd.goalie_usage(proc)
+    pos = {**base.pos, **dict(who.select("player_id", "pos_group").iter_rows())}
+    pri = gd_.Priors({season: dict(zip(d["player_id"].to_list(), (rate + 60.0 * rho).tolist()))}, pos, {season: dict(tl.iter_rows())}, {season: (dict(rates.select("goalie", "rate_v").iter_rows()), float(rates["rep_v"][0]))},
+                     {season: float(lg.filter(pl.col("season") == season - 1)["shots82"].item()) / 82.0}, base.home_adv)
+    return pri, snap
+
+
+def overrides() -> tuple[set, dict]:
+    """Manual roster knowledge (data/external/roster_overrides.json): players who will not play, and named starting goalies by team."""
+    path = ROOT / "data/external/roster_overrides.json"
+    if not path.exists():
+        return set(), {}
+    o = json.loads(path.read_text(encoding="utf-8"))
+    return {int(u["player_id"]) for u in o.get("unavailable", [])}, {k: int(v) for k, v in o.get("starters", {}).items()}
+
+
+def run(away: str, home: str, date: str | None = None, season: int = 2026, goalies: dict | None = None) -> dict:
+    os.environ.pop("PM_EPA_CONFIG", None)                          # the historical tables, not the live ones, feed the priors
+    out_set, named = overrides()
+    goalies = {**named, **(goalies or {})}
+    cfg = load_config()
+    proc, met = cfg.path(cfg.data.processed_dir), cfg.path(cfg.data.metrics_dir)
+    hp = json.loads((met / "game_model.json").read_text())["tuned"]["P"]
+    kw = {"lam": hp["lam"], "alpha": hp["alpha"], "n0": hp["n0"]}
+    # history: the logistic step and the margin calibration, fitted on every season from 2019
+    hist = gd_.load_games(proc)
+    seasons = grun.TUNE + grun.TEST
+    base = gd_.build_priors(proc, cfg, seasons, hist)
+    th = hist.table.filter(pl.col("season") >= grun.TUNE[0])
+    mu_h = np.concatenate([gm.run_player_season(hist, base, T, **kw) for T in seasons])
+    X = np.column_stack([mu_h, th["b2b_home"].to_numpy(), th["b2b_away"].to_numpy()])
+    beta = gm.logit_fit(X, th["home_win"].to_numpy())
+    A = np.column_stack([np.ones(len(mu_h)), mu_h])
+    cal = np.linalg.lstsq(A, th["gd"].to_numpy(), rcond=None)[0]                                    # actual margin on the model's expected margin
+    # this season so far, plus the game to forecast appended with each team's previous lineup
+    live = live_games(season)
+    pri, snap = season_priors(proc, cfg, season, live, base)
+    ids = dict(pl.concat([live.table.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")), live.table.select(pl.col("away_abbrev").alias("t"), pl.col("away_id").alias("i"))]).unique().iter_rows())
+    if home not in ids or away not in ids:
+        raise SystemExit("a team has no completed game this season yet; run src.live.update or wait for its first game")
+    hid, aid = ids[home], ids[away]
+    day = pl.Series([date]).str.to_date("%Y-%m-%d")[0] if date else live.table["date"].max()
+    fake = -1
+    last, info = {}, {}
+    per, _ = sd.goalie_usage(proc)
+    for tid, ab in ((hid, home), (aid, away)):
+        tg = live.table.filter((pl.col("home_id") == tid) | (pl.col("away_id") == tid)).sort("date", "game_id")
+        gid = tg["game_id"][-1]
+        lu_ids, lu_min = live.lineups[(gid, tid)]
+        keep = ~np.isin(lu_ids, list(out_set))
+        live.lineups[(fake, tid)] = (lu_ids[keep], lu_min[keep])
+        prev_gk = live.goalies[(gid, tid)][0][0]
+        cand = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") == "G") & ~pl.col("player_id").is_in(list(out_set))).select(pl.col("player_id").alias("goalie"), "name")
+        w = (cand.join(per.filter(pl.col("season") == season - 1).select("goalie", pl.col("shots").alias("s1")), on="goalie", how="left").join(per.filter(pl.col("season") == season - 2).select("goalie", pl.col("shots").alias("s2")), on="goalie", how="left")
+             .with_columns((pl.col("s1").fill_null(0) + 0.5 * pl.col("s2").fill_null(0)).alias("w")).sort("w", descending=True))
+        gk = (goalies or {}).get(ab) or (int(w["goalie"][0]) if w.height else prev_gk)
+        live.goalies[(fake, tid)] = [(gk, 0.0, 0.0)]
+        nm = dict(snap.select("player_id", "name").iter_rows())
+        last[tid] = tg["date"][-1]
+        info[ab] = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "previous_game_goalie": nm.get(prev_gk, str(prev_gk)), "games_played": tg.height, "b2b": float((day - tg["date"][-1]).days == 1)}
+    row = pl.DataFrame({"game_id": [fake], "season": [season], "date": [day], "home_id": [hid], "away_id": [aid], "home_abbrev": [home], "away_abbrev": [away], "gd": [0.0], "xgd": [0.0], "home_win": [0.0],
+                        "b2b_home": [info[home]["b2b"]], "b2b_away": [info[away]["b2b"]]}, schema=live.table.schema)
+    live.table = pl.concat([live.table, row])
+    mu = float(gm.run_player_season(live, pri, season, **kw)[-1])
+    p_home = float(gm.logit_pred(beta, np.array([[mu, info[home]["b2b"], info[away]["b2b"]]]))[0])
+    margin = float(cal[0] + cal[1] * mu)
+    avg = float((pl.read_parquet(proc / "games.parquet").filter(pl.col("season") == season - 1).select((pl.col("home_final") + pl.col("away_final")).mean()).item()) / 2)
+    out = {"away": away, "home": home, "date": str(day), "p_home_win": p_home, "p_away_win": 1 - p_home, "expected_margin_home": margin, "model_mu": mu, "avg_goals_per_team": avg,
+           "expected_goals_home": avg + margin / 2, "expected_goals_away": avg - margin / 2, "teams": info, "hyperparameters": hp, "completed_games_this_season": live.table.height - 1}
+    log.info("%s at %s: P(%s win) %.3f; expected score %s %.2f, %s %.2f", away, home, home, p_home, home, out["expected_goals_home"], away, out["expected_goals_away"])
+    return out
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    r = run(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None, int(sys.argv[4]) if len(sys.argv) > 4 else 2026)
+    print(json.dumps(r, indent=2, default=float))
