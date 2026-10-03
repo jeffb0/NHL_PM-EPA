@@ -51,8 +51,43 @@ def team_summary(d: dict) -> pl.DataFrame:
 
 def player_table(d: dict) -> pl.DataFrame:
     pg = d["pg"].join(d["names"].select("player_id", "name"), on="player_id", how="left")
+    # impact order: 5v5 on-ice expected-goal differential, best first (the model owner's preference; ice time stays as a column)
     return pg.select("team", "name", "position", (pl.col("toi_all") / 60).alias("toi"), "goals", (pl.col("a1") + pl.col("a2")).alias("assists"), "sog", "ixg", pl.col("pm_epa_total").alias("pm_epa"),
-                     pl.col("oi_xgf").alias("on_xgf_5v5"), pl.col("oi_xga").alias("on_xga_5v5"), (pl.col("oi_xgf") - pl.col("oi_xga")).alias("on_xgd_5v5"), (pl.col("toi_5v5") / 60).alias("toi_5v5")).sort("team", "toi", descending=[False, True])
+                     pl.col("oi_xgf").alias("on_xgf_5v5"), pl.col("oi_xga").alias("on_xga_5v5"), (pl.col("oi_xgf") - pl.col("oi_xga")).alias("on_xgd_5v5"), (pl.col("toi_5v5") / 60).alias("toi_5v5"),
+                     pl.col("ixg_ev").alias("own_xg_5v5"), (pl.col("oi_xgf") - pl.col("ixg_ev")).clip(lower_bound=0.0).alias("mates_xg_5v5")).sort("team", "on_xgd_5v5", descending=[False, True])
+
+
+def fig_impact(d: dict, pt: pl.DataFrame):
+    """Stacked bars of each skater's 5v5 on-ice expected goals: his own shots and his linemates' shots (for), against (negative), with the net marked; sorted by net."""
+    g = d["g"]
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 7.6), sharex=True)
+    lim = 1.3 * max(float(pt["on_xgf_5v5"].max()), float(pt["on_xga_5v5"].max()))             # room on the right for the net figure
+    for ax, ab, col in ((axes[0], g["away_abbrev"], AWAY_C), (axes[1], g["home_abbrev"], HOME_C)):
+        t = pt.filter(pl.col("team") == ab).sort("on_xgd_5v5")
+        y = np.arange(t.height)
+        own, mates, ag, net = (t[c].to_numpy() for c in ("own_xg_5v5", "mates_xg_5v5", "on_xga_5v5", "on_xgd_5v5"))
+        ax.barh(y, own, color=col, height=0.72, edgecolor=style.SURFACE, linewidth=1.5)
+        ax.barh(y, mates, left=own, color=col, alpha=0.45, height=0.72, edgecolor=style.SURFACE, linewidth=1.5)
+        ax.barh(y, -ag, color="#9a9994", height=0.72, edgecolor=style.SURFACE, linewidth=1.5)
+        ax.scatter(net, y, s=46, color=style.TEXT, zorder=6, edgecolor=style.SURFACE, linewidth=1.2)
+        for yi, n in zip(y, net):
+            ax.text(lim, yi, f"{n:+.2f}", va="center", ha="right", fontsize=8.5, color=style.TEXT, fontweight="bold")
+        ax.set_yticks(y, [f"{n}  ({p})" for n, p in zip(t["name"].to_list(), t["position"].to_list())], fontsize=9)
+        ax.axvline(0, color=style.TEXT2, lw=1)
+        ax.set_xlim(-lim / 1.3 * 1.05, lim)
+        ax.set_ylim(-0.6, t.height - 0.4)
+        ax.grid(axis="y", visible=False)
+        ax.set_title(ab, color=col, fontsize=13)
+        ax.set_xlabel("expected goals at 5v5 while on the ice   (against  ←  →  for)")
+    h = axes[0]
+    h.barh([-9], [0], color=AWAY_C, label="his own shots")
+    h.barh([-9], [0], color=AWAY_C, alpha=0.45, label="linemates' shots")
+    h.barh([-9], [0], color="#9a9994", label="against")
+    h.scatter([], [], s=46, color=style.TEXT, label="net (number at right)")
+    fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=4, bbox_to_anchor=(0.5, 0.0))
+    fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: net 5v5 impact by skater (sorted best to worst)", x=0.02, ha="left", fontweight="bold", fontsize=12)
+    fig.tight_layout(rect=(0, 0.05, 1, 0.96))
+    return fig
 
 
 def fig_flow(d: dict, ts: pl.DataFrame):
@@ -102,7 +137,7 @@ def fig_players(d: dict, pt: pl.DataFrame):
     lim = {c: float(pt[c].abs().max()) or 1.0 for c, _, _, kind in COLS if kind}
     for ax, ab, col in ((axes[0], g["away_abbrev"], AWAY_C), (axes[1], g["home_abbrev"], HOME_C)):
         t = pt.filter(pl.col("team") == ab)
-        t = pl.concat([t.filter(pl.col("position") != "D"), t.filter(pl.col("position") == "D")])
+        t = pl.concat([t.filter(pl.col("position") != "D"), t.filter(pl.col("position") == "D")])          # each group already in impact order
         n = t.height
         ax.set_xlim(0, 3.2 + len(COLS))
         ax.set_ylim(n + 0.2, -1.6)
@@ -123,7 +158,7 @@ def fig_players(d: dict, pt: pl.DataFrame):
                     ax.add_patch(plt.Rectangle((3.2 + j + 0.04, y + 0.06), 0.92, 0.88, color=face, lw=0))
                 dark = kind == "div" and abs(v / lim[c]) > 0.75 or kind == "seq" and v / lim[c] > 0.8
                 ax.text(3.7 + j, y + 0.5, fmt.format(v), ha="center", va="center", fontsize=8.5, color="white" if dark else style.TEXT)
-    fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: skaters (forwards, then defensemen, by ice time)", x=0.02, ha="left", fontweight="bold", fontsize=12)
+    fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: skaters (forwards, then defensemen, by 5v5 on-ice xG differential)", x=0.02, ha="left", fontweight="bold", fontsize=12)
     fig.text(0.02, 0.015, "ixG: expected goals from the player's own shots.  Puck value: goals of expected value added by his credited puck actions (PM-EPA, all situations).  "
              "xGF/xGA on: expected goals for and against while he was on the ice at 5v5.\nOne game is a small sample: these describe what happened, not how good a player is.", fontsize=8.5, color=style.TEXT2, va="bottom")
     fig.tight_layout(rect=(0, 0.06, 1, 0.96))
@@ -163,6 +198,7 @@ def run(game_id: int, season: int = 2026) -> dict:
     ts, pt = team_summary(d), player_table(d)
     style.save(fig_flow(d, ts), out, "game_flow")
     style.save(fig_players(d, pt), out, "players")
+    style.save(fig_impact(d, pt), out, "impact")
     pt.write_csv(out / "players.csv", float_precision=3)
     ts.write_csv(out / "teams.csv", float_precision=3)
     (out / "summary.md").write_text(takeaways(d, ts, pt), encoding="utf-8")
