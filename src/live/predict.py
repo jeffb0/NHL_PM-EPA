@@ -94,60 +94,92 @@ def overrides() -> tuple[set, dict]:
     return {int(u["player_id"]) for u in o.get("unavailable", [])}, {k: int(v) for k, v in o.get("starters", {}).items()}
 
 
-def run(away: str, home: str, date: str | None = None, season: int = 2026, goalies: dict | None = None) -> dict:
+def prepare(season: int = 2026) -> dict:
+    """Everything that does not depend on the game: the logistic step and margin calibration from history, this season's games and preseason ratings."""
     os.environ.pop("PM_EPA_CONFIG", None)                          # the historical tables, not the live ones, feed the priors
     out_set, named = overrides()
-    goalies = {**named, **(goalies or {})}
     cfg = load_config()
     proc, met = cfg.path(cfg.data.processed_dir), cfg.path(cfg.data.metrics_dir)
     hp = json.loads((met / "game_model.json").read_text())["tuned"]["P"]
     kw = {"lam": hp["lam"], "alpha": hp["alpha"], "n0": hp["n0"]}
-    # history: the logistic step and the margin calibration, fitted on every season from 2019
     hist = gd_.load_games(proc)
     seasons = grun.TUNE + grun.TEST
     base = gd_.build_priors(proc, cfg, seasons, hist)
     th = hist.table.filter(pl.col("season") >= grun.TUNE[0])
     mu_h = np.concatenate([gm.run_player_season(hist, base, T, **kw) for T in seasons])
-    X = np.column_stack([mu_h, th["b2b_home"].to_numpy(), th["b2b_away"].to_numpy()])
-    beta = gm.logit_fit(X, th["home_win"].to_numpy())
-    A = np.column_stack([np.ones(len(mu_h)), mu_h])
-    cal = np.linalg.lstsq(A, th["gd"].to_numpy(), rcond=None)[0]                                    # actual margin on the model's expected margin
-    # this season so far, plus the game to forecast appended with each team's previous lineup
+    beta = gm.logit_fit(np.column_stack([mu_h, th["b2b_home"].to_numpy(), th["b2b_away"].to_numpy()]), th["home_win"].to_numpy())
+    cal = np.linalg.lstsq(np.column_stack([np.ones(len(mu_h)), mu_h]), th["gd"].to_numpy(), rcond=None)[0]        # actual margin on the model's expected margin
     live = live_games(season)
     pri, snap = season_priors(proc, cfg, season, live, base)
-    ids = dict(pl.concat([live.table.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")), live.table.select(pl.col("away_abbrev").alias("t"), pl.col("away_id").alias("i"))]).unique().iter_rows())
-    if home not in ids or away not in ids:
-        raise SystemExit("a team has no completed game this season yet; run src.live.update or wait for its first game")
-    hid, aid = ids[home], ids[away]
-    day = pl.Series([date]).str.to_date("%Y-%m-%d")[0] if date else live.table["date"].max()
-    fake = -1
-    last, info = {}, {}
+    g_last = pl.read_parquet(proc / "games.parquet").filter(pl.col("season") == season - 1)
+    ids = dict(pl.concat([g_last.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")), live.table.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")),
+                          live.table.select(pl.col("away_abbrev").alias("t"), pl.col("away_id").alias("i"))]).unique().iter_rows())
     per, _ = sd.goalie_usage(proc)
-    for tid, ab in ((hid, home), (aid, away)):
-        tg = live.table.filter((pl.col("home_id") == tid) | (pl.col("away_id") == tid)).sort("date", "game_id")
+    avg = float(g_last.select((pl.col("home_final") + pl.col("away_final")).mean()).item() / 2)
+    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named,
+            "names": dict(snap.select("player_id", "name").iter_rows())}
+
+
+def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict) -> tuple[tuple, int, dict]:
+    """Lineup (previous game's, or the published roster's top 12 forwards and 6 defensemen by last season's ice time if the team has not played), starting goalie, and notes."""
+    live, snap, season, out_set = ctx["live"], ctx["snap"], ctx["season"], ctx["out_set"]
+    tg = live.table.filter((pl.col("home_id") == tid) | (pl.col("away_id") == tid)).sort("date", "game_id")
+    prev_gk = None
+    if tg.height:
         gid = tg["game_id"][-1]
         lu_ids, lu_min = live.lineups[(gid, tid)]
-        keep = ~np.isin(lu_ids, list(out_set))
-        live.lineups[(fake, tid)] = (lu_ids[keep], lu_min[keep])
         prev_gk = live.goalies[(gid, tid)][0][0]
-        cand = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") == "G") & ~pl.col("player_id").is_in(list(out_set))).select(pl.col("player_id").alias("goalie"), "name")
-        w = (cand.join(per.filter(pl.col("season") == season - 1).select("goalie", pl.col("shots").alias("s1")), on="goalie", how="left").join(per.filter(pl.col("season") == season - 2).select("goalie", pl.col("shots").alias("s2")), on="goalie", how="left")
-             .with_columns((pl.col("s1").fill_null(0) + 0.5 * pl.col("s2").fill_null(0)).alias("w")).sort("w", descending=True))
-        gk = (goalies or {}).get(ab) or (int(w["goalie"][0]) if w.height else prev_gk)
+        b2b = float((day - tg["date"][-1]).days == 1)
+    else:
+        tl = ctx["pri"].toi_last[season]
+        r = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") != "G")).with_columns(pl.col("player_id").replace_strict(tl, default=0.0, return_dtype=pl.Float64).alias("m")).sort("m", descending=True)
+        r = pl.concat([r.filter(pl.col("pos_group") == "F").head(12), r.filter(pl.col("pos_group") == "D").head(6)])
+        lu_ids = r["player_id"].to_numpy().astype(np.int64)
+        lu_min = np.where(r["m"].to_numpy() > 0, r["m"].to_numpy(), np.where(r["pos_group"].to_numpy() == "D", 19.0, 14.0))
+        b2b = 0.0
+    keep = ~np.isin(lu_ids, list(out_set))
+    cand = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") == "G") & ~pl.col("player_id").is_in(list(out_set))).select(pl.col("player_id").alias("goalie"))
+    per = ctx["per"]
+    w = (cand.join(per.filter(pl.col("season") == season - 1).select("goalie", pl.col("shots").alias("s1")), on="goalie", how="left").join(per.filter(pl.col("season") == season - 2).select("goalie", pl.col("shots").alias("s2")), on="goalie", how="left")
+         .with_columns((pl.col("s1").fill_null(0) + 0.5 * pl.col("s2").fill_null(0)).alias("w")).sort(["w", "goalie"], descending=[True, False]))
+    gk = goalies.get(ab) or (int(w["goalie"][0]) if w.height else prev_gk)
+    nm = ctx["names"]
+    info = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "goalie_source": "override" if ab in goalies else "most prior work", "previous_game_goalie": nm.get(prev_gk, str(prev_gk)) if prev_gk else None,
+            "games_played": tg.height, "lineup_source": "previous game" if tg.height else "published roster", "b2b": b2b}
+    return (lu_ids[keep], lu_min[keep]), gk, info
+
+
+def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None) -> dict:
+    live, season = ctx["live"], ctx["season"]
+    goalies = {**ctx["named"], **(goalies or {})}
+    if home not in ctx["ids"] or away not in ctx["ids"]:
+        raise ValueError(f"unknown team {away} or {home}")
+    hid, aid = ctx["ids"][home], ctx["ids"][away]
+    day = pl.Series([date]).str.to_date("%Y-%m-%d")[0] if date else live.table["date"].max()
+    fake, info = -1, {}
+    for tid, ab in ((hid, home), (aid, away)):
+        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies)
         live.goalies[(fake, tid)] = [(gk, 0.0, 0.0)]
-        nm = dict(snap.select("player_id", "name").iter_rows())
-        last[tid] = tg["date"][-1]
-        info[ab] = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "previous_game_goalie": nm.get(prev_gk, str(prev_gk)), "games_played": tg.height, "b2b": float((day - tg["date"][-1]).days == 1)}
     row = pl.DataFrame({"game_id": [fake], "season": [season], "date": [day], "home_id": [hid], "away_id": [aid], "home_abbrev": [home], "away_abbrev": [away], "gd": [0.0], "xgd": [0.0], "home_win": [0.0],
                         "b2b_home": [info[home]["b2b"]], "b2b_away": [info[away]["b2b"]]}, schema=live.table.schema)
-    live.table = pl.concat([live.table, row])
-    mu = float(gm.run_player_season(live, pri, season, **kw)[-1])
-    p_home = float(gm.logit_pred(beta, np.array([[mu, info[home]["b2b"], info[away]["b2b"]]]))[0])
-    margin = float(cal[0] + cal[1] * mu)
-    avg = float((pl.read_parquet(proc / "games.parquet").filter(pl.col("season") == season - 1).select((pl.col("home_final") + pl.col("away_final")).mean()).item()) / 2)
-    out = {"away": away, "home": home, "date": str(day), "p_home_win": p_home, "p_away_win": 1 - p_home, "expected_margin_home": margin, "model_mu": mu, "avg_goals_per_team": avg,
-           "expected_goals_home": avg + margin / 2, "expected_goals_away": avg - margin / 2, "teams": info, "hyperparameters": hp, "completed_games_this_season": live.table.height - 1}
-    log.info("%s at %s: P(%s win) %.3f; expected score %s %.2f, %s %.2f", away, home, home, p_home, home, out["expected_goals_home"], away, out["expected_goals_away"])
+    played = live.table
+    live.table = pl.concat([played, row])
+    try:
+        mu = float(gm.run_player_season(live, ctx["pri"], season, **ctx["kw"])[-1])
+    finally:
+        live.table = played                                         # the appended game never stays in the season table
+        for tid in (hid, aid):
+            live.lineups.pop((fake, tid), None)
+            live.goalies.pop((fake, tid), None)
+    p_home = float(gm.logit_pred(ctx["beta"], np.array([[mu, info[home]["b2b"], info[away]["b2b"]]]))[0])
+    margin, avg = float(ctx["cal"][0] + ctx["cal"][1] * mu), ctx["avg"]
+    return {"away": away, "home": home, "date": str(day), "p_home_win": p_home, "p_away_win": 1 - p_home, "expected_margin_home": margin, "model_mu": mu, "avg_goals_per_team": avg,
+            "expected_goals_home": avg + margin / 2, "expected_goals_away": avg - margin / 2, "teams": info, "hyperparameters": ctx["hp"], "completed_games_this_season": played.height}
+
+
+def run(away: str, home: str, date: str | None = None, season: int = 2026, goalies: dict | None = None) -> dict:
+    out = forecast(prepare(season), away, home, date, goalies)
+    log.info("%s at %s: P(%s win) %.3f; expected score %s %.2f, %s %.2f", away, home, home, out["p_home_win"], home, out["expected_goals_home"], away, out["expected_goals_away"])
     return out
 
 

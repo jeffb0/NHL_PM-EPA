@@ -200,6 +200,19 @@ Pre-registered ([methodology](docs/residual/methodology.md), [results](reports/r
 `python -m src.live.game_report <game_id>` writes `reports/games/<date>_<AWAY>_at_<HOME>/`: a game-flow figure (cumulative expected goals and a shot map), a skater table figure (ice time, goals, assists, individual xG, puck value, 5v5 on-ice xG), `players.csv`, `teams.csv` and `summary.md` with takeaways.
 These are single-game descriptions, not ratings: the season-level components (defense, finishing talent, special-teams ratings) need many games.
 
+### Daily forecasts and the prospective market test
+
+Pre-registered protocol: [docs/market/methodology.md](docs/market/methodology.md). Once a day, before the first game:
+
+```
+python -m src.live.daily          # refresh completed games, forecast today's and tomorrow's games, capture prices, append to data/live/logs/
+python -m src.live.score          # score logged forecasts and prices against results -> reports/live/market_tracking.md
+python -m src.live.predict WPG DET 2026-10-04     # one game
+```
+
+Forecasts use the frozen game model with in-season updating; prices are morning moneylines from FanDuel, DraftKings and BetMGM (scoresandodds.com), margin removed. Manual roster facts (suspensions, named starters) go in `data/external/roster_overrides.json`.
+Nothing is claimed about the market before 300 scored games. This is analysis of a model, not betting advice.
+
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
 
 Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.
