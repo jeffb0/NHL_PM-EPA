@@ -17,3 +17,6 @@ data/outputs/pm_epa_player_game.csv
 reports/figures/value_surfaces/*.svg
 .DS_Store
 .venv-bayes/
+
+# the forecast and odds logs are append-only evidence for the market test: tracked
+!data/live/logs/
