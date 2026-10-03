@@ -20,6 +20,9 @@ def main(season: int) -> None:
     out = raw / "rosters_next" / str(season) / stamp
     man = {}
     for t in teams:
+        if (out / f"{t}.json.gz").exists():                         # one snapshot per team per day: a second run the same day keeps the first
+            man[t] = "kept"
+            continue
         d = _get_json(ROSTER_URL.format(team=t, sid=season_id(season)), cfg.data.request_timeout_s)
         if d is None:
             man[t] = "missing"
