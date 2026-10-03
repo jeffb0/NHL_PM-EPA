@@ -10,7 +10,7 @@ import polars as pl
 from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
-from src.projection.model import Spec
+from src.prospects import features as pf
 from src.standings import candidates as cd
 from src.standings import data as sd
 from src.standings import forecast as fc
@@ -63,7 +63,8 @@ class Priors:
     home_adv: float         # mean home margin (blend-free: goals) in 2017-2018
 
 
-def build_priors(proc, cfg, seasons: list[int], games: Games) -> Priors:
+def build_priors(proc, cfg, seasons: list[int], games: Games, yp: pl.DataFrame | None = None) -> Priors:
+    """With ``yp`` (docs/prospects) the rate model includes the pre-NHL columns."""
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
     p = pd_.panel(proc, roll)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
@@ -73,15 +74,15 @@ def build_priors(proc, cfg, seasons: list[int], games: Games) -> Priors:
     pos = dict(posdf.iter_rows())
     pg = pl.read_parquet(proc / "player_game.parquet", columns=["player_id", "season", "toi_all"]).filter(pl.col("toi_all") > 0)
     tl = pg.group_by("season", "player_id").agg((pl.col("toi_all").mean() / 60.0).alias("m"))
-    fr_val = pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR)
+    fr_val = pf.with_yp(pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR), yp)
     rates = pl.read_parquet(proc / "gk_rolling_rates.parquet")
     _, lg = sd.goalie_usage(proc)
-    M = Spec()
+    M = pf.spec(yp)
     theta0, toi_last, goalie0, shots_pg = {}, {}, {}, {}
     for T in seasons:
         who = pg.filter(pl.col("season") == T).select(pl.col("player_id").cast(pl.Int64)).unique().join(posdf, on="player_id", how="left").with_columns(pl.col("pos_group").fill_null("F"), pl.lit(0, pl.Int64).alias("team_id"))
-        d = fc.roster_frame(p, bio, who, T)
-        rate = pm.predict_models(pm.fit_models(pr.train_rows(fr_val, 1, T), M), d, M)
+        d = pf.with_yp(fc.roster_frame(p, bio, who, T), yp)
+        rate =pm.predict_models(pm.fit_models(pr.train_rows(fr_val, 1, T), M), d, M)
         prev = p.filter(pl.col("season") == T - 1).select("player_id", "team").join(resid.filter(pl.col("season") == T - 1).select("team", "rho"), on="team", how="left").select("player_id", "rho")
         rho = d.select("player_id").join(prev, on="player_id", how="left")["rho"].fill_null(0.0).to_numpy()
         theta0[T] = dict(zip(d["player_id"].to_list(), (rate + 60.0 * rho).tolist()))

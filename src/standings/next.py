@@ -16,6 +16,7 @@ from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
 from src.projection.model import Spec
+from src.prospects import features as pf
 from src.standings import candidates as cd
 from src.standings import data as sd
 from src.standings import forecast as fc
@@ -74,15 +75,21 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     bio0 = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
     new_bio = snap.select("player_id", "birth_date", "height_in", "weight_lb").unique("player_id")
     bio = pl.concat([new_bio, bio0.filter(~pl.col("player_id").is_in(new_bio["player_id"]))])       # the snapshot's bio wins where both exist
-    M = Spec()
-    fr_val = pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR)
+    # pre-NHL priors (docs/prospects): used when that test's rule said to implement them; the M1 reference keeps the original rate model
+    pj_path = cfg.path(cfg.data.metrics_dir) / "prospects.json"
+    pj = json.loads(pj_path.read_text()) if pj_path.exists() else {}
+    yp = pl.read_parquet(proc / "prospect_features.parquet") if pj.get("implement") else None
+    M = pf.spec(yp)
+    fr_plain = pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR)
+    fr_val = pf.with_yp(fr_plain, yp)
     fr_min = pd_.design_frame(p, bio, 1)
     ros = snap.filter(pl.col("pos_group") != "G").select("team_id", "player_id", "pos_group")
-    d = fc.roster_frame(p, bio, ros, season)
+    d = pf.with_yp(fc.roster_frame(p, bio, ros, season), yp)
     models = pm.fit_models(pr.train_rows(fr_val, 1, season), M)
     mm = pr._minutes_fit(pr.train_rows(fr_min, 1, season))
     alloc = fc.allocate_minutes(d, pr._minutes_pred(mm, d), fc.team_minutes(p, res, last))
-    S = fc._skater_sum(alloc, pm.predict_models(models, alloc, M), "S")
+    models0 = pm.fit_models(pr.train_rows(fr_plain, 1, season), Spec())
+    S = fc._skater_sum(alloc, pm.predict_models(models0, alloc, Spec()), "S")
     # implemented improvements (docs/standings/improvements.md): C3 deployment-aware minutes, applied to a dressed-size pre-selection (14 F, 8 D) so the
     # roster-relative feature is computed over a group like the backtest's opening lineups rather than a whole camp roster; C1 portable team residual
     pre = (d.with_columns(pl.Series("_m", pr._minutes_pred(mm, d))).with_columns(pl.col("_m").rank("ordinal", descending=True).over("team_id", "pos_group").alias("_rk"))
@@ -102,16 +109,16 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     tab = pl.read_parquet(proc / "standings_table.parquet")
     act = tab.filter(pl.col("gp") > 0)
     a, b = sr.ols(act["gd82"].to_numpy()[:, None], act["pts82"].to_numpy())
-    ct = pl.read_parquet(proc / "standings_candidates_table.parquet").filter((pl.col("gp") > 0) & pl.col("SG3_dm").is_not_null())
+    ct = pl.read_parquet(proc / ("standings_candidates_table_yp.parquet" if yp is not None else "standings_candidates_table.parquet")).filter((pl.col("gp") > 0) & pl.col("SG3_dm").is_not_null())
     yc = (ct["pts82"].to_numpy() - (a + b * ct["SG3_dm"].to_numpy())) / b
     c = float((ct["Rc3_dm"].to_numpy() * yc).sum() / (ct["Rc3_dm"].to_numpy() ** 2).sum())
     cj = json.loads((cfg.path(cfg.data.metrics_dir) / "standings_candidates.json").read_text())
-    sd_new = float(cj["rmse"]["C1_C3"])                                                  # out-of-sample error of the implemented model, 2021-2025
+    sd_new = float(pj["standings"]["rmse_C1_C3_MY"] if yp is not None else cj["rmse"]["C1_C3"])   # out-of-sample error of the implemented model, 2021-2025
     # player-level table for auditing: projected rate, minutes, value and the carried share of last season's team residual
     prev_rho = p.filter(pl.col("season") == last).select("player_id", "team").join(tres.filter(pl.col("season") == last).select("team", "rho"), on="team", how="left").select("player_id", "rho")
-    players = (alloc3.with_columns(pl.Series("proj_rate60", rate3)).with_columns((pl.col("proj_rate60") * pl.col("mins") / 60).alias("proj_gar"))
+    players = (alloc3.with_columns(pl.Series("proj_rate60", rate3), pl.Series("proj_rate60_no_prenhl", pm.predict_models(models0, alloc3, Spec()))).with_columns((pl.col("proj_rate60") * pl.col("mins") / 60).alias("proj_gar"))
                .join(prev_rho, on="player_id", how="left").with_columns((pl.col("rho").fill_null(0.0) * pl.col("mins") * c).alias("carried_residual")).join(snap.select("player_id", "name", "team"), on="player_id", how="left"))
-    players.select("team", "name", "pos_group", "age", "no_history", "mins", "proj_rate60", "proj_gar", "carried_residual").sort("team", "proj_gar", descending=[False, True]).write_csv(outdir / f"standings_{season}_players.csv")
+    players.select("team", "name", "pos_group", "age", "no_history", "mins", "proj_rate60", "proj_rate60_no_prenhl", "proj_gar", "carried_residual").sort("team", "proj_gar", descending=[False, True]).write_csv(outdir / f"standings_{season}_players.csv")
     t = ids.join(S, on="team_id", how="left").join(S3, on="team_id", how="left").join(Rc3, on="team_id", how="left").join(G, on="team_id", how="left")
     t = t.with_columns((pl.col("S") + pl.col("G")).alias("SG"), (pl.col("S_c3") + pl.col("G")).alias("SG3")).with_columns(
         *[(pl.col(x) - pl.col(x).mean()).alias(f"{x}_dm") for x in ("SG", "SG3", "Rc3")])
@@ -130,7 +137,7 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     t = t.with_columns(pl.lit(sd_new).alias("sd80_basis"), (pl.col("pts") - z80 * sd_new).alias("pts_lo80"), (pl.col("pts") + z80 * sd_new).alias("pts_hi80"))
     t = t.with_columns(pl.col("pts").rank("ordinal", descending=True).alias("rank")).sort("rank")
     t.select("rank", "team", "pts", "pts_lo80", "pts_hi80", "pts_M1", "pts_M3", "pts_B2", "pts82_last", "S_c3", "G", "carried_residual", "gd_hat").write_csv(outdir / f"standings_{season}_forecast.csv")
-    meta = {"season": season, "roster_snapshot": stamp, "goalies_per_team": 2, "model": "M1 + C1 (portable team residual) + C3 (deployment-aware minutes)", "c_residual": c,
+    meta = {"season": season, "roster_snapshot": stamp, "goalies_per_team": 2, "model": "M1 + C1 (portable team residual) + C3 (deployment-aware minutes)" + (" + pre-NHL priors" if yp is not None else ""), "c_residual": c,
             "sd_points_out_of_sample": sd_new, "map_a": float(a), "map_b": float(b)}
     (cfg.path(cfg.data.metrics_dir) / f"standings_{season}_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     lines = [f"# {season}-{str(season + 1)[2:]} standings projection", "",

@@ -1,6 +1,6 @@
 ## Interpretation
 
-**Result: the player-rating model is the best model tested, but the main gate fails by a hair.** On 6,493 test games (2021–2025) the player model P has a log loss of 0.6585 against 0.6613 for the better team rating (G2, a tuned team rating on a blend of goals and expected goals)
+**Result: the player-rating model is the best model tested, but the main gate fails by a hair.** On 6,502 test games (2021–2025) the player model P has a log loss of 0.6585 against 0.6613 for the better team rating (G2, a tuned team rating on a blend of goals and expected goals)
 and 0.6655 for a team rating on goals alone (G1). P beats G1 clearly (z = 3.40) and G2 by 0.0028 with z = 1.99 (1.93 with date clusters), just under the pre-registered 2, so **GM-2 fails**. It is better than G2 in four of the five seasons (not 2022).
 GM-1 (against home ice, z = 9.6), GM-3 (in-season updating, z = 5.7), GM-4 (player attribution, z = 2.4) and GM-5 (calibration slope 0.91) pass. The fair reading: a real but small edge over a well-tuned team rating, at the edge of what five seasons can establish.
 

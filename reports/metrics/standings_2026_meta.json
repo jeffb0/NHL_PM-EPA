@@ -2,9 +2,9 @@
   "season": 2026,
   "roster_snapshot": "2026-09-30",
   "goalies_per_team": 2,
-  "model": "M1 + C1 (portable team residual) + C3 (deployment-aware minutes)",
-  "c_residual": 0.8354906200941274,
-  "sd_points_out_of_sample": 13.956505382214571,
+  "model": "M1 + C1 (portable team residual) + C3 (deployment-aware minutes) + pre-NHL priors",
+  "c_residual": 0.8298423402529573,
+  "sd_points_out_of_sample": 13.986258109153964,
   "map_a": 91.17413653903859,
   "map_b": 0.325752869369066
 }

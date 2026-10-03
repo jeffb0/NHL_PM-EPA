@@ -14,7 +14,7 @@ from src.config import load_config
 from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
-from src.projection.model import Spec
+from src.prospects import features as pf
 from src.standings import data as sd
 from src.standings import forecast as fc
 from src.standings import run as sr
@@ -86,7 +86,7 @@ def share_error(alloc: pl.DataFrame, p: pl.DataFrame, T: int, ab: pl.DataFrame) 
 
 
 # ---------------------------------------------------------------- build and evaluate
-def build(proc, cfg, seasons: list[int]) -> tuple[pl.DataFrame, dict]:
+def build(proc, cfg, seasons: list[int], yp: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
     p = pd_.panel(proc, roll)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
@@ -95,14 +95,14 @@ def build(proc, cfg, seasons: list[int]) -> tuple[pl.DataFrame, dict]:
     per, lg = sd.goalie_usage(proc)
     rates = pl.read_parquet(proc / "gk_rolling_rates.parquet")
     resid = team_residual(proc, p, res)
-    M = Spec()
+    M = pf.spec(yp)
     fr_min = pd_.design_frame(p, bio, 1)
-    fr_val = pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR)
+    fr_val = pf.with_yp(pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR), yp)
     rows, diag = [], {"share_mae_base": {}, "share_mae_c3": {}}
     for T in seasons:
         ab = res.filter(pl.col("season") == T).select("team_id", "team")
         ros = sk.filter(pl.col("season") == T).select("team_id", "player_id", "pos_group")
-        d = fc.roster_frame(p, bio, ros, T)
+        d = pf.with_yp(fc.roster_frame(p, bio, ros, T), yp)
         models = pm.fit_models(pr.train_rows(fr_val, 1, T), M)
         mm = pr._minutes_fit(pr.train_rows(fr_min, 1, T))
         target = fc.team_minutes(p, res, T - 1)
@@ -192,19 +192,27 @@ def decide(z: float, sound: bool) -> bool:
     return False
 
 
+def assemble(proc, cfg, yp: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
+    """Team-season table with every candidate's inputs. With ``yp`` (docs/prospects) the skater sums use the rate model with pre-NHL columns, and M1's sum is rebuilt from them."""
+    tab = pl.read_parquet(proc / "standings_table.parquet")
+    cand, diag = build(proc, cfg, sr.FORECAST_SEASONS, yp)
+    df = tab.select("season", "team_id", "team", "gp", "pts82", "gd82", "S", "G", "SG_dm").join(cand.drop("team"), on=["season", "team_id"], how="left", suffix="_c")
+    chk = df.filter(pl.col("S").is_not_null())
+    diag["max_abs_S_diff_vs_backtest"] = float((chk["S"] - chk["S_c"]).abs().max())          # zero without yp: the reference M1 is reproduced exactly
+    if yp is not None:
+        df = df.with_columns((pl.col("S_c") + pl.col("G")).alias("_sg")).with_columns((pl.col("_sg") - pl.col("_sg").mean().over("season")).alias("SG_dm")).drop("_sg")
+    df = df.with_columns((pl.col("S_c3") + pl.col("G")).alias("SG3"))
+    for c in ["SG3", "Rc", "Rc3", *AGG_COLS]:
+        df = df.with_columns((pl.col(c) - pl.col(c).mean().over("season")).alias(f"{c}_dm"))
+    return df, diag
+
+
 def run() -> dict:
     cfg = load_config()
     proc = cfg.path(cfg.data.processed_dir)
     met = cfg.path(cfg.data.metrics_dir)
     outdir = cfg.path(cfg.data.output_dir)
-    tab = pl.read_parquet(proc / "standings_table.parquet")
-    cand, diag = build(proc, cfg, sr.FORECAST_SEASONS)
-    df = tab.select("season", "team_id", "team", "gp", "pts82", "gd82", "S", "G", "SG_dm").join(cand.drop("team"), on=["season", "team_id"], how="left", suffix="_c")
-    chk = df.filter(pl.col("S").is_not_null())
-    diag["max_abs_S_diff_vs_backtest"] = float((chk["S"] - chk["S_c"]).abs().max())          # the reference M1 is reproduced exactly
-    df = df.with_columns((pl.col("S_c3") + pl.col("G")).alias("SG3"))
-    for c in ["SG3", "Rc", "Rc3", *AGG_COLS]:
-        df = df.with_columns((pl.col(c) - pl.col(c).mean().over("season")).alias(f"{c}_dm"))
+    df, diag = assemble(proc, cfg)
     df.write_parquet(proc / "standings_candidates_table.parquet")                 # the 2026 forecast fits C1's coefficient on it
     e, fitted = evaluate(df)
     base = pl.read_csv(outdir / "standings_backtest.csv").select("season", "team_id", "B2", "M3", pl.col("M1").alias("M1_ref"))

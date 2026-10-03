@@ -176,7 +176,11 @@ Three pre-registered improvements were then tested ([plan](docs/standings/improv
 
 ### Game-level model with in-season player ratings
 
-Pre-registered ([methodology](docs/gamemodel/methodology.md), [report](reports/gamemodel/validation_report.md), [interpretation](reports/gamemodel/narrative.md)). Each skater's rating starts at his preseason projection plus carried team residual and is updated after every game from the team's expected-goal surprise in proportion to ice time; goalies update by shots. On 6,493 games (2021–2025) log loss is 0.6585 against 0.6613 for a tuned team rating (z = 1.99, the main gate fails narrowly) and 0.6655 for a goals-only team rating (z = 3.4); in-season updating (z = 5.7) and player attribution (z = 2.4) pass; lineup news adds nothing measurable. `python -m src.gamemodel.run`, `data/outputs/game_predictions.csv`. A market comparison runs when `data/external/odds.csv` is supplied.
+Pre-registered ([methodology](docs/gamemodel/methodology.md), [report](reports/gamemodel/validation_report.md), [interpretation](reports/gamemodel/narrative.md)). Each skater's rating starts at his preseason projection plus carried team residual and is updated after every game from the team's expected-goal surprise in proportion to ice time; goalies update by shots. On 6,502 games (2021–2025) log loss is 0.6585 against 0.6613 for a tuned team rating (z = 1.99, the main gate fails narrowly) and 0.6655 for a goals-only team rating (z = 3.4); in-season updating (z = 5.7) and player attribution (z = 2.4) pass; lineup news adds nothing measurable. `python -m src.gamemodel.run`, `data/outputs/game_predictions.csv`. A market comparison runs when `data/external/odds.csv` is supplied.
+
+### Pre-NHL priors for young and thin-history players
+
+Pre-registered ([methodology](docs/prospects/methodology.md), [results](reports/prospects/narrative.md)). League-translated production (factors estimated from our own data: AHL 0.46, KHL 0.61, NCAA 0.37, OHL 0.29) and draft position enter the projection, fading as NHL minutes accumulate. Player projections improve overall (z = 2.62) and for thin-history forwards (z = 1.48, not reliable), but there is **no team-level gain** (game model z = −0.25, standings z = −1.39). Implemented in the standings forecast under the pre-registered rule; the effect on any team is under a point. `python -m src.prospects.ingest`, `python -m src.prospects.run`.
 
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
 
