@@ -21,8 +21,10 @@ def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float) -
         theta[i] = theta.get(i, 0.0) + di
 
 
-def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True) -> np.ndarray:
-    """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each game."""
+def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None):
+    """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each game.
+
+    With ``feature`` (a function of the dressed player ids and their projected minutes) the home-minus-away value of that roster feature is returned as a second array."""
     t = games.table.filter(pl.col("season") == season)
     theta = dict(pri.theta0[season])
     toi_last, (g0, rep), shots_pg, h = pri.toi_last[season], pri.goalie0[season], pri.shots_pg[season], pri.home_adv
@@ -30,7 +32,8 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
     gsaved, gshots = defaultdict(float), defaultdict(float)
     team_u: dict = defaultdict(float)
     prev_lu, prev_gk = {}, {}
-    mu_out = np.zeros(t.height)
+    mu_out, feat_out = np.zeros(t.height), np.zeros(t.height)
+    fval: dict = {}
 
     def strength(gid: int, team: int) -> float:
         ids, _ = games.lineups[(gid, team)]
@@ -39,6 +42,8 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
             ids, gk = prev_lu[team], prev_gk[team]
         m = np.array([float(np.mean(recent[i][-RECENT:])) if recent[i] else toi_last.get(i, POS_DEFAULT_MIN[pri.pos.get(i, "F")]) for i in ids.tolist()])
         m *= TEAM_MINUTES / m.sum()
+        if feature is not None:
+            fval[team] = feature(ids, m)
         s = float(sum(theta.get(i, 0.0) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
         rate = (n0 * g0.get(gk, rep) + gsaved[gk]) / (n0 + gshots[gk])
         return s + rate * shots_pg + (team_u[team] if attribution == "team" else 0.0)
@@ -46,6 +51,8 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
     for k, (gid, hid, aid, gd, xgd) in enumerate(t.select("game_id", "home_id", "away_id", "gd", "xgd").iter_rows()):
         mu = strength(gid, hid) - strength(gid, aid) + h
         mu_out[k] = mu
+        if feature is not None:
+            feat_out[k] = fval[hid] - fval[aid]
         e = alpha * gd + (1 - alpha) * xgd - mu
         for team, sign in ((hid, 1.0), (aid, -1.0)):
             ids, mins = games.lineups[(gid, team)]
@@ -61,7 +68,7 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
             for i, mi in zip(ids.tolist(), mins.tolist()):
                 recent[i].append(mi)
             prev_lu[team], prev_gk[team] = ids, games.goalies[(gid, team)][0][0]
-    return mu_out
+    return (mu_out, feat_out) if feature is not None else mu_out
 
 
 def run_team_rating(games: Games, k: float, rho: float, alpha: float, h: float) -> np.ndarray:

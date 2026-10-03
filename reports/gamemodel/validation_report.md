@@ -20,7 +20,7 @@ Test seasons 2021–2025, 6502 games; hyperparameters tuned on 2019–2020 only 
 | G1 team rating on goals | 0.6655 | 0.2365 | 59.5% | 0.83 |
 | G2 team rating on blended margin | 0.6613 | 0.2345 | 60.0% | 0.84 |
 | P-pre preseason player prior only | 0.6692 | 0.2383 | 59.0% | 0.90 |
-| P-team preseason prior + team-level update | 0.6598 | 0.2339 | 60.1% | 0.90 |
+| P-team preseason prior + team-level update | 0.6599 | 0.2339 | 60.1% | 0.90 |
 | P-prev previous game's lineup | 0.6586 | 0.2334 | 60.4% | 0.95 |
 | P player ratings, updated in season | 0.6585 | 0.2333 | 60.4% | 0.91 |
 
@@ -29,13 +29,13 @@ Test seasons 2021–2025, 6502 games; hyperparameters tuned on 2019–2020 only 
 | comparison | log-loss difference | z | z (date clusters) |
 |---|---|---|---|
 | P vs G0 | 0.0320 | 9.58 | 9.35 |
-| P vs G1 | 0.0070 | 3.40 | 3.50 |
-| P vs G2 | 0.0028 | 1.99 | 1.93 |
-| P vs P-pre | 0.0107 | 5.74 | 5.77 |
-| P vs P-team | 0.0013 | 2.40 | 2.47 |
-| P vs P-prev | 0.0001 | 0.07 | 0.06 |
+| P vs G1 | 0.0069 | 3.39 | 3.49 |
+| P vs G2 | 0.0028 | 1.99 | 1.92 |
+| P vs P-pre | 0.0107 | 5.74 | 5.76 |
+| P vs P-team | 0.0013 | 2.40 | 2.46 |
+| P vs P-prev | 0.0001 | 0.06 | 0.06 |
 | P-pre vs best-team | -0.0079 | -3.72 | -3.71 |
-| P-team vs best-team | 0.0015 | 1.03 | 1.00 |
+| P-team vs best-team | 0.0014 | 1.02 | 0.99 |
 
 ## Tuned hyperparameters (2019–2020)
 
@@ -52,9 +52,9 @@ Test seasons 2021–2025, 6502 games; hyperparameters tuned on 2019–2020 only 
 |---|---|---|---|---|---|---|
 | 2021 | 0.6906 | 0.6465 | 0.6441 | 0.6556 | 0.6440 | 0.6435 |
 | 2022 | 0.6922 | 0.6614 | 0.6544 | 0.6707 | 0.6573 | 0.6558 |
-| 2023 | 0.6900 | 0.6595 | 0.6605 | 0.6578 | 0.6538 | 0.6532 |
+| 2023 | 0.6900 | 0.6595 | 0.6605 | 0.6578 | 0.6537 | 0.6532 |
 | 2024 | 0.6871 | 0.6643 | 0.6625 | 0.6656 | 0.6588 | 0.6569 |
-| 2025 | 0.6926 | 0.6957 | 0.6851 | 0.6961 | 0.6852 | 0.6831 |
+| 2025 | 0.6926 | 0.6957 | 0.6851 | 0.6962 | 0.6853 | 0.6832 |
 
 ## Market comparison
 

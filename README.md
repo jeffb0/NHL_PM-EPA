@@ -182,6 +182,10 @@ Pre-registered ([methodology](docs/gamemodel/methodology.md), [report](reports/g
 
 Pre-registered ([methodology](docs/prospects/methodology.md), [results](reports/prospects/narrative.md)). League-translated production (factors estimated from our own data: AHL 0.46, KHL 0.61, NCAA 0.37, OHL 0.29) and draft position enter the projection, fading as NHL minutes accumulate. Player projections improve overall (z = 2.62) and for thin-history forwards (z = 1.48, not reliable), but there is **no team-level gain** (game model z = −0.25, standings z = −1.39). Implemented in the standings forecast under the pre-registered rule; the effect on any team is under a point. `python -m src.prospects.ingest`, `python -m src.prospects.run`.
 
+### Chemistry and roster fit (tested, not adopted)
+
+Pre-registered ([methodology](docs/chemistry/methodology.md), [results](reports/chemistry/narrative.md)). A factorization machine on 5v5 stints (latent traits per player, pairwise synergy within a unit, able to score pairs that never played together). **Both gates fail:** it predicts next-season stints worse than the additive model (pooled z = −2.66), pair synergies are uncorrelated across non-overlapping windows (0.01), and a roster-fit covariate does not help the game model (z = −0.97). Lineups are additive as far as 5v5 expected goals can tell. `python -m src.chemistry.run`.
+
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
 
 Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.

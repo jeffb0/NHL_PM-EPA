@@ -43,7 +43,7 @@ def load_games(proc) -> Games:
     lu = pg.group_by("game_id", "team_id").agg(pl.col("player_id"), (pl.col("toi_all") / 60.0).alias("mins"))
     lineups = {(r[0], r[1]): (np.asarray(r[2], dtype=np.int64), np.asarray(r[3], dtype=float)) for r in lu.iter_rows()}
     gs = pl.read_parquet(proc / "gk_shots.parquet", columns=["game_id", "goalie", "team_id", "goal", "xg_f"]).drop_nulls("goalie").group_by("game_id", "team_id", "goalie").agg(
-        pl.len().alias("shots"), (pl.col("xg_f") - pl.col("goal")).sum().alias("saved")).sort("shots", descending=True)
+        pl.len().alias("shots"), (pl.col("xg_f") - pl.col("goal")).sum().alias("saved")).sort(["shots", "goalie"], descending=[True, False])   # ties broken by id so runs are reproducible
     goalies: dict = {}
     for gid, tid, gk, n, s in gs.iter_rows():
         goalies.setdefault((gid, tid), []).append((int(gk), float(n), float(s)))

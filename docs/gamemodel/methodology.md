@@ -71,3 +71,6 @@ no travel, altitude, referee or motivation effects; the update treats all streng
 ## 10. Deviations log
 
 *(any change to §3–§7 after results are seen is recorded here with its reason)*
+
+1. **Reproducibility fix (2026-10-03).** When two goalies faced the same number of shots in a game the "starter" was chosen by an unstable sort, so log loss varied by about 0.00003 between runs (comparisons within a run were unaffected).
+   Ties are now broken by goalie id and the model was rerun: every gate outcome and every z to two decimals is unchanged (GM-2 z = 1.99); log losses moved in the fifth decimal. The test has 6,502 games.
