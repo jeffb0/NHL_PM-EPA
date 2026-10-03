@@ -186,6 +186,10 @@ Pre-registered ([methodology](docs/prospects/methodology.md), [results](reports/
 
 Pre-registered ([methodology](docs/chemistry/methodology.md), [results](reports/chemistry/narrative.md)). A factorization machine on 5v5 stints (latent traits per player, pairwise synergy within a unit, able to score pairs that never played together). **Both gates fail:** it predicts next-season stints worse than the additive model (pooled z = −2.66), pair synergies are uncorrelated across non-overlapping windows (0.01), and a roster-fit covariate does not help the game model (z = −0.97). Lineups are additive as far as 5v5 expected goals can tell. `python -m src.chemistry.run`.
 
+### Possession under-scaling (tested, not adopted)
+
+Pre-registered ([methodology](docs/possession/methodology.md), [results](reports/possession/narrative.md)). Tuning on 2019–2020 selected no rescaling of the possession component, so nothing is implemented. Declared context variants (×1.5 for both positions; ×3 for defensemen) do slightly better on 2021–2025 (z = 2.7–3.5, about 0.0002 log loss, 3% of the preseason prior's gap to a team rating), which is encouraging but not a clean test. `python -m src.possession.run`.
+
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
 
 Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.

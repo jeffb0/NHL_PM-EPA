@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
+from src.possession.scale import rescale
 from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
@@ -63,10 +64,10 @@ class Priors:
     home_adv: float         # mean home margin (blend-free: goals) in 2017-2018
 
 
-def build_priors(proc, cfg, seasons: list[int], games: Games, yp: pl.DataFrame | None = None) -> Priors:
-    """With ``yp`` (docs/prospects) the rate model includes the pre-NHL columns."""
+def build_priors(proc, cfg, seasons: list[int], games: Games, yp: pl.DataFrame | None = None, kappa: dict | None = None) -> Priors:
+    """With ``yp`` (docs/prospects) the rate model includes the pre-NHL columns; with ``kappa`` (docs/possession) the possession rate is rescaled by position."""
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
-    p = pd_.panel(proc, roll)
+    p = rescale(pd_.panel(proc, roll), kappa)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
     res = sd.results(proc)
     resid = cd.team_residual(proc, p, res)
