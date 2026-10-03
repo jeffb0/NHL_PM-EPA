@@ -10,18 +10,21 @@ import polars as pl
 from src.gamemodel.data import POS_DEFAULT_MIN, Games, Priors
 
 TEAM_MINUTES = 300.0
+EXPERIENCE_M0 = 1000.0
 RECENT = 10
 
 
-def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float) -> None:
-    """Move each dressed skater's rating so the team's strength with this lineup changes by ``step`` (normalised least-mean-squares step)."""
+def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float, gain: np.ndarray | None = None) -> None:
+    """Move each dressed skater's rating so the team's strength with this lineup changes by ``step`` (normalised least-mean-squares step).
+    ``gain`` (docs/prospects/elite.md §1B) gives some players a larger share of the move; the team's total step is unchanged."""
     x = mins / 60.0
-    d = step * x / float((x * x).sum())
+    g = np.ones(len(x)) if gain is None else gain
+    d = step * g * x / float((g * x * x).sum())
     for i, di in zip(ids.tolist(), d.tolist()):
         theta[i] = theta.get(i, 0.0) + di
 
 
-def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None):
+def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None, kappa: float = 0.0, early=None):
     """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each game.
 
     With ``feature`` (a function of the dressed player ids and their projected minutes) the home-minus-away value of that roster feature is returned as a second array."""
@@ -29,6 +32,9 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
     theta = dict(pri.theta0[season])
     toi_last, (g0, rep), shots_pg, h = pri.toi_last[season], pri.goalie0[season], pri.shots_pg[season], pri.home_adv
     recent: dict = defaultdict(list)
+    career = pri.career.get(season, {}) if kappa else {}
+    played: dict = defaultdict(float)                              # minutes this season, for the experience-weighted update
+    cum: dict = {}                                                 # games and summed game lines this season, for the early-sample adjustment
     gsaved, gshots = defaultdict(float), defaultdict(float)
     team_u: dict = defaultdict(float)
     prev_lu, prev_gk = {}, {}
@@ -44,7 +50,10 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
         m *= TEAM_MINUTES / m.sum()
         if feature is not None:
             fval[team] = feature(ids, m)
-        s = float(sum(theta.get(i, 0.0) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
+        if early is None:
+            s = float(sum(theta.get(i, 0.0) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
+        else:                                                       # thin-history players: prior plus the adjustment from their games so far (docs/prospects/hybrid.md)
+            s = float(sum((theta.get(i, 0.0) + early.adj(i, cum.get(i))) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
         rate = (n0 * g0.get(gk, rep) + gsaved[gk]) / (n0 + gshots[gk])
         return s + rate * shots_pg + (team_u[team] if attribution == "team" else 0.0)
 
@@ -58,7 +67,11 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
             ids, mins = games.lineups[(gid, team)]
             if update and lam > 0:
                 if attribution == "player":
-                    skater_update(theta, ids, mins, sign * lam * e)
+                    gain = None
+                    if kappa:
+                        exp_ = np.array([career.get(i, 0.0) + played[i] for i in ids.tolist()])
+                        gain = 1.0 + kappa * EXPERIENCE_M0 / (exp_ + EXPERIENCE_M0)
+                    skater_update(theta, ids, mins, sign * lam * e, gain)
                 else:
                     team_u[team] += sign * lam * e
             if update:
@@ -67,6 +80,13 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
                     gsaved[gk] += saved
             for i, mi in zip(ids.tolist(), mins.tolist()):
                 recent[i].append(mi)
+                played[i] += mi
+            if early is not None:
+                for i, line in zip(ids.tolist(), games.stats.get((gid, team), ())):       # a game being forecast has no lines yet
+                    if i in early.thin:
+                        c = cum.setdefault(i, np.zeros(8))
+                        c[0] += 1.0
+                        c[1:] += line
             prev_lu[team], prev_gk[team] = ids, games.goalies[(gid, team)][0][0]
     return (mu_out, feat_out) if feature is not None else mu_out
 

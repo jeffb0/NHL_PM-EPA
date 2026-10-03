@@ -83,6 +83,9 @@ def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:
     pj_path = cfg.path(cfg.data.metrics_dir) / "prospects.json"
     pj = json.loads(pj_path.read_text()) if pj_path.exists() else {}
     yp = pl.read_parquet(proc / "prospect_features.parquet") if pj.get("implement") else None
+    ej_path = cfg.path(cfg.data.metrics_dir) / "elite_prospects.json"
+    if ej_path.exists() and json.loads(ej_path.read_text()).get("implement_A"):      # docs/prospects/elite.md supersedes the first pre-NHL columns
+        yp = pf.elite_table(raw, list(range(pr.FIRST_TARGET, season + 1)))
     M = pf.spec(yp)
     fr_plain = pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR)
     fr_val = pf.with_yp(fr_plain, yp)

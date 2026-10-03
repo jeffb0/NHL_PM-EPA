@@ -23,7 +23,7 @@ F_COLS = ["made_utc", "game_id", "game_date", "start_utc", "away", "home", "p_ho
           "home_lineup_source", "away_lineup_source", "home_games", "away_games", "completed_games", "model",
           "home_removed", "away_removed", "home_added", "away_added", "home_questionable", "away_questionable", "unmatched_out", "roster_snapshot"]
 O_COLS = ["captured_utc", "game_id", "game_date", "away", "home", "book", "market", "side", "line", "american", "source"]
-MODEL = "game model P, frozen 2026-10-03 (docs/gamemodel; original rate model); inputs v2: daily rosters, injury list and listed starting goalies"
+MODEL = "game model P (docs/gamemodel); from 2026-10-04: rate model v3 (elite-prospect priors, docs/prospects/elite.md) and early-sample adjustment for thin-history players (docs/prospects/hybrid.md); inputs v2: daily rosters, injury list and listed starting goalies"
 
 
 def slate(day: str) -> list[dict]:
@@ -59,6 +59,8 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     if update:
         from src.ingestion.rosters_next import main as roster_snapshot
         roster_snapshot(season)                                    # today's published rosters: trades, call-ups and assignments
+        from src.prospects.ingest import main as career_pages
+        career_pages()                                             # draft slot and pre-NHL seasons for players new to the rosters
     ctx = lp.prepare(season)
     snap = ctx["snap"]
     roster: dict = {}

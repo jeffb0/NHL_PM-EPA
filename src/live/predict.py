@@ -21,7 +21,8 @@ from src.gamemodel import run as grun
 from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
-from src.projection.model import Spec
+from src.prospects import features as pf
+from src.prospects import hybrid as hy
 from src.standings import candidates as cd
 from src.standings import data as sd
 from src.standings import forecast as fc
@@ -46,8 +47,7 @@ def live_games(season: int) -> gd_.Games:
     tg = tg.with_columns(((pl.col("date") - pl.col("date").shift(1).over("team_id")).dt.total_days() == 1).fill_null(False).cast(pl.Float64).alias("b2b"))
     g = (g.join(tg.select("game_id", pl.col("team_id").alias("home_id"), pl.col("b2b").alias("b2b_home")), on=["game_id", "home_id"]).join(tg.select("game_id", pl.col("team_id").alias("away_id"), pl.col("b2b").alias("b2b_away")), on=["game_id", "away_id"]))
     pg = pl.read_parquet(LIVE / "player_game.parquet").filter((pl.col("toi_all") > 0) & (pl.col("position") != "G"))
-    lu = pg.group_by("game_id", "team_id").agg(pl.col("player_id"), (pl.col("toi_all") / 60.0).alias("mins"))
-    lineups = {(r[0], r[1]): (np.asarray(r[2], dtype=np.int64), np.asarray(r[3], dtype=float)) for r in lu.iter_rows()}
+    lineups, stats = gd_.lineup_tables(pg)
     # goalies: the starter is the goalie on the most shots on goal; every unblocked attempt against with a goalie in net is booked to him
     teams = g.select("game_id", "home_id", "away_id")
     ag = sh.filter(~pl.col("empty_net")).join(teams, on="game_id").with_columns(pl.when(pl.col("team_id") == pl.col("home_id")).then(pl.col("away_id")).otherwise(pl.col("home_id")).alias("def_id"))
@@ -56,7 +56,15 @@ def live_games(season: int) -> gd_.Games:
     tot = ag.group_by("game_id", "def_id").agg(pl.len().alias("n"), (pl.col("xg") - pl.col("goal")).sum().alias("saved")).join(start.select("game_id", "def_id", "player2"), on=["game_id", "def_id"])
     goalies = {(r["game_id"], r["def_id"]): [(int(r["player2"]), float(r["n"]), float(r["saved"]))] for r in tot.iter_rows(named=True)}
     g = g.sort("date", "game_id")
-    return gd_.Games(g.select("game_id", "season", "date", "home_id", "away_id", "home_abbrev", "away_abbrev", "gd", "xgd", "home_win", "b2b_home", "b2b_away"), lineups, goalies)
+    return gd_.Games(g.select("game_id", "season", "date", "home_id", "away_id", "home_abbrev", "away_abbrev", "gd", "xgd", "home_win", "b2b_home", "b2b_away"), lineups, goalies, stats)
+
+
+def rate_features(cfg, raw, season: int) -> pl.DataFrame | None:
+    """The elite-prospect columns (docs/prospects/elite.md) when that test's rule adopted them, rebuilt from the career pages on disk so new roster players are covered; else None (the original rate model)."""
+    flag = cfg.path(cfg.data.metrics_dir) / "elite_prospects.json"
+    if not flag.exists() or not json.loads(flag.read_text()).get("implement_A"):
+        return None
+    return pf.elite_table(raw, list(range(pr.FIRST_TARGET, season + 1)))
 
 
 def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> tuple[gd_.Priors, pl.DataFrame, str]:
@@ -70,9 +78,10 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
     bio = pl.concat([nb, bio0.filter(~pl.col("player_id").is_in(nb["player_id"]))])
     seen = pl.read_parquet(LIVE / "player_game.parquet").filter(pl.col("position") != "G").select(pl.col("player_id").cast(pl.Int64), pl.when(pl.col("position") == "D").then(pl.lit("D")).otherwise(pl.lit("F")).alias("pos_group")).unique("player_id")
     who = pl.concat([snap.filter(pl.col("pos_group") != "G").select("player_id", "pos_group"), seen]).unique("player_id").with_columns(pl.lit(0, pl.Int64).alias("team_id"))
-    d = fc.roster_frame(p, bio, who, season)
-    M = Spec()
-    rate = pm.predict_models(pm.fit_models(pr.train_rows(pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR), 1, season), M), d, M)
+    yp = rate_features(cfg, raw, season)
+    d = pf.with_yp(fc.roster_frame(p, bio, who, season), yp)
+    M = pf.spec(yp)
+    rate = pm.predict_models(pm.fit_models(pr.train_rows(pf.with_yp(pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR), yp), 1, season), M), d, M)
     resid = cd.team_residual(proc, p, res)
     prev = p.filter(pl.col("season") == season - 1).select("player_id", "team").join(resid.filter(pl.col("season") == season - 1).select("team", "rho"), on="team", how="left").select("player_id", "rho")
     rho = d.select("player_id").join(prev, on="player_id", how="left")["rho"].fill_null(0.0).to_numpy()
@@ -81,7 +90,7 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
     _, lg = sd.goalie_usage(proc)
     pos = {**base.pos, **dict(who.select("player_id", "pos_group").iter_rows())}
     pri = gd_.Priors({season: dict(zip(d["player_id"].to_list(), (rate + 60.0 * rho).tolist()))}, pos, {season: dict(tl.iter_rows())}, {season: (dict(rates.select("goalie", "rate_v").iter_rows()), float(rates["rep_v"][0]))},
-                     {season: float(lg.filter(pl.col("season") == season - 1)["shots82"].item()) / 82.0}, base.home_adv)
+                     {season: float(lg.filter(pl.col("season") == season - 1)["shots82"].item()) / 82.0}, base.home_adv, m_eff={season: dict(d.select("player_id", "m_eff").iter_rows())})
     return pri, snap, stamp
 
 
@@ -111,12 +120,17 @@ def prepare(season: int = 2026) -> dict:
     cal = np.linalg.lstsq(np.column_stack([np.ones(len(mu_h)), mu_h]), th["gd"].to_numpy(), rcond=None)[0]        # actual margin on the model's expected margin
     live = live_games(season)
     pri, snap, stamp = season_priors(proc, cfg, season, live, base)
+    # early-sample adjustment for thin-history players (docs/prospects/hybrid.md), fitted on every completed season, when that test's rule adopted it
+    early = None
+    hj = met / "hybrid_prospects.json"
+    if hj.exists() and json.loads(hj.read_text()).get("implement") and (proc / "hybrid_training.parquet").exists():
+        early = hy.Early({i for i, v in pri.m_eff[season].items() if v < hy.THIN}, hy.fit(pl.read_parquet(proc / "hybrid_training.parquet")), pri.pos)
     g_last = pl.read_parquet(proc / "games.parquet").filter(pl.col("season") == season - 1)
     ids = dict(pl.concat([g_last.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")), live.table.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")),
                           live.table.select(pl.col("away_abbrev").alias("t"), pl.col("away_id").alias("i"))]).unique().iter_rows())
     per, _ = sd.goalie_usage(proc)
     avg = float(g_last.select((pl.col("home_final") + pl.col("away_final")).mean()).item() / 2)
-    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named, "snapshot_stamp": stamp,
+    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named, "snapshot_stamp": stamp, "early": early,
             "names": dict(snap.select("player_id", "name").iter_rows())}
 
 
@@ -190,7 +204,7 @@ def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: 
     played = live.table
     live.table = pl.concat([played, row])
     try:
-        mu = float(gm.run_player_season(live, ctx["pri"], season, **ctx["kw"])[-1])
+        mu = float(gm.run_player_season(live, ctx["pri"], season, early=ctx.get("early"), **ctx["kw"])[-1])
     finally:
         live.table = played                                         # the appended game never stays in the season table
         for tid in (hid, aid):

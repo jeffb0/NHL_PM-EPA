@@ -200,6 +200,14 @@ Pre-registered ([methodology](docs/residual/methodology.md), [results](reports/r
 `python -m src.live.game_report <game_id>` writes `reports/games/<date>_<AWAY>_at_<HOME>/`: a game-flow figure (cumulative expected goals and a shot map), a skater table figure (ice time, goals, assists, individual xG, puck value, 5v5 on-ice xG), `players.csv`, `teams.csv` and `summary.md` with takeaways.
 These are single-game descriptions, not ratings: the season-level components (defense, finishing talent, special-teams ratings) need many games.
 
+### Elite-prospect priors (adopted; small effect)
+
+Pre-registered ([methodology](docs/prospects/elite.md), [results](reports/prospects/elite_narrative.md)). Draft slot bins and debut timing replace the single draft term in the rate model. The data do not support a large premium: the fourteen top-three forwards who debuted at 18 since 2018 averaged 0.11 goals above replacement per 60, about a generic rookie; the model projects such a player at 0.16 (0.12–0.19). Adopted by the pre-registered rule (no harm), with no forecast gain (true rookies z = 0.29; game model z = −1.1 to −1.5). Faster in-season learning for inexperienced players was tested and not adopted. `python -m src.prospects.elite`.
+
+### Early-sample updating for young players (adopted)
+
+Pre-registered ([methodology](docs/prospects/hybrid.md), [results](reports/prospects/hybrid_narrative.md)). A thin-history player's rating is his prior plus an adjustment from his own games so far (ice time per game, puck value, individual expected goals, points, 5v5 on-ice expected goals), with weights learned from history at 2, 5, 10, 20 and 40 games. Full-season projections improve reliably from five games (z = 2.25 at 5, 2.64 at 10, 4.57 at 40; 6% to 18% of the prior's error removed); two games say almost nothing (z = 1.16); the game model is unchanged to slightly better (z = 0.60). The signal is mostly ice time and on-ice results, and the shifts are modest (about ±0.05 per 60). `python -m src.prospects.hybrid`.
+
 ### Daily forecasts and the prospective market test
 
 Pre-registered protocol: [docs/market/methodology.md](docs/market/methodology.md). Once a day, before the first game:

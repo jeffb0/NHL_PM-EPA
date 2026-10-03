@@ -24,3 +24,11 @@ def test_logit_recovers_coefficients_and_paired_sign():
     dates = np.repeat(np.arange(200), 100)
     r = paired(good, flat, dates)
     assert r["z"] > 2 and r["z_cluster_date"] > 2 and r["mean_diff"] > 0
+
+
+def test_experience_weighted_update_keeps_the_team_step_and_moves_rookies_more():
+    theta = {1: 0.0, 2: 0.0}
+    ids, mins = np.array([1, 2]), np.array([15.0, 15.0])
+    skater_update(theta, ids, mins, 0.2, gain=np.array([3.0, 1.0]))
+    assert abs(sum(theta[i] * m / 60 for i, m in zip(ids, mins)) - 0.2) < 1e-12
+    assert abs(theta[1] / theta[2] - 3.0) < 1e-12

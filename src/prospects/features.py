@@ -22,14 +22,14 @@ def load_landing(raw) -> tuple[pl.DataFrame, pl.DataFrame]:
         d = json.load(gzip.open(f))
         pid = int(d["playerId"])
         dd = d.get("draftDetails") or {}
-        draft.append((pid, dd.get("overallPick")))
+        draft.append((pid, dd.get("overallPick"), dd.get("year")))
         for s in d.get("seasonTotals") or []:
             if s.get("gameTypeId") != 2 or not s.get("gamesPlayed"):
                 continue
             rows.append((pid, int(str(s["season"])[:4]), str(s.get("leagueAbbrev")), float(s["gamesPlayed"]), float(s.get("points") or 0)))
     st = pl.DataFrame(rows, schema={"player_id": pl.Int64, "season": pl.Int64, "league": pl.Utf8, "gp": pl.Float64, "points": pl.Float64}, orient="row")
     st = st.group_by("player_id", "season", "league").agg(pl.col("gp").sum(), pl.col("points").sum())
-    return st, pl.DataFrame(draft, schema={"player_id": pl.Int64, "overall": pl.Float64}, orient="row")
+    return st, pl.DataFrame(draft, schema={"player_id": pl.Int64, "overall": pl.Float64, "draft_year": pl.Int64}, orient="row")
 
 
 def transitions(st: pl.DataFrame) -> pl.DataFrame:
@@ -68,15 +68,43 @@ def table(raw, seasons: list[int]) -> pl.DataFrame:
     return pl.concat([features(st, draft, tr, T) for T in seasons])
 
 
+ELITE = ("yp_nhle", "yp_has_nhle", "yp_top3", "yp_p4_10", "yp_p11_32", "yp_d0", "yp_d1")
+DEFAULTS = {"nhle": 0.0, "has_nhle": 0.0, "pick": float(np.log(UNDRAFTED_PICK)), "undrafted": 1.0, "top3": 0.0, "p4_10": 0.0, "p11_32": 0.0, "d0": 0.0, "d1": 0.0}
+
+
+def elite_features(st: pl.DataFrame, draft: pl.DataFrame, tr: pl.DataFrame, T: int) -> pl.DataFrame:
+    """docs/prospects/elite.md §1A: NHL-equivalent production, draft slot bins and debut timing for a player entering season T (rows from seasons < T only;
+    a player with no NHL game before T debuts in T). ``nhl_gp_before`` is for test subsets, not a feature."""
+    base = features(st, draft, tr, T).select("player_id", "season", "nhle", "has_nhle")
+    nhl = st.filter((pl.col("league") == "NHL") & (pl.col("gp") > 0))
+    before = nhl.filter(pl.col("season") < T).group_by("player_id").agg(pl.col("season").min().alias("debut"), pl.col("gp").sum().alias("nhl_gp_before"))
+    d = draft.join(before, on="player_id", how="left").with_columns(pl.col("debut").fill_null(T), pl.col("nhl_gp_before").fill_null(0.0))
+    ov = pl.col("overall")
+    d = d.select("player_id", (ov <= 3).fill_null(False).cast(pl.Float64).alias("top3"), ((ov > 3) & (ov <= 10)).fill_null(False).cast(pl.Float64).alias("p4_10"), ((ov > 10) & (ov <= 32)).fill_null(False).cast(pl.Float64).alias("p11_32"),
+                 (pl.col("debut") == pl.col("draft_year")).fill_null(False).cast(pl.Float64).alias("d0"), (pl.col("debut") == pl.col("draft_year") + 1).fill_null(False).cast(pl.Float64).alias("d1"), "nhl_gp_before", "overall", "draft_year")
+    return base.join(d, on="player_id", how="left")
+
+
+def elite_table(raw, seasons: list[int]) -> pl.DataFrame:
+    st, draft = load_landing(raw)
+    tr = transitions(st)
+    return pl.concat([elite_features(st, draft, tr, T) for T in seasons])
+
+
+def _names(yp: pl.DataFrame) -> tuple[str, ...]:
+    return ELITE if "top3" in yp.columns else YP
+
+
 def with_yp(frame: pl.DataFrame, yp: pl.DataFrame | None, m0: float = pd_.M0) -> pl.DataFrame:
-    """Add the four faded columns to a design frame (player_id, season, m_eff). Players without a career page get the undrafted, no-NHLe values."""
+    """Add the faded pre-NHL columns to a design frame (player_id, season, m_eff): the docs/prospects set, or the elite set when the table carries draft-slot bins.
+    Players without a career page get the undrafted, no-production values."""
     if yp is None:
         return frame
-    j = frame.join(yp.select("player_id", "season", "nhle", "has_nhle", "pick", "undrafted"), on=["player_id", "season"], how="left")
+    base = [n[3:] for n in _names(yp)]
+    j = frame.join(yp.select("player_id", "season", *base), on=["player_id", "season"], how="left")
     w = m0 / (pl.col("m_eff") + m0)
-    return j.with_columns((w * pl.col("nhle").fill_null(0.0)).alias("yp_nhle"), (w * pl.col("has_nhle").fill_null(0.0)).alias("yp_has_nhle"),
-                          (w * pl.col("pick").fill_null(float(np.log(UNDRAFTED_PICK)))).alias("yp_pick"), (w * pl.col("undrafted").fill_null(1.0)).alias("yp_undrafted")).drop("nhle", "has_nhle", "pick", "undrafted")
+    return j.with_columns([(w * pl.col(b).fill_null(DEFAULTS[b])).alias(f"yp_{b}") for b in base]).drop(base)
 
 
 def spec(yp: pl.DataFrame | None) -> Spec:
-    return Spec(extra=YP) if yp is not None else Spec()
+    return Spec(extra=_names(yp)) if yp is not None else Spec()
