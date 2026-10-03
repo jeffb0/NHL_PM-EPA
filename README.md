@@ -210,7 +210,7 @@ python -m src.live.score          # score logged forecasts and prices against re
 python -m src.live.predict WPG DET 2026-10-04     # one game
 ```
 
-Forecasts use the frozen game model with in-season updating; prices are morning moneylines from FanDuel, DraftKings and BetMGM (scoresandodds.com), margin removed. Manual roster facts (suspensions, named starters) go in `data/external/roster_overrides.json`.
+Forecasts use the frozen game model with in-season updating. Each run snapshots the published rosters and reads the RotoWire lineups page for listed starting goalies (confirmed or expected) and injury lists: players listed out, on injured reserve or suspended, and players no longer on the roster, are removed from a team's previous lineup and replaced from the roster. Prices are midday moneylines from FanDuel, DraftKings and BetMGM (scoresandodds.com), margin removed. The run is scheduled daily at 12:00 Eastern. Manual roster facts (suspensions, named starters) go in `data/external/roster_overrides.json`.
 Nothing is claimed about the market before 300 scored games. This is analysis of a model, not betting advice.
 
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)

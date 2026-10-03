@@ -59,10 +59,10 @@ def live_games(season: int) -> gd_.Games:
     return gd_.Games(g.select("game_id", "season", "date", "home_id", "away_id", "home_abbrev", "away_abbrev", "gd", "xgd", "home_win", "b2b_home", "b2b_away"), lineups, goalies)
 
 
-def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> tuple[gd_.Priors, pl.DataFrame]:
+def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> tuple[gd_.Priors, pl.DataFrame, str]:
     """Preseason ratings for a season not yet in the historical tables: everyone on the published rosters or seen in a game this season."""
     raw = cfg.path(cfg.data.raw_dir)
-    snap, _ = load_snapshot(raw, season)
+    snap, stamp = load_snapshot(raw, season)
     p = pd_.panel(proc, pl.read_parquet(proc / "wm_rolling_values.parquet"))
     res = sd.results(proc)
     bio0 = pd_.player_bio(proc, raw)
@@ -82,7 +82,7 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
     pos = {**base.pos, **dict(who.select("player_id", "pos_group").iter_rows())}
     pri = gd_.Priors({season: dict(zip(d["player_id"].to_list(), (rate + 60.0 * rho).tolist()))}, pos, {season: dict(tl.iter_rows())}, {season: (dict(rates.select("goalie", "rate_v").iter_rows()), float(rates["rep_v"][0]))},
                      {season: float(lg.filter(pl.col("season") == season - 1)["shots82"].item()) / 82.0}, base.home_adv)
-    return pri, snap
+    return pri, snap, stamp
 
 
 def overrides() -> tuple[set, dict]:
@@ -110,17 +110,17 @@ def prepare(season: int = 2026) -> dict:
     beta = gm.logit_fit(np.column_stack([mu_h, th["b2b_home"].to_numpy(), th["b2b_away"].to_numpy()]), th["home_win"].to_numpy())
     cal = np.linalg.lstsq(np.column_stack([np.ones(len(mu_h)), mu_h]), th["gd"].to_numpy(), rcond=None)[0]        # actual margin on the model's expected margin
     live = live_games(season)
-    pri, snap = season_priors(proc, cfg, season, live, base)
+    pri, snap, stamp = season_priors(proc, cfg, season, live, base)
     g_last = pl.read_parquet(proc / "games.parquet").filter(pl.col("season") == season - 1)
     ids = dict(pl.concat([g_last.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")), live.table.select(pl.col("home_abbrev").alias("t"), pl.col("home_id").alias("i")),
                           live.table.select(pl.col("away_abbrev").alias("t"), pl.col("away_id").alias("i"))]).unique().iter_rows())
     per, _ = sd.goalie_usage(proc)
     avg = float(g_last.select((pl.col("home_final") + pl.col("away_final")).mean()).item() / 2)
-    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named,
+    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named, "snapshot_stamp": stamp,
             "names": dict(snap.select("player_id", "name").iter_rows())}
 
 
-def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict) -> tuple[tuple, int, dict]:
+def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | None = None) -> tuple[tuple, int, dict]:
     """Lineup (previous game's, or the published roster's top 12 forwards and 6 defensemen by last season's ice time if the team has not played), starting goalie, and notes."""
     live, snap, season, out_set = ctx["live"], ctx["snap"], ctx["season"], ctx["out_set"]
     tg = live.table.filter((pl.col("home_id") == tid) | (pl.col("away_id") == tid)).sort("date", "game_id")
@@ -137,19 +137,44 @@ def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict) -> tuple[tupl
         lu_ids = r["player_id"].to_numpy().astype(np.int64)
         lu_min = np.where(r["m"].to_numpy() > 0, r["m"].to_numpy(), np.where(r["pos_group"].to_numpy() == "D", 19.0, 14.0))
         b2b = 0.0
-    keep = ~np.isin(lu_ids, list(out_set))
-    cand = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") == "G") & ~pl.col("player_id").is_in(list(out_set))).select(pl.col("player_id").alias("goalie"))
+    # unavailable players: the manual overrides plus the day's injury list; their places are filled from the published roster by last season's ice time
+    news = news or {}
+    out_all = set(out_set) | set(news.get("out_ids", ()))
+    on_team = set(snap.filter(pl.col("team") == ab)["player_id"].to_list())
+    if on_team:                                                     # traded, waived or assigned since his last game: no longer on the published roster
+        out_all |= {int(x) for x in lu_ids.tolist() if int(x) not in on_team}
+    keep = ~np.isin(lu_ids, list(out_all))
+    removed = [int(x) for x in lu_ids[~keep]]
+    lu_ids, lu_min = lu_ids[keep], lu_min[keep]
+    pos, tl = ctx["pri"].pos, ctx["pri"].toi_last[season]
+    bench = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") != "G") & ~pl.col("player_id").is_in(list(out_all | set(lu_ids.tolist())))).with_columns(
+        pl.col("player_id").replace_strict(tl, default=0.0, return_dtype=pl.Float64).alias("m")).sort("m", descending=True)
+    added = []
+    for grp, want, dflt in (("F", 12, 14.0), ("D", 6, 19.0)):
+        have = sum(1 for x in lu_ids.tolist() if pos.get(x, "F") == grp)
+        for r in bench.filter(pl.col("pos_group") == grp).head(max(want - have, 0)).iter_rows(named=True):
+            lu_ids, lu_min = np.append(lu_ids, r["player_id"]), np.append(lu_min, r["m"] if r["m"] > 0 else dflt)
+            added.append(int(r["player_id"]))
+    cand = snap.filter((pl.col("team") == ab) & (pl.col("pos_group") == "G") & ~pl.col("player_id").is_in(list(out_all))).select(pl.col("player_id").alias("goalie"))
     per = ctx["per"]
     w = (cand.join(per.filter(pl.col("season") == season - 1).select("goalie", pl.col("shots").alias("s1")), on="goalie", how="left").join(per.filter(pl.col("season") == season - 2).select("goalie", pl.col("shots").alias("s2")), on="goalie", how="left")
          .with_columns((pl.col("s1").fill_null(0) + 0.5 * pl.col("s2").fill_null(0)).alias("w")).sort(["w", "goalie"], descending=[True, False]))
-    gk = goalies.get(ab) or (int(w["goalie"][0]) if w.height else prev_gk)
+    listed = news.get("goalie_id")
+    if ab in goalies:                                              # a manual override outranks the feed
+        gk, src = goalies[ab], "override"
+    elif listed and listed not in out_all:
+        gk, src = listed, f"lineup feed ({news.get('goalie_status')})"
+    else:
+        gk, src = (int(w["goalie"][0]) if w.height else prev_gk), "most prior work"
     nm = ctx["names"]
-    info = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "goalie_source": "override" if ab in goalies else "most prior work", "previous_game_goalie": nm.get(prev_gk, str(prev_gk)) if prev_gk else None,
-            "games_played": tg.height, "lineup_source": "previous game" if tg.height else "published roster", "b2b": b2b}
-    return (lu_ids[keep], lu_min[keep]), gk, info
+    info = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "goalie_source": src, "previous_game_goalie": nm.get(prev_gk, str(prev_gk)) if prev_gk else None,
+            "games_played": tg.height, "lineup_source": ("previous game" if tg.height else "published roster") + (" + injury feed" if news else ""), "b2b": b2b,
+            "removed": [nm.get(x, str(x)) for x in removed], "added": [nm.get(x, str(x)) for x in added], "listed_out": len(news.get("out_names", [])), "unmatched_out": news.get("unmatched", []),
+            "questionable": news.get("questionable", [])}
+    return (lu_ids.astype(np.int64), lu_min), gk, info
 
 
-def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None) -> dict:
+def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None, news: dict | None = None) -> dict:
     live, season = ctx["live"], ctx["season"]
     goalies = {**ctx["named"], **(goalies or {})}
     if home not in ctx["ids"] or away not in ctx["ids"]:
@@ -158,7 +183,7 @@ def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: 
     day = pl.Series([date]).str.to_date("%Y-%m-%d")[0] if date else live.table["date"].max()
     fake, info = -1, {}
     for tid, ab in ((hid, home), (aid, away)):
-        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies)
+        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies, (news or {}).get(ab))
         live.goalies[(fake, tid)] = [(gk, 0.0, 0.0)]
     row = pl.DataFrame({"game_id": [fake], "season": [season], "date": [day], "home_id": [hid], "away_id": [aid], "home_abbrev": [home], "away_abbrev": [away], "gd": [0.0], "xgd": [0.0], "home_win": [0.0],
                         "b2b_home": [info[home]["b2b"]], "b2b_away": [info[away]["b2b"]]}, schema=live.table.schema)

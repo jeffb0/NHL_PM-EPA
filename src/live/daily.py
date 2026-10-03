@@ -13,15 +13,17 @@ from datetime import UTC, date, datetime, timedelta
 import requests
 
 from src.config import ROOT
+from src.live import lineups as ln
 from src.live import odds as od
 from src.live import predict as lp
 
 log = logging.getLogger("live")
 LOGS = ROOT / "data/live/logs"
 F_COLS = ["made_utc", "game_id", "game_date", "start_utc", "away", "home", "p_home", "p_away", "exp_goals_home", "exp_goals_away", "model_mu", "home_goalie", "home_goalie_source", "away_goalie", "away_goalie_source",
-          "home_lineup_source", "away_lineup_source", "home_games", "away_games", "completed_games", "model"]
+          "home_lineup_source", "away_lineup_source", "home_games", "away_games", "completed_games", "model",
+          "home_removed", "away_removed", "home_added", "away_added", "home_questionable", "away_questionable", "unmatched_out", "roster_snapshot"]
 O_COLS = ["captured_utc", "game_id", "game_date", "away", "home", "book", "market", "side", "line", "american", "source"]
-MODEL = "game model P, frozen 2026-10-03 (docs/gamemodel; original rate model)"
+MODEL = "game model P, frozen 2026-10-03 (docs/gamemodel; original rate model); inputs v2: daily rosters, injury list and listed starting goalies"
 
 
 def slate(day: str) -> list[dict]:
@@ -32,6 +34,15 @@ def slate(day: str) -> list[dict]:
 
 def _append(path, cols: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():                                              # a log written with fewer columns is rewritten once with the new header (old rows keep their values; new columns are blank)
+        with path.open(newline="", encoding="utf-8") as fh:
+            rd = csv.DictReader(fh)
+            if rd.fieldnames != cols:
+                old = list(rd)
+                with path.open("w", newline="", encoding="utf-8") as out:
+                    w = csv.DictWriter(out, fieldnames=cols, extrasaction="ignore")
+                    w.writeheader()
+                    w.writerows(old)
     new = not path.exists()
     with path.open("a", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=cols)
@@ -45,7 +56,18 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     if update:
         from src.live.update import run as live_update
         live_update(season)
+    if update:
+        from src.ingestion.rosters_next import main as roster_snapshot
+        roster_snapshot(season)                                    # today's published rosters: trades, call-ups and assignments
     ctx = lp.prepare(season)
+    snap = ctx["snap"]
+    roster: dict = {}
+    for team, name, pid in snap.select("team", "name", "player_id").iter_rows():
+        roster.setdefault(team, {})[ln.norm(name)] = pid
+    feed = {}
+    for tomorrow in (False, True):
+        for g in ln.fetch(tomorrow):
+            feed[(g["away"], g["home"])] = ln.resolve(g, roster)
     now = datetime.now(UTC)
     stamp = now.isoformat(timespec="seconds")
     nxt = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
@@ -56,17 +78,21 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
         if started:
             skipped.append(g["game_id"])
             continue
-        f = lp.forecast(ctx, g["away"], g["home"], g["game_date"])
+        news = feed.get((g["away"], g["home"]))
+        f = lp.forecast(ctx, g["away"], g["home"], g["game_date"], news=news)
         th, ta = f["teams"][g["home"]], f["teams"][g["away"]]
         f_rows.append({"made_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "start_utc": g["start_utc"], "away": g["away"], "home": g["home"], "p_home": round(f["p_home_win"], 5), "p_away": round(f["p_away_win"], 5),
                        "exp_goals_home": round(f["expected_goals_home"], 3), "exp_goals_away": round(f["expected_goals_away"], 3), "model_mu": round(f["model_mu"], 4), "home_goalie": th["goalie"], "home_goalie_source": th["goalie_source"],
                        "away_goalie": ta["goalie"], "away_goalie_source": ta["goalie_source"], "home_lineup_source": th["lineup_source"], "away_lineup_source": ta["lineup_source"], "home_games": th["games_played"], "away_games": ta["games_played"],
-                       "completed_games": f["completed_games_this_season"], "model": MODEL})
+                       "completed_games": f["completed_games_this_season"], "model": MODEL, "home_removed": "; ".join(th["removed"]), "away_removed": "; ".join(ta["removed"]), "home_added": "; ".join(th["added"]),
+                       "away_added": "; ".join(ta["added"]), "home_questionable": "; ".join(th["questionable"]), "away_questionable": "; ".join(ta["questionable"]),
+                       "unmatched_out": "; ".join(th["unmatched_out"] + ta["unmatched_out"]), "roster_snapshot": ctx["snapshot_stamp"]})
         prices, url = od.fetch(g["away"], g["home"])
         o_rows += [{"captured_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "away": g["away"], "home": g["home"], **p, "source": url} for p in prices]
     _append(LOGS / "forecast_log.csv", F_COLS, f_rows)
     _append(LOGS / "odds_log.csv", O_COLS, o_rows)
     with_odds = len({r["game_id"] for r in o_rows})
+    log.info("lineup feed matched %d of %d games", sum(1 for g in games if (g["away"], g["home"]) in feed), len(games))
     log.info("logged %d forecasts (%d with prices) for %s and %s; %d games already started", len(f_rows), with_odds, day, nxt, len(skipped))
     return {"forecasts": f_rows, "odds_rows": len(o_rows), "games_with_odds": with_odds, "skipped": skipped}
 

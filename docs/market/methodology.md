@@ -54,3 +54,8 @@ this is analysis of a model, not betting advice.
 1. **2026-10-03, before any game was scored: source-error guard.** The first capture showed one book (BetMGM, FLA at ANA) with the sides apparently reversed (+154 / −190 against −127 to −146 / +108 to +122 at six other books).
    A book whose margin-free home probability is more than 8 percentage points from the median of all listed books for that game is dropped from the consensus and from the paper-bet prices. The raw rows stay in the log.
 2. **2026-10-03: first capture was made in the afternoon**, a few hours before the first games, not in the morning.
+3. **2026-10-03, before any game was scored: inputs v2 (model unchanged).** At the model owner's request each run now (a) snapshots the published rosters, (b) reads the RotoWire lineups page for each game's listed starting goalie (confirmed or expected)
+   and injury list, (c) removes from a team's previous lineup anyone listed out, injured-reserve or suspended, anyone in `roster_overrides.json`, and anyone no longer on the published roster, filling to 12 forwards and 6 defensemen from the roster by last season's ice time,
+   and (d) uses the listed starter unless a manual override names one. Day-to-day and game-time-decision players stay in. The forecast log records the goalie source, the players removed and added, and names that could not be matched.
+   The rating model and its hyperparameters are unchanged; the `model` column marks rows made with these inputs. The 18 forecasts logged at 20:52 UTC on 2026-10-03 used the earlier inputs and are superseded by the 20:59 UTC run (the last before puck drop is the one scored).
+4. **Schedule:** from 2026-10-04 the run is scheduled daily at 12:00 Eastern, so prices are midday, not morning.
