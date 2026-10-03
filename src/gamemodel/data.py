@@ -64,13 +64,13 @@ class Priors:
     home_adv: float         # mean home margin (blend-free: goals) in 2017-2018
 
 
-def build_priors(proc, cfg, seasons: list[int], games: Games, yp: pl.DataFrame | None = None, kappa: dict | None = None) -> Priors:
+def build_priors(proc, cfg, seasons: list[int], games: Games, yp: pl.DataFrame | None = None, kappa: dict | None = None, resid: pl.DataFrame | None = None) -> Priors:
     """With ``yp`` (docs/prospects) the rate model includes the pre-NHL columns; with ``kappa`` (docs/possession) the possession rate is rescaled by position."""
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
     p = rescale(pd_.panel(proc, roll), kappa)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
     res = sd.results(proc)
-    resid = cd.team_residual(proc, p, res)
+    resid = cd.team_residual(proc, p, res) if resid is None else resid      # an override (season, team, rho) replaces the lump (docs/residual)
     posdf = pl.read_parquet(proc / "players.parquet").select(pl.col("player_id").cast(pl.Int64), pl.when(pl.col("position") == "D").then(pl.lit("D")).otherwise(pl.lit("F")).alias("pos_group"))
     pos = dict(posdf.iter_rows())
     pg = pl.read_parquet(proc / "player_game.parquet", columns=["player_id", "season", "toi_all"]).filter(pl.col("toi_all") > 0)

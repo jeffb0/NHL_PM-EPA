@@ -87,7 +87,7 @@ def share_error(alloc: pl.DataFrame, p: pl.DataFrame, T: int, ab: pl.DataFrame) 
 
 
 # ---------------------------------------------------------------- build and evaluate
-def build(proc, cfg, seasons: list[int], yp: pl.DataFrame | None = None, kappa: dict | None = None) -> tuple[pl.DataFrame, dict]:
+def build(proc, cfg, seasons: list[int], yp: pl.DataFrame | None = None, kappa: dict | None = None, resid: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
     p = rescale(pd_.panel(proc, roll), kappa)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
@@ -95,7 +95,7 @@ def build(proc, cfg, seasons: list[int], yp: pl.DataFrame | None = None, kappa: 
     sk, gk = sd.openers(proc)
     per, lg = sd.goalie_usage(proc)
     rates = pl.read_parquet(proc / "gk_rolling_rates.parquet")
-    resid = team_residual(proc, p, res)
+    resid = team_residual(proc, p, res) if resid is None else resid
     M = pf.spec(yp)
     fr_min = pd_.design_frame(p, bio, 1)
     fr_val = pf.with_yp(pd_.design_frame(p, bio, 1, floor=pr.REVISED_FLOOR), yp)
@@ -193,10 +193,10 @@ def decide(z: float, sound: bool) -> bool:
     return False
 
 
-def assemble(proc, cfg, yp: pl.DataFrame | None = None, kappa: dict | None = None) -> tuple[pl.DataFrame, dict]:
+def assemble(proc, cfg, yp: pl.DataFrame | None = None, kappa: dict | None = None, resid: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
     """Team-season table with every candidate's inputs. With ``yp`` (docs/prospects) or ``kappa`` (docs/possession) the skater sums use the modified rate model, and M1's sum is rebuilt from them."""
     tab = pl.read_parquet(proc / "standings_table.parquet")
-    cand, diag = build(proc, cfg, sr.FORECAST_SEASONS, yp, kappa)
+    cand, diag = build(proc, cfg, sr.FORECAST_SEASONS, yp, kappa, resid)
     df = tab.select("season", "team_id", "team", "gp", "pts82", "gd82", "S", "G", "SG_dm").join(cand.drop("team"), on=["season", "team_id"], how="left", suffix="_c")
     chk = df.filter(pl.col("S").is_not_null())
     diag["max_abs_S_diff_vs_backtest"] = float((chk["S"] - chk["S_c"]).abs().max())          # zero without yp: the reference M1 is reproduced exactly

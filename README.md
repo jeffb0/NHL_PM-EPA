@@ -190,6 +190,10 @@ Pre-registered ([methodology](docs/chemistry/methodology.md), [results](reports/
 
 Pre-registered ([methodology](docs/possession/methodology.md), [results](reports/possession/narrative.md)). Tuning on 2019–2020 selected no rescaling of the possession component, so nothing is implemented. Declared context variants (×1.5 for both positions; ×3 for defensemen) do slightly better on 2021–2025 (z = 2.7–3.5, about 0.0002 log loss, 3% of the preseason prior's gap to a team rating), which is encouraging but not a clean test. `python -m src.possession.run`.
 
+### What the team residual is made of
+
+Pre-registered ([methodology](docs/residual/methodology.md), [results](reports/residual/narrative.md), `data/outputs/team_residual_buckets.csv`). An exact accounting of each team's goal differential against the player components. **45% of the unexplained part is 5v5 play that the components rank correctly (r = 0.85) but under-scale (slope 1.62); it is stable (0.65 year over year) and travels with players (carry 0.94 ± 0.15).** Finishing, special teams and empty-net/other parts carry at only 0.2–0.4. A bucket-split prior improves the preseason game model by 0.0014 log loss (z = 1.80, not adopted). `python -m src.residual.run`.
+
 ## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
 
 Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.
