@@ -94,19 +94,19 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
     return pri, snap, stamp
 
 
-def overrides() -> tuple[set, dict]:
-    """Manual roster knowledge (data/external/roster_overrides.json): players who will not play, and named starting goalies by team."""
+def overrides() -> tuple[set, dict, dict]:
+    """Manual roster knowledge (data/external/roster_overrides.json): players who will not play, named starting goalies and named backups by team."""
     path = ROOT / "data/external/roster_overrides.json"
     if not path.exists():
-        return set(), {}
+        return set(), {}, {}
     o = json.loads(path.read_text(encoding="utf-8"))
-    return {int(u["player_id"]) for u in o.get("unavailable", [])}, {k: int(v) for k, v in o.get("starters", {}).items()}
+    return {int(u["player_id"]) for u in o.get("unavailable", [])}, {k: int(v) for k, v in o.get("starters", {}).items()}, {k: int(v) for k, v in o.get("backups", {}).items()}
 
 
 def prepare(season: int = 2026) -> dict:
     """Everything that does not depend on the game: the logistic step and margin calibration from history, this season's games and preseason ratings."""
     os.environ.pop("PM_EPA_CONFIG", None)                          # the historical tables, not the live ones, feed the priors
-    out_set, named = overrides()
+    out_set, named, backups = overrides()
     cfg = load_config()
     proc, met = cfg.path(cfg.data.processed_dir), cfg.path(cfg.data.metrics_dir)
     hp = json.loads((met / "game_model.json").read_text())["tuned"]["P"]
@@ -130,11 +130,11 @@ def prepare(season: int = 2026) -> dict:
                           live.table.select(pl.col("away_abbrev").alias("t"), pl.col("away_id").alias("i"))]).unique().iter_rows())
     per, _ = sd.goalie_usage(proc)
     avg = float(g_last.select((pl.col("home_final") + pl.col("away_final")).mean()).item() / 2)
-    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named, "snapshot_stamp": stamp, "early": early,
+    return {"season": season, "kw": kw, "hp": hp, "beta": beta, "cal": cal, "live": live, "pri": pri, "snap": snap, "ids": ids, "per": per, "avg": avg, "out_set": out_set, "named": named, "backups": backups, "snapshot_stamp": stamp, "early": early,
             "names": dict(snap.select("player_id", "name").iter_rows())}
 
 
-def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | None = None) -> tuple[tuple, int, dict]:
+def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | None = None, force_b2b: bool = False) -> tuple[tuple, int, dict]:
     """Lineup (previous game's, or the published roster's top 12 forwards and 6 defensemen by last season's ice time if the team has not played), starting goalie, and notes."""
     live, snap, season, out_set = ctx["live"], ctx["snap"], ctx["season"], ctx["out_set"]
     tg = live.table.filter((pl.col("home_id") == tid) | (pl.col("away_id") == tid)).sort("date", "game_id")
@@ -151,6 +151,8 @@ def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | 
         lu_ids = r["player_id"].to_numpy().astype(np.int64)
         lu_min = np.where(r["m"].to_numpy() > 0, r["m"].to_numpy(), np.where(r["pos_group"].to_numpy() == "D", 19.0, 14.0))
         b2b = 0.0
+    if force_b2b:                                                   # the team plays the day before, in a game not yet completed
+        b2b = 1.0
     # unavailable players: the manual overrides plus the day's injury list; their places are filled from the published roster by last season's ice time
     news = news or {}
     out_all = set(out_set) | set(news.get("out_ids", ()))
@@ -174,7 +176,19 @@ def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | 
     w = (cand.join(per.filter(pl.col("season") == season - 1).select("goalie", pl.col("shots").alias("s1")), on="goalie", how="left").join(per.filter(pl.col("season") == season - 2).select("goalie", pl.col("shots").alias("s2")), on="goalie", how="left")
          .with_columns((pl.col("s1").fill_null(0) + 0.5 * pl.col("s2").fill_null(0)).alias("w")).sort(["w", "goalie"], descending=[True, False]))
     listed = news.get("goalie_id")
-    if ab in goalies:                                              # a manual override outranks the feed
+    order = [int(x) for x in w["goalie"].to_list()]
+    # second night of a back-to-back: the backup starts unless a starter is confirmed (model owner's rule, 2026-10-04). "Yesterday's starter" is the goalie who played,
+    # or, when yesterday's game is not completed yet, the team's usual starter.
+    usual = goalies.get(ab) or (order[0] if order else prev_gk)
+    yesterday = usual if force_b2b else prev_gk
+    backup = ctx.get("backups", {}).get(ab)
+    if backup is None or backup == yesterday or backup in out_all:
+        backup = next((x for x in order if x != yesterday), None)
+    if listed and listed not in out_all and news.get("goalie_status") == "confirmed":      # a confirmed starter is a fact: it outranks every rule
+        gk, src = listed, "lineup feed (confirmed)"
+    elif b2b and backup is not None:
+        gk, src = backup, "back-to-back rule (backup)"
+    elif ab in goalies:                                            # a manual override outranks an expected starter
         gk, src = goalies[ab], "override"
     elif listed and listed not in out_all:
         gk, src = listed, f"lineup feed ({news.get('goalie_status')})"
@@ -188,7 +202,7 @@ def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | 
     return (lu_ids.astype(np.int64), lu_min), gk, info
 
 
-def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None, news: dict | None = None) -> dict:
+def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None, news: dict | None = None, force_b2b: set | None = None) -> dict:
     live, season = ctx["live"], ctx["season"]
     goalies = {**ctx["named"], **(goalies or {})}
     if home not in ctx["ids"] or away not in ctx["ids"]:
@@ -197,7 +211,7 @@ def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: 
     day = pl.Series([date]).str.to_date("%Y-%m-%d")[0] if date else live.table["date"].max()
     fake, info = -1, {}
     for tid, ab in ((hid, home), (aid, away)):
-        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies, (news or {}).get(ab))
+        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies, (news or {}).get(ab), ab in (force_b2b or ()))
         live.goalies[(fake, tid)] = [(gk, 0.0, 0.0)]
     row = pl.DataFrame({"game_id": [fake], "season": [season], "date": [day], "home_id": [hid], "away_id": [aid], "home_abbrev": [home], "away_abbrev": [away], "gd": [0.0], "xgd": [0.0], "home_win": [0.0],
                         "b2b_home": [info[home]["b2b"]], "b2b_away": [info[away]["b2b"]]}, schema=live.table.schema)

@@ -73,7 +73,9 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     now = datetime.now(UTC)
     stamp = now.isoformat(timespec="seconds")
     nxt = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
-    games = [g for d in (day, nxt) for g in slate(d)]
+    today = slate(day)
+    games = today + slate(nxt)
+    plays_today = {g["away"] for g in today} | {g["home"] for g in today}        # these teams are on a back-to-back in tomorrow's games
     f_rows, o_rows, skipped = [], [], []
     for g in games:
         started = g["state"] not in ("FUT", "PRE") or (g["start_utc"] and datetime.fromisoformat(g["start_utc"].replace("Z", "+00:00")) <= now)
@@ -81,7 +83,7 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
             skipped.append(g["game_id"])
             continue
         news = feed.get((g["away"], g["home"]))
-        f = lp.forecast(ctx, g["away"], g["home"], g["game_date"], news=news)
+        f = lp.forecast(ctx, g["away"], g["home"], g["game_date"], news=news, force_b2b=plays_today if g["game_date"] == nxt else None)
         th, ta = f["teams"][g["home"]], f["teams"][g["away"]]
         f_rows.append({"made_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "start_utc": g["start_utc"], "away": g["away"], "home": g["home"], "p_home": round(f["p_home_win"], 5), "p_away": round(f["p_away_win"], 5),
                        "exp_goals_home": round(f["expected_goals_home"], 3), "exp_goals_away": round(f["expected_goals_away"], 3), "model_mu": round(f["model_mu"], 4), "home_goalie": th["goalie"], "home_goalie_source": th["goalie_source"],

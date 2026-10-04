@@ -1,9 +1,26 @@
 {
   "_note": "Manual roster knowledge the NHL roster feed does not carry. Read by src/live/predict.py and src/standings/next.py.",
   "unavailable": [
-    {"player_id": 8476945, "name": "Connor Hellebuyck", "team": "WPG", "since": "2026-10-03", "reason": "suspended indefinitely pending a trade; treated as never playing for WPG again (model owner, 2026-10-03)"}
-    ,{"player_id": 8477946, "name": "Dylan Larkin", "team": "DET", "since": "2026-10-03", "reason": "sitting out pending a trade request (model owner, 2026-10-03); treated as not playing for DET"}
+    {
+      "player_id": 8476945,
+      "name": "Connor Hellebuyck",
+      "team": "WPG",
+      "since": "2026-10-03",
+      "reason": "suspended indefinitely pending a trade; treated as never playing for WPG again (model owner, 2026-10-03)"
+    },
+    {
+      "player_id": 8477946,
+      "name": "Dylan Larkin",
+      "team": "DET",
+      "since": "2026-10-03",
+      "reason": "sitting out pending a trade request (model owner, 2026-10-03); treated as not playing for DET"
+    }
   ],
-  "starters": {"WPG": 8479973},
-  "_starters_note": "WPG: Stuart Skinner (8479973) starts, Clay Stevenson (8483532) backs up (model owner, 2026-10-03)."
+  "starters": {
+    "WPG": 8479973
+  },
+  "_starters_note": "WPG: Stuart Skinner (8479973) starts, Clay Stevenson (8483532) backs up (model owner, 2026-10-03). Rule (model owner, 2026-10-04): on the second night of a back-to-back the backup starts unless a starter is confirmed.",
+  "backups": {
+    "WPG": 8483532
+  }
 }
