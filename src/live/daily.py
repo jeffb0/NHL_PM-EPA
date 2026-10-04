@@ -98,7 +98,12 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     with_odds = len({r["game_id"] for r in o_rows})
     log.info("lineup feed matched %d of %d games", sum(1 for g in games if (g["away"], g["home"]) in feed), len(games))
     log.info("logged %d forecasts (%d with prices) for %s and %s; %d games already started", len(f_rows), with_odds, day, nxt, len(skipped))
-    return {"forecasts": f_rows, "odds_rows": len(o_rows), "games_with_odds": with_odds, "skipped": skipped}
+    # score finished games against the market, then lock today's picks and settle yesterday's (docs/market/picks.md)
+    from src.live import picks as pk
+    from src.live import score as sc
+    sc.run()
+    ledger = pk.run(day)
+    return {"forecasts": f_rows, "odds_rows": len(o_rows), "games_with_odds": with_odds, "skipped": skipped, "picks": ledger}
 
 
 if __name__ == "__main__":
