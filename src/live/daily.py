@@ -103,6 +103,8 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     from src.live import score as sc
     sc.run()
     ledger = pk.run(day)
+    from src.live import digest
+    digest.run(day)                                                # reports/live/daily_digest.md: the summary that is emailed
     return {"forecasts": f_rows, "odds_rows": len(o_rows), "games_with_odds": with_odds, "skipped": skipped, "picks": ledger}
 
 
