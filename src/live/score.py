@@ -75,6 +75,11 @@ def summarize(d: pl.DataFrame) -> dict:
     return out
 
 
+def _dec(american: int) -> float:
+    """Decimal odds for display."""
+    return 1.0 + (american / 100.0 if american > 0 else 100.0 / -american)
+
+
 def report(d: pl.DataFrame, s: dict) -> str:
     L = ["# Model against the betting market — running log", "", "Protocol and thresholds: [docs/market/methodology.md](../../docs/market/methodology.md). Morning prices (not closing lines) from FanDuel, DraftKings and BetMGM, margin removed; "
          "forecasts logged before each game. **Analysis of a model, not betting advice.**", "", f"Games logged: {s['logged']}. Scored: {s['scored']}. Pending: {s['pending']}.", ""]
@@ -96,12 +101,12 @@ def report(d: pl.DataFrame, s: dict) -> str:
         L.append("")
     pend = d.filter(pl.col("home_win").is_null()).sort("start_utc")
     if pend.height:
-        L += ["## Pending games", "", "| date | game | model home | market home | difference | best prices (away / home) | paper bet | goalies assumed (away / home) |", "|---|---|---|---|---|---|---|---|"]
+        L += ["## Pending games", "", "| date | game | model home | market home | difference | best decimal odds (away / home) | paper bet | goalies assumed (away / home) |", "|---|---|---|---|---|---|---|---|"]
         for r in pend.iter_rows(named=True):
             if r["mkt_home"] is None:
                 L.append(f"| {r['game_date']} | {r['away']} at {r['home']} | {r['p_home']:.1%} | n/a | | | | {r['away_goalie']} / {r['home_goalie']} |")
             else:
-                L.append(f"| {r['game_date']} | {r['away']} at {r['home']} | {r['p_home']:.1%} | {r['mkt_home']:.1%} | {r['p_home'] - r['mkt_home']:+.1%} | {r['best_away']:+d} / {r['best_home']:+d} | {r['bet'] or ''} | {r['away_goalie']} / {r['home_goalie']} |")
+                L.append(f"| {r['game_date']} | {r['away']} at {r['home']} | {r['p_home']:.1%} | {r['mkt_home']:.1%} | {r['p_home'] - r['mkt_home']:+.1%} | {_dec(r['best_away']):.2f} / {_dec(r['best_home']):.2f} | {r['bet'] or ''} | {r['away_goalie']} / {r['home_goalie']} |")
         L.append("")
     return "\n".join(L)
 

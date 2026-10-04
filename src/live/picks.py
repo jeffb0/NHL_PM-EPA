@@ -112,12 +112,18 @@ def summary(s: pl.DataFrame) -> dict:
     return out
 
 
+def decimal(american: int) -> float:
+    """Decimal odds (total return per unit staked): -125 -> 1.80, +230 -> 3.30."""
+    return 1.0 + payout(american)
+
+
 def fmt(a: int) -> str:
-    return f"{a:+d}"
+    """Prices are shown as decimal odds (the owner's preference); the logs keep the American price as captured."""
+    return f"{decimal(a):.2f}"
 
 
 def report(s: pl.DataFrame, m: dict, today: str) -> str:
-    L = ["# Picks ledger", "", "Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 units per pick; prices as locked at the daily run. **Bookkeeping for the owner's own wagers, not advice; the model has no demonstrated edge over the market.**", ""]
+    L = ["# Picks ledger", "", "Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 units per pick; decimal odds as locked at the daily run. **Bookkeeping for the owner's own wagers, not advice; the model has no demonstrated edge over the market.**", ""]
     if m.get("settled"):
         ci = f" (95% interval {m['roi_lo95']:+.0%} to {m['roi_hi95']:+.0%})" if m.get("roi_lo95") is not None else ""
         L += [f"**Season to date: {m['profit']:+.2f} units (${m['profit']:+.2f}) on {m['staked']:.0f} units staked; record {m['won']}–{m['lost']}; return {m['roi']:+.1%} per unit{ci}.** "
@@ -126,7 +132,7 @@ def report(s: pl.DataFrame, m: dict, today: str) -> str:
         L += [f"No settled picks yet. {m['pending']} pick(s) pending ({m['pending_units']} units).", ""]
     pend = s.filter(pl.col("result").is_null())
     if pend.height:
-        L += ["## Locked, not yet played", "", "| date | pick | units | price | book | model | market | gap over break-even |", "|---|---|---|---|---|---|---|---|"]
+        L += ["## Locked, not yet played", "", "| date | pick | units | odds (decimal) | book | model | market | gap over break-even |", "|---|---|---|---|---|---|---|---|"]
         L += [f"| {r['game_date']} | **{r['pick']}** over {r['against']} | {r['units']} (${r['units']}) | {fmt(r['american'])} | {r['book']} | {r['p_model']:.1%} | {r['p_market']:.1%} | {r['edge_vs_breakeven']:+.1%} |" for r in pend.iter_rows(named=True)]
         L.append("")
     done = s.filter(pl.col("result").is_not_null()).sort("start_utc", descending=True)
@@ -134,7 +140,7 @@ def report(s: pl.DataFrame, m: dict, today: str) -> str:
         by = done.group_by("game_date").agg(pl.len().alias("picks"), pl.col("units").sum(), pl.col("profit").sum(), (pl.col("result") == "won").sum().alias("won")).sort("game_date", descending=True)
         L += ["## By day", "", "| date | picks | won | units staked | profit |", "|---|---|---|---|---|"]
         L += [f"| {r['game_date']} | {r['picks']} | {r['won']} | {r['units']} | {r['profit']:+.2f} |" for r in by.head(30).iter_rows(named=True)]
-        L += ["", "## Settled picks (latest first)", "", "| date | pick | units | price | book | score (away–home) | result | profit |", "|---|---|---|---|---|---|---|---|"]
+        L += ["", "## Settled picks (latest first)", "", "| date | pick | units | odds (decimal) | book | score (away–home) | result | profit |", "|---|---|---|---|---|---|---|---|"]
         L += [f"| {r['game_date']} | {r['pick']} over {r['against']} | {r['units']} | {fmt(r['american'])} | {r['book']} | {r['away']} {r['away_final']}–{r['home_final']} {r['home']} ({r['last_period_type']}) | {r['result']} | {r['profit']:+.2f} |"
               for r in done.head(60).iter_rows(named=True)]
         L.append("")
@@ -170,7 +176,7 @@ def run(day: str | None = None) -> dict:
     chart(s)
     (ROOT / "reports/live").mkdir(parents=True, exist_ok=True)
     (ROOT / "reports/live/picks.md").write_text(report(s, m, day), encoding="utf-8")
-    s.write_csv(LOGS / "picks_settled.csv")
+    s.with_columns((1.0 + pl.when(pl.col("american") > 0).then(pl.col("american") / 100.0).otherwise(100.0 / -pl.col("american"))).round(3).alias("decimal_odds")).write_csv(LOGS / "picks_settled.csv")
     log.info("picks: %d locked now; %d settled, %d pending; profit %s units", len(new), m.get("settled", 0), m["pending"], f"{m['profit']:+.2f}" if m.get("settled") else "n/a")
     return {"locked_now": new, **m}
 

@@ -1,8 +1,9 @@
-from src.live.picks import payout, units
+from src.live.picks import decimal, fmt, payout, units
 
 
 def test_payout():
     assert abs(payout(-125) - 0.8) < 1e-12 and abs(payout(230) - 2.3) < 1e-12
+    assert abs(decimal(-125) - 1.8) < 1e-12 and fmt(230) == "3.30" and fmt(-275) == "1.36" and fmt(100) == "2.00"
 
 
 def test_units_scale_with_the_gap_and_are_capped():

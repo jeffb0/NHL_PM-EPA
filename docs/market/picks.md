@@ -49,3 +49,5 @@ several hundred picks are needed before profit says anything about the model. Th
 ## 7. Change log
 
 *(any change to the sizing or locking rules is recorded here with its date; settled picks are never re-sized)*
+
+1. **2026-10-04: display in decimal odds.** At the owner's request prices are shown as decimal odds (total return per unit staked: 1.80 means a one-unit pick returns 1.80, a profit of 0.80) in the ledger report, the market report and the daily summary. The logs keep the American price as captured (`american`), and `picks_settled.csv` carries both. Sizing and settlement are unchanged.
