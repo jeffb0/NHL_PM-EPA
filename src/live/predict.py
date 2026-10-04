@@ -187,7 +187,7 @@ def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | 
     if listed and listed not in out_all and news.get("goalie_status") == "confirmed":      # a confirmed starter is a fact: it outranks every rule
         gk, src = listed, "lineup feed (confirmed)"
     elif b2b and backup is not None:
-        gk, src = backup, "back-to-back rule (backup)"
+        gk, src = backup, "back-to-back rule (rested goalie)"
     elif ab in goalies:                                            # a manual override outranks an expected starter
         gk, src = goalies[ab], "override"
     elif listed and listed not in out_all:
