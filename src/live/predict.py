@@ -23,6 +23,7 @@ from src.projection import model as pm
 from src.projection import run as pr
 from src.prospects import features as pf
 from src.prospects import hybrid as hy
+from src.scoreeffects import factors as sf
 from src.standings import candidates as cd
 from src.standings import data as sd
 from src.standings import forecast as fc
@@ -39,9 +40,14 @@ def live_games(season: int) -> gd_.Games:
     so = pl.col("last_period_type") == "SO"
     g = g.with_columns(pl.when(so).then(0).otherwise(pl.col("home_final") - pl.col("away_final")).cast(pl.Float64).alias("gd"), (pl.col("home_final") > pl.col("away_final")).cast(pl.Float64).alias("home_win"),
                        pl.col("game_date").str.to_date("%Y-%m-%d").alias("date"))
-    ev = pl.read_parquet(LIVE / "events.parquet", columns=["game_id", "event_idx", "player2"])
+    ev = pl.read_parquet(LIVE / "events.parquet", columns=["game_id", "event_idx", "player2", "period", "score_diff"])
     sh = pl.read_parquet(LIVE / "shots_xg.parquet").filter(pl.col("type").is_in(UNBLOCKED)).join(ev, on=["game_id", "event_idx"])
-    x = sh.group_by("game_id", "team_id").agg(pl.col("xg").sum())
+    flag, wp = ROOT / "reports/metrics/score_effects.json", ROOT / "data/outputs/score_effect_weights.csv"
+    if flag.exists() and wp.exists() and json.loads(flag.read_text()).get("implement"):      # docs/scoreeffects: 5v5 shots weighted by score state in the differential that updates ratings
+        sh = sf.apply(sh, pl.read_csv(wp)).with_columns(pl.col("xg_adj").alias("xg_update"))
+    else:
+        sh = sh.with_columns(pl.col("xg").alias("xg_update"))
+    x = sh.group_by("game_id", "team_id").agg(pl.col("xg_update").sum().alias("xg"))
     g = (g.join(x.rename({"team_id": "home_id", "xg": "xh"}), on=["game_id", "home_id"]).join(x.rename({"team_id": "away_id", "xg": "xa"}), on=["game_id", "away_id"]).with_columns((pl.col("xh") - pl.col("xa")).alias("xgd")))
     tg = pl.concat([g.select("game_id", "date", pl.col("home_id").alias("team_id")), g.select("game_id", "date", pl.col("away_id").alias("team_id"))]).sort("team_id", "date")
     tg = tg.with_columns(((pl.col("date") - pl.col("date").shift(1).over("team_id")).dt.total_days() == 1).fill_null(False).cast(pl.Float64).alias("b2b"))

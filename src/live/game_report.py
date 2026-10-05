@@ -13,6 +13,7 @@ import polars as pl
 
 from src.config import ROOT, load_config
 from src.live.update import live_config
+from src.scoreeffects import factors as sf
 from src.viz import style
 from src.viz.style import plt
 
@@ -28,7 +29,9 @@ def load(game_id: int) -> dict:
     names = pl.read_parquet(proc / "players.parquet").select("player_id", (pl.col("first_name").str.slice(0, 1) + ". " + pl.col("last_name")).alias("name"), "last_name", "position")
     ev = pl.read_parquet(proc / "events.parquet").filter(pl.col("game_id") == game_id)
     sh = (pl.read_parquet(proc / "shots_xg.parquet").filter((pl.col("game_id") == game_id) & pl.col("type").is_in(UNBLOCKED))
-          .join(ev.select("event_idx", "t_game", "period", "player2"), on="event_idx").join(names.select(pl.col("player_id").alias("player1"), "last_name"), on="player1", how="left").sort("t_game"))
+          .join(ev.select("event_idx", "t_game", "period", "player2", "score_diff"), on="event_idx").join(names.select(pl.col("player_id").alias("player1"), "last_name"), on="player1", how="left").sort("t_game"))
+    wp = ROOT / "data/outputs/score_effect_weights.csv"            # league score-state weights for 5v5 shots (docs/scoreeffects); without the file the adjusted figure equals the raw one
+    sh = sf.apply(sh, pl.read_csv(wp) if wp.exists() else pl.DataFrame(schema={"period": pl.Int64, "d": pl.Int64, "rate60": pl.Float64, "w": pl.Float64}))
     pg = pl.read_parquet(proc / "player_game.parquet").filter(pl.col("game_id") == game_id)
     return {"g": g, "ev": ev, "sh": sh, "pg": pg, "names": names}
 
@@ -43,7 +46,7 @@ def team_summary(d: dict) -> pl.DataFrame:
         gk = a.filter(~pl.col("empty_net"))
         who = (a.filter(pl.col("type").is_in(["shot-on-goal", "goal"]) & pl.col("player2").is_not_null())
                .join(d["names"].filter(pl.col("position") == "G").select(pl.col("player_id").alias("player2"), pl.col("name").alias("goalie")), on="player2", how="inner"))
-        rows.append({"team": ab, "goals": g["away_final"] if tid == g["away_id"] else g["home_final"], "xg": float(f["xg"].sum()), "xg_5v5": float(s5["xg"].sum()), "xg_pp": float(f.filter(pl.col("strength") == "PP")["xg"].sum()),
+        rows.append({"team": ab, "goals": g["away_final"] if tid == g["away_id"] else g["home_final"], "xg": float(f["xg"].sum()), "xg_score_adj": float(f["xg_adj"].sum()), "xg_5v5": float(s5["xg"].sum()), "xg_5v5_score_adj": float(s5["xg_adj"].sum()), "xg_pp": float(f.filter(pl.col("strength") == "PP")["xg"].sum()),
                      "xg_other": float(f.filter(~pl.col("strength").is_in(["5v5", "PP"]))["xg"].sum()), "shots_on_goal": int(f["type"].is_in(["shot-on-goal", "goal"]).sum()), "unblocked_attempts": f.height,
                      "goalie": " / ".join(who["goalie"].unique(maintain_order=True).to_list()) if who.height else None, "goalie_shots": who.height, "goalie_xg_faced": float(gk["xg"].sum()), "goalie_goals_against": int(gk["goal"].sum())})
     return pl.DataFrame(rows).with_columns((pl.col("goalie_xg_faced") - pl.col("goalie_goals_against")).alias("goalie_saved_above_expected"))
@@ -171,11 +174,13 @@ def takeaways(d: dict, ts: pl.DataFrame, pt: pl.DataFrame) -> str:
     win = a if a["goals"] > h["goals"] else h
     xw = a if a["xg"] > h["xg"] else h
     L = [f"# {a['team']} {a['goals']} at {h['team']} {h['goals']} ({g['last_period_type']}), {g['game_date']}", "",
-         "| team | goals | expected goals | 5v5 | power play | other | shots on goal | unblocked attempts |", "|---|---|---|---|---|---|---|---|"]
-    L += [f"| {r['team']} | {r['goals']} | {r['xg']:.2f} | {r['xg_5v5']:.2f} | {r['xg_pp']:.2f} | {r['xg_other']:.2f} | {r['shots_on_goal']} | {r['unblocked_attempts']} |" for r in (a, h)]
+         "| team | goals | expected goals | score-adjusted | 5v5 | 5v5 score-adjusted | power play | other | shots on goal | unblocked attempts |", "|---|---|---|---|---|---|---|---|---|---|"]
+    L += [f"| {r['team']} | {r['goals']} | {r['xg']:.2f} | {r['xg_score_adj']:.2f} | {r['xg_5v5']:.2f} | {r['xg_5v5_score_adj']:.2f} | {r['xg_pp']:.2f} | {r['xg_other']:.2f} | {r['shots_on_goal']} | {r['unblocked_attempts']} |" for r in (a, h)]
     L += ["", "## Takeaways", ""]
     L.append(f"* **{win['team']} won {max(a['goals'], h['goals'])}–{min(a['goals'], h['goals'])}; {xw['team']} had more expected goals ({xw['xg']:.2f} to {min(a['xg'], h['xg']):.2f}).** "
              f"At 5v5 it was {a['team']} {a['xg_5v5']:.2f}, {h['team']} {h['xg_5v5']:.2f}; on the power play {a['team']} {a['xg_pp']:.2f}, {h['team']} {h['xg_pp']:.2f}.")
+    L.append(f"* **Adjusted for the score:** {a['team']} {a['xg_score_adj']:.2f}, {h['team']} {h['xg_score_adj']:.2f} (5v5: {a['xg_5v5_score_adj']:.2f} to {h['xg_5v5_score_adj']:.2f}). "
+             "5v5 shots are re-weighted to what they would be worth at even score in the same period (league averages); the correction is small because at 5v5 the main effect is a trailing team's extra chances in the third period.")
     for r in (a, h):
         if r["goalie"]:
             L.append(f"* **{r['team']} goaltending:** {r['goalie']} faced {r['goalie_shots']} shots on goal; the unblocked attempts against were worth {r['goalie_xg_faced']:.2f} expected goals and {r['goalie_goals_against']} went in "

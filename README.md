@@ -208,6 +208,10 @@ Pre-registered ([methodology](docs/prospects/elite.md), [results](reports/prospe
 
 Pre-registered ([methodology](docs/prospects/hybrid.md), [results](reports/prospects/hybrid_narrative.md)). A thin-history player's rating is his prior plus an adjustment from his own games so far (ice time per game, puck value, individual expected goals, points, 5v5 on-ice expected goals), with weights learned from history at 2, 5, 10, 20 and 40 games. Full-season projections improve reliably from five games (z = 2.25 at 5, 2.64 at 10, 4.57 at 40; 6% to 18% of the prior's error removed); two games say almost nothing (z = 1.16); the game model is unchanged to slightly better (z = 0.60). The signal is mostly ice time and on-ice results, and the shifts are modest (about ±0.05 per 60). `python -m src.prospects.hybrid`.
 
+### Score-effects adjustment (adopted; small effect)
+
+Pre-registered ([methodology](docs/scoreeffects/methodology.md), [results](reports/scoreeffects/narrative.md)). 5v5 expected goals are re-weighted to even-score value by score state and period (league rates from earlier seasons). At 5v5 the effect is small except for teams trailing in the third period (10–11% more expected goals per minute); game differentials change by 0.03 goals on average. No gain for the player-rating game model (z = 0.39), a small gain for the team-rating benchmark (z = 2.84). Used in the in-season update of the forward forecasts and shown beside raw expected goals in game reports. `python -m src.scoreeffects.run`.
+
 ### Daily forecasts and the prospective market test
 
 Pre-registered protocol: [docs/market/methodology.md](docs/market/methodology.md). Once a day, before the first game:
