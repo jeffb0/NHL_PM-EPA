@@ -1,0 +1,3 @@
+team,goals,xg,xg_score_adj,xg_5v5,xg_5v5_score_adj,xg_pp,xg_other,shots_on_goal,unblocked_attempts,goalie,goalie_shots,goalie_xg_faced,goalie_goals_against,goalie_saved_above_expected
+PHI,1,3.645,3.618,1.978,1.952,1.092,0.574,29,41,J. Woll,26,2.483,2,0.483
+OTT,2,2.483,2.476,1.412,1.405,0.843,0.228,26,36,L. Ullmark,29,3.645,1,2.645

@@ -148,19 +148,24 @@ def report(s: pl.DataFrame, m: dict, today: str) -> str:
 
 
 def chart(s: pl.DataFrame) -> None:
-    d = s.filter(pl.col("result").is_not_null()).sort("start_utc", "game_id")
+    """Cumulative net profit by date (x: game date; y: units)."""
+    from datetime import date as _date
+    d = s.filter(pl.col("result").is_not_null()).group_by("game_date").agg(pl.col("profit").sum(), pl.col("units").sum(), pl.len().alias("n")).sort("game_date")
     if d.height == 0:
         return
-    cum = np.concatenate([[0.0], np.cumsum(d["profit"].to_numpy())])
+    days = [_date.fromisoformat(x) for x in d["game_date"].to_list()]
+    cum = np.cumsum(d["profit"].to_numpy())
     fig, ax = plt.subplots(figsize=(9, 4.2))
     ax.axhline(0, color=style.TEXT2, lw=1)
-    ax.step(np.arange(len(cum)), cum, where="post", color=style.SERIES[0])
-    ax.scatter([len(cum) - 1], [cum[-1]], color=style.SERIES[0], zorder=5)
-    ax.annotate(f"{cum[-1]:+.2f} units", (len(cum) - 1, cum[-1]), xytext=(8, 0), textcoords="offset points", va="center", fontweight="bold", color=style.SERIES[0])
-    ax.set_xlim(0, max(len(cum) - 1, 1) * 1.12)
-    ax.set_xlabel("settled picks, in order")
-    ax.set_ylabel("cumulative profit (units; 1 unit = $1)")
-    ax.set_title(f"Picks ledger: cumulative profit through {d['game_date'].max()} ({d.height} settled picks, {int(d['units'].sum())} units staked)")
+    ax.plot(days, cum, color=style.SERIES[0], marker="o", markersize=5)
+    ax.fill_between(days, 0, cum, where=cum >= 0, color=style.SERIES[2], alpha=0.15, interpolate=True)
+    ax.fill_between(days, 0, cum, where=cum < 0, color=style.SERIES[7], alpha=0.15, interpolate=True)
+    ax.annotate(f"{cum[-1]:+.2f} units", (days[-1], cum[-1]), xytext=(8, 0), textcoords="offset points", va="center", fontweight="bold", color=style.SERIES[0])
+    ax.set_xlabel("date")
+    ax.set_ylabel("net profit (units; 1 unit = $1)")
+    ax.margins(x=0.12)
+    fig.autofmt_xdate()
+    ax.set_title(f"Picks ledger: cumulative net profit through {d['game_date'].max()} ({int(d['n'].sum())} settled picks, {int(d['units'].sum())} units staked)")
     fig.tight_layout()
     style.save(fig, ROOT / "reports/live", "picks_profit")
 

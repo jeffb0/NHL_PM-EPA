@@ -1,5 +1,7 @@
 {
   "_note": "Manual roster knowledge the NHL roster feed does not carry. Read by src/live/predict.py and src/standings/next.py.",
+  "active": false,
+  "_active_note": "Model owner, 2026-10-10: the live forecast disregards this file and relies on the morning projected lineups. Set to true to switch the entries below back on. src/standings/next.py (the preseason projection) still reads 'unavailable'.",
   "unavailable": [
     {
       "player_id": 8476945,

@@ -1,0 +1,3 @@
+team,goals,xg,xg_score_adj,xg_5v5,xg_5v5_score_adj,xg_pp,xg_other,shots_on_goal,unblocked_attempts,goalie,goalie_shots,goalie_xg_faced,goalie_goals_against,goalie_saved_above_expected
+OTT,3,2.515,2.475,1.186,1.147,0.801,0.527,25,35,S. Ersson,35,3.325,4,-0.675
+DET,5,3.747,3.719,1.772,1.745,1.507,0.468,36,45,J. Gibson,25,2.515,3,-0.485

@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -100,12 +101,15 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
     return pri, snap, stamp
 
 
-def overrides() -> tuple[set, dict, dict]:
-    """Manual roster knowledge (data/external/roster_overrides.json): players who will not play, named starting goalies and named backups by team."""
-    path = ROOT / "data/external/roster_overrides.json"
+def overrides(path: Path | None = None) -> tuple[set, dict, dict]:
+    """Manual roster knowledge (data/external/roster_overrides.json): players who will not play, named starting goalies and named backups by team.
+    Ignored when the file says ``"active": false`` (model owner, 2026-10-10): the morning lineup feed is then the only source of lineup news."""
+    path = path or ROOT / "data/external/roster_overrides.json"
     if not path.exists():
         return set(), {}, {}
     o = json.loads(path.read_text(encoding="utf-8"))
+    if not o.get("active", True):
+        return set(), {}, {}
     return {int(u["player_id"]) for u in o.get("unavailable", [])}, {k: int(v) for k, v in o.get("starters", {}).items()}, {k: int(v) for k, v in o.get("backups", {}).items()}
 
 
