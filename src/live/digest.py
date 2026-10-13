@@ -16,6 +16,7 @@ import polars as pl
 from src.config import ROOT
 from src.live import picks as pk
 from src.live import score as sc
+from src.live.odds import implied
 from src.scoreeffects import factors as sf
 
 log = logging.getLogger("live")
@@ -48,6 +49,32 @@ def with_xg(s: pl.DataFrame) -> pl.DataFrame:
                        pl.when(home).then(pl.col("xga_home")).otherwise(pl.col("xga_away")).alias("xga_pick"), pl.when(home).then(pl.col("xga_away")).otherwise(pl.col("xga_home")).alias("xga_opp"))
     tag = [None if r["result"] is None or r["xga_pick"] is None else VERDICT[(r["result"] == "won", r["xga_pick"] > r["xga_opp"])][0] for r in j.iter_rows(named=True)]
     return j.with_columns(pl.Series("verdict", tag, dtype=pl.Utf8))
+
+
+CONFIRMED = "lineup feed (confirmed)"
+
+
+def unconfirmed(r: dict) -> list[tuple[str, str, str | None]]:
+    """(team, listed goalie, other goalie) for each side of a logged forecast whose starter was not confirmed at that run."""
+    return [(r[s], r[f"{s}_goalie"], r.get(f"{s}_goalie_alt") or None) for s in ("away", "home") if (r.get(f"{s}_goalie_source") or "") != CONFIRMED]
+
+
+def goalie_note(r: dict, side: str, american: int) -> tuple[str, bool]:
+    """For a pick on ``side`` of logged forecast ``r`` at price ``american``: a sentence on how the edge depends on unconfirmed starters, and whether the pick is goalie-dependent
+    (its edge over break-even would fall below the picks threshold if the other goalie started)."""
+    un = unconfirmed(r)
+    if not un:
+        return "both starting goalies confirmed", False
+    be = implied(american)
+    p = r["p_home"] if side == "home" else r["p_away"]
+    lo, hi = r.get("p_home_min"), r.get("p_home_max")
+    who = "; ".join(f"{g} for {t}" + (f", or {a}" if a else "") for t, g, a in un)
+    if lo is None or hi is None:
+        return f"starter not confirmed ({who})", False
+    worst = (lo if side == "home" else 1 - hi) - be
+    if worst >= pk.MIN_EDGE:
+        return f"holds whichever goalie starts (edge at least {worst:+.1%}); not confirmed: {who}", False
+    return f"GOALIE-DEPENDENT: edge {p - be:+.1%} with the listed starters, {worst:+.1%} at worst if the other goalie starts; not confirmed: {who}", True
 
 
 def cumulative(s: pl.DataFrame) -> pl.DataFrame:
@@ -201,23 +228,31 @@ def build(day: str | None = None) -> tuple[str, str]:
     T += ["", f"TODAY'S PICKS ({day})", ""]
     H.append(f'<h3 style="font-size:15px;margin:16px 0 6px 0">Today\'s picks ({day})</h3>')
     if n_today:
-        rows = []
+        rows, logged, dep = [], {r["game_id"]: r for r in d.filter(pl.col("game_date") == day).iter_rows(named=True)}, 0
         for r in today_picks.iter_rows(named=True):
+            note, flagged = goalie_note(logged[r["game_id"]], r["side"], r["american"]) if r["game_id"] in logged else ("", False)
+            dep += flagged
             T.append(f"- {r['pick']} over {r['against']}: {r['units']} unit{'s' if r['units'] != 1 else ''} (${r['units']}) at {pk.fmt(r['american'])} ({r['book']}); model {r['p_model']:.0%}, market {r['p_market']:.0%}")
-            rows.append([f"<b>{r['pick']}</b> over {r['against']}", f"{r['units']} (${r['units']})", pk.fmt(r["american"]), r["book"], f"{r['p_model']:.0%}", f"{r['p_market']:.0%}"])
-        T.append(f"  Total at stake today: {int(today_picks['units'].sum())} units.")
-        H += [_table(["pick", "units", "odds", "book", "model", "market"], rows), f'<p style="font-size:13px;margin:6px 0">Total at stake today: {int(today_picks["units"].sum())} units.</p>']
+            T.append(f"    Goalies: {note}.")
+            cell = f'<b style="color:{RED}">{html.escape(note)}</b>' if flagged else html.escape(note)
+            rows.append([f"<b>{r['pick']}</b> over {r['against']}", f"{r['units']} (${r['units']})", pk.fmt(r["american"]), r["book"], f"{r['p_model']:.0%}", f"{r['p_market']:.0%}", cell])
+        tot = f"Total at stake today: {int(today_picks['units'].sum())} units." + (f" {dep} pick{'s' if dep != 1 else ''} depend{'' if dep != 1 else 's'} on an unconfirmed goalie: consider waiting for the 5 PM update." if dep else "")
+        T.append(f"  {tot}")
+        H += [_table(["pick", "units", "odds", "book", "model", "market", "goalies"], rows), f'<p style="font-size:13px;margin:6px 0">{html.escape(tot)}</p>']
     else:
         T.append("- No pick qualified today.")
         H.append('<p style="font-size:13px">No pick qualified today.</p>')
     T += ["", f"TODAY'S FORECASTS ({day})", "", "away at home | model away/home | market away/home | expected score | goalies (away / home)"]
     H.append(f'<h3 style="font-size:15px;margin:16px 0 6px 0">Today\'s forecasts ({day})</h3>')
     g = d.filter((pl.col("game_date") == day) & pl.col("home_win").is_null()).sort("start_utc")
-    flags, rows = [], []
+    flags, rows, open_games = [], [], []
     for r in g.iter_rows(named=True):
         mk = f"{1 - r['mkt_home']:.0%}/{r['mkt_home']:.0%}" if r["mkt_home"] is not None else "no prices"
-        T.append(f"- {r['away']} at {r['home']} | {r['p_away']:.0%}/{r['p_home']:.0%} | {mk} | {r['exp_goals_away']:.1f}-{r['exp_goals_home']:.1f} | {r['away_goalie']} / {r['home_goalie']}")
-        rows.append([f"{r['away']} at {r['home']}", f"{r['p_away']:.0%} / {r['p_home']:.0%}", mk.replace("/", " / "), f"{r['exp_goals_away']:.1f} to {r['exp_goals_home']:.1f}", html.escape(f"{r['away_goalie']} / {r['home_goalie']}")])
+        gk = " / ".join(r[f"{s}_goalie"] + ("" if (r.get(f"{s}_goalie_source") or "") == CONFIRMED else "*") for s in ("away", "home"))       # * = not confirmed at this run
+        if unconfirmed(r):
+            open_games.append(f"{r['away']} at {r['home']}")
+        T.append(f"- {r['away']} at {r['home']} | {r['p_away']:.0%}/{r['p_home']:.0%} | {mk} | {r['exp_goals_away']:.1f}-{r['exp_goals_home']:.1f} | {gk}")
+        rows.append([f"{r['away']} at {r['home']}", f"{r['p_away']:.0%} / {r['p_home']:.0%}", mk.replace("/", " / "), f"{r['exp_goals_away']:.1f} to {r['exp_goals_home']:.1f}", html.escape(gk)])
         if r["mkt_home"] is not None and abs(r["p_home"] - r["mkt_home"]) > 0.08:
             flags.append(f"{r['away']} at {r['home']}: model and market differ by {abs(r['p_home'] - r['mkt_home']):.0%} - check for roster news the model may be missing.")
         for side in ("away", "home"):
@@ -226,6 +261,10 @@ def build(day: str | None = None) -> tuple[str, str]:
                 flags.append(f"{r[side]}: {r[f'{side}_goalie']} in goal by {src} - no starter was confirmed in the morning lineups.")
     if g.height:
         H.append(_table(["game", "model, away / home", "market, away / home", "expected score", "goalies, away / home"], rows))
+        note = (f"* Starting goalie not confirmed at this run, in {len(open_games)} of {g.height} games ({', '.join(open_games)}). An update for those games follows at about 5 PM Eastern."
+                if open_games else "All of today's starting goalies were confirmed at this run; no afternoon update will be sent.")
+        T += ["", note]
+        H.append(f'<p style="font-size:12px;color:{MUTED};margin:6px 0">{html.escape(note)}</p>')
     else:
         T.append("- No games remaining today in the log.")
         H.append('<p style="font-size:13px">No games remaining today in the log.</p>')

@@ -23,7 +23,7 @@ MIN_GAMES, MIN_BETS = 300, 100
 
 def scored_frame() -> pl.DataFrame:
     """One row per game: the last forecast logged before the start, the prices captured in that run, the market consensus, the paper bet, and the result if played."""
-    f = pl.read_csv(LOGS / "forecast_log.csv").filter(pl.col("made_utc") < pl.col("start_utc").str.replace("Z", "+00:00")).sort("made_utc").unique("game_id", keep="last", maintain_order=True)
+    f = pl.read_csv(LOGS / "forecast_log.csv", infer_schema_length=None).filter(pl.col("made_utc") < pl.col("start_utc").str.replace("Z", "+00:00")).sort("made_utc").unique("game_id", keep="last", maintain_order=True)
     o = pl.read_csv(LOGS / "odds_log.csv").filter(pl.col("market") == "moneyline").join(f.select("game_id", pl.col("made_utc").alias("captured_utc")), on=["game_id", "captured_utc"])
     imp = pl.col("american").map_elements(implied, return_dtype=pl.Float64)
     w = o.with_columns(imp.alias("q")).pivot(on="side", index=["game_id", "book"], values=["american", "q"]).drop_nulls()

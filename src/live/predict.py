@@ -6,6 +6,7 @@ the starting goalie is the one with the most prior work unless named. Run src.li
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import os
@@ -144,7 +145,7 @@ def prepare(season: int = 2026) -> dict:
             "names": dict(snap.select("player_id", "name").iter_rows())}
 
 
-def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | None = None, force_b2b: bool = False) -> tuple[tuple, int, dict]:
+def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | None = None, force_b2b: bool = False, force_goalie: int | None = None) -> tuple[tuple, int, dict]:
     """Lineup (previous game's, or the published roster's top 12 forwards and 6 defensemen by last season's ice time if the team has not played), starting goalie, and notes."""
     live, snap, season, out_set = ctx["live"], ctx["snap"], ctx["season"], ctx["out_set"]
     tg = live.table.filter((pl.col("home_id") == tid) | (pl.col("away_id") == tid)).sort("date", "game_id")
@@ -204,15 +205,19 @@ def _team_inputs(ctx: dict, ab: str, tid: int, day, goalies: dict, news: dict | 
         gk, src = listed, f"lineup feed ({news.get('goalie_status')})"
     else:
         gk, src = (int(w["goalie"][0]) if w.height else prev_gk), "most prior work"
+    confirmed = src == "lineup feed (confirmed)"
+    alt = next((x for x in order if x != gk), None)                  # the team's other goalie: who starts if the unconfirmed one does not
+    if force_goalie is not None:                                     # a what-if forecast (the goalie flag in the daily email)
+        gk, src = force_goalie, "scenario"
     nm = ctx["names"]
-    info = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "goalie_source": src, "previous_game_goalie": nm.get(prev_gk, str(prev_gk)) if prev_gk else None,
+    info = {"goalie": nm.get(gk, str(gk)), "goalie_id": gk, "goalie_source": src, "goalie_confirmed": confirmed, "goalie_alt_id": alt, "goalie_alt": nm.get(alt, str(alt)) if alt is not None else None, "previous_game_goalie": nm.get(prev_gk, str(prev_gk)) if prev_gk else None,
             "games_played": tg.height, "lineup_source": ("previous game" if tg.height else "published roster") + (" + injury feed" if news else ""), "b2b": b2b,
             "removed": [nm.get(x, str(x)) for x in removed], "added": [nm.get(x, str(x)) for x in added], "listed_out": len(news.get("out_names", [])), "unmatched_out": news.get("unmatched", []),
             "questionable": news.get("questionable", [])}
     return (lu_ids.astype(np.int64), lu_min), gk, info
 
 
-def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None, news: dict | None = None, force_b2b: set | None = None) -> dict:
+def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: dict | None = None, news: dict | None = None, force_b2b: set | None = None, force_goalie: dict | None = None) -> dict:
     live, season = ctx["live"], ctx["season"]
     goalies = {**ctx["named"], **(goalies or {})}
     if home not in ctx["ids"] or away not in ctx["ids"]:
@@ -221,7 +226,7 @@ def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: 
     day = pl.Series([date]).str.to_date("%Y-%m-%d")[0] if date else live.table["date"].max()
     fake, info = -1, {}
     for tid, ab in ((hid, home), (aid, away)):
-        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies, (news or {}).get(ab), ab in (force_b2b or ()))
+        live.lineups[(fake, tid)], gk, info[ab] = _team_inputs(ctx, ab, tid, day, goalies, (news or {}).get(ab), ab in (force_b2b or ()), (force_goalie or {}).get(ab))
         live.goalies[(fake, tid)] = [(gk, 0.0, 0.0)]
     row = pl.DataFrame({"game_id": [fake], "season": [season], "date": [day], "home_id": [hid], "away_id": [aid], "home_abbrev": [home], "away_abbrev": [away], "gd": [0.0], "xgd": [0.0], "home_win": [0.0],
                         "b2b_home": [info[home]["b2b"]], "b2b_away": [info[away]["b2b"]]}, schema=live.table.schema)
@@ -238,6 +243,15 @@ def forecast(ctx: dict, away: str, home: str, date: str | None = None, goalies: 
     margin, avg = float(ctx["cal"][0] + ctx["cal"][1] * mu), ctx["avg"]
     return {"away": away, "home": home, "date": str(day), "p_home_win": p_home, "p_away_win": 1 - p_home, "expected_margin_home": margin, "model_mu": mu, "avg_goals_per_team": avg,
             "expected_goals_home": avg + margin / 2, "expected_goals_away": avg - margin / 2, "teams": info, "hyperparameters": ctx["hp"], "completed_games_this_season": played.height}
+
+
+def goalie_range(ctx: dict, f: dict, date: str | None, news: dict | None, force_b2b: set | None) -> tuple[float, float]:
+    """Lowest and highest home win probability over who might start: every combination of the listed goalie and the team's other goalie for each side whose starter is not confirmed."""
+    alts = {ab: t["goalie_alt_id"] for ab, t in f["teams"].items() if not t["goalie_confirmed"] and t["goalie_alt_id"] is not None}
+    ps = [f["p_home_win"]]
+    for combo in (c for n in range(1, len(alts) + 1) for c in itertools.combinations(alts, n)):
+        ps.append(forecast(ctx, f["away"], f["home"], date, news=news, force_b2b=force_b2b, force_goalie={ab: alts[ab] for ab in combo})["p_home_win"])
+    return min(ps), max(ps)
 
 
 def run(away: str, home: str, date: str | None = None, season: int = 2026, goalies: dict | None = None) -> dict:

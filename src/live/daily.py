@@ -21,7 +21,8 @@ log = logging.getLogger("live")
 LOGS = ROOT / "data/live/logs"
 F_COLS = ["made_utc", "game_id", "game_date", "start_utc", "away", "home", "p_home", "p_away", "exp_goals_home", "exp_goals_away", "model_mu", "home_goalie", "home_goalie_source", "away_goalie", "away_goalie_source",
           "home_lineup_source", "away_lineup_source", "home_games", "away_games", "completed_games", "model",
-          "home_removed", "away_removed", "home_added", "away_added", "home_questionable", "away_questionable", "unmatched_out", "roster_snapshot"]
+          "home_removed", "away_removed", "home_added", "away_added", "home_questionable", "away_questionable", "unmatched_out", "roster_snapshot",
+          "home_goalie_alt", "away_goalie_alt", "p_home_min", "p_home_max"]        # the other goalie for a side whose starter is not confirmed, and the range of the forecast over who starts
 O_COLS = ["captured_utc", "game_id", "game_date", "away", "home", "book", "market", "side", "line", "american", "source"]
 MODEL = "game model P (docs/gamemodel); from 2026-10-04: rate model v3 (elite-prospect priors, docs/prospects/elite.md) and early-sample adjustment for thin-history players (docs/prospects/hybrid.md); from 2026-10-05: score-adjusted differential in the in-season update (docs/scoreeffects) and the back-to-back goalie rule; inputs: daily rosters, injury list and listed starting goalies"
 
@@ -51,6 +52,29 @@ def _append(path, cols: list[str], rows: list[dict]) -> None:
         w.writerows(rows)
 
 
+def lineup_feed(ctx: dict, tomorrow: tuple = (False, True)) -> dict:
+    """The lineup feed keyed by (away, home), names matched to ids through the roster snapshot."""
+    roster: dict = {}
+    for team, name, pid in ctx["snap"].select("team", "name", "player_id").iter_rows():
+        roster.setdefault(team, {})[ln.norm(name)] = pid
+    return {(g["away"], g["home"]): ln.resolve(g, roster) for tm in tomorrow for g in ln.fetch(tm)}
+
+
+def forecast_row(ctx: dict, g: dict, news: dict | None, force_b2b: set | None, stamp: str) -> dict:
+    """One forecast-log row: the forecast with the listed goalies, plus its range over who starts for any side not yet confirmed."""
+    f = lp.forecast(ctx, g["away"], g["home"], g["game_date"], news=news, force_b2b=force_b2b)
+    lo, hi = lp.goalie_range(ctx, f, g["game_date"], news, force_b2b)
+    th, ta = f["teams"][g["home"]], f["teams"][g["away"]]
+    alt = lambda t: "" if t["goalie_confirmed"] or not t["goalie_alt"] else t["goalie_alt"]        # noqa: E731
+    return {"made_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "start_utc": g["start_utc"], "away": g["away"], "home": g["home"], "p_home": round(f["p_home_win"], 5), "p_away": round(f["p_away_win"], 5),
+            "exp_goals_home": round(f["expected_goals_home"], 3), "exp_goals_away": round(f["expected_goals_away"], 3), "model_mu": round(f["model_mu"], 4), "home_goalie": th["goalie"], "home_goalie_source": th["goalie_source"],
+            "away_goalie": ta["goalie"], "away_goalie_source": ta["goalie_source"], "home_lineup_source": th["lineup_source"], "away_lineup_source": ta["lineup_source"], "home_games": th["games_played"], "away_games": ta["games_played"],
+            "completed_games": f["completed_games_this_season"], "model": MODEL, "home_removed": "; ".join(th["removed"]), "away_removed": "; ".join(ta["removed"]), "home_added": "; ".join(th["added"]),
+            "away_added": "; ".join(ta["added"]), "home_questionable": "; ".join(th["questionable"]), "away_questionable": "; ".join(ta["questionable"]),
+            "unmatched_out": "; ".join(th["unmatched_out"] + ta["unmatched_out"]), "roster_snapshot": ctx["snapshot_stamp"],
+            "home_goalie_alt": alt(th), "away_goalie_alt": alt(ta), "p_home_min": round(lo, 5), "p_home_max": round(hi, 5)}
+
+
 def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict:
     day = day or date.today().isoformat()
     if update:
@@ -62,14 +86,7 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
         from src.prospects.ingest import main as career_pages
         career_pages()                                             # draft slot and pre-NHL seasons for players new to the rosters
     ctx = lp.prepare(season)
-    snap = ctx["snap"]
-    roster: dict = {}
-    for team, name, pid in snap.select("team", "name", "player_id").iter_rows():
-        roster.setdefault(team, {})[ln.norm(name)] = pid
-    feed = {}
-    for tomorrow in (False, True):
-        for g in ln.fetch(tomorrow):
-            feed[(g["away"], g["home"])] = ln.resolve(g, roster)
+    feed = lineup_feed(ctx)
     now = datetime.now(UTC)
     stamp = now.isoformat(timespec="seconds")
     nxt = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
@@ -82,15 +99,7 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
         if started:
             skipped.append(g["game_id"])
             continue
-        news = feed.get((g["away"], g["home"]))
-        f = lp.forecast(ctx, g["away"], g["home"], g["game_date"], news=news, force_b2b=plays_today if g["game_date"] == nxt else None)
-        th, ta = f["teams"][g["home"]], f["teams"][g["away"]]
-        f_rows.append({"made_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "start_utc": g["start_utc"], "away": g["away"], "home": g["home"], "p_home": round(f["p_home_win"], 5), "p_away": round(f["p_away_win"], 5),
-                       "exp_goals_home": round(f["expected_goals_home"], 3), "exp_goals_away": round(f["expected_goals_away"], 3), "model_mu": round(f["model_mu"], 4), "home_goalie": th["goalie"], "home_goalie_source": th["goalie_source"],
-                       "away_goalie": ta["goalie"], "away_goalie_source": ta["goalie_source"], "home_lineup_source": th["lineup_source"], "away_lineup_source": ta["lineup_source"], "home_games": th["games_played"], "away_games": ta["games_played"],
-                       "completed_games": f["completed_games_this_season"], "model": MODEL, "home_removed": "; ".join(th["removed"]), "away_removed": "; ".join(ta["removed"]), "home_added": "; ".join(th["added"]),
-                       "away_added": "; ".join(ta["added"]), "home_questionable": "; ".join(th["questionable"]), "away_questionable": "; ".join(ta["questionable"]),
-                       "unmatched_out": "; ".join(th["unmatched_out"] + ta["unmatched_out"]), "roster_snapshot": ctx["snapshot_stamp"]})
+        f_rows.append(forecast_row(ctx, g, feed.get((g["away"], g["home"])), plays_today if g["game_date"] == nxt else None, stamp))
         prices, url = od.fetch(g["away"], g["home"])
         o_rows += [{"captured_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "away": g["away"], "home": g["home"], **p, "source": url} for p in prices]
     _append(LOGS / "forecast_log.csv", F_COLS, f_rows)

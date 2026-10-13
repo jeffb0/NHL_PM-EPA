@@ -54,3 +54,4 @@ See reports/deshrink/narrative.md. Run 2026-10-12: DS-1 z = −0.25, DS-2 z = �
 1. **Implementation held (2026-10-12).** §5 says implement when both primary z are above −1, and they are. The fix is nevertheless **not switched on** in the forward forecasts, pending the owner's decision, because every reading is negative
    and the two reported checks where §3 expected the fix to matter most (early-season games, standings) are the most negative. The descriptive result also weakens the "sound in advance" rating: scaling removes only 2 of the 14 goals of 5v5 play residual SD.
    `reports/metrics/deshrink.json` records `implement: true` (the rule's output) and `implemented: false`.
+2. **Owner's decision (2026-10-12): leave the fix off.** The forward forecasts and the standings projection are unchanged.
