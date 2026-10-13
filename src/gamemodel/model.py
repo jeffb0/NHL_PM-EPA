@@ -24,8 +24,11 @@ def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float, g
         theta[i] = theta.get(i, 0.0) + di
 
 
-def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None, kappa: float = 0.0, early=None):
+def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None, kappa: float = 0.0, early=None,
+                      lam_team: float = 0.0):
     """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each game.
+
+    With ``lam_team`` a team-level term is updated alongside the skaters and added to the team's strength (docs/structure/methodology.md, U1).
 
     With ``feature`` (a function of the dressed player ids and their projected minutes) the home-minus-away value of that roster feature is returned as a second array."""
     t = games.table.filter(pl.col("season") == season)
@@ -55,7 +58,7 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
         else:                                                       # thin-history players: prior plus the adjustment from their games so far (docs/prospects/hybrid.md)
             s = float(sum((theta.get(i, 0.0) + early.adj(i, cum.get(i))) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
         rate = (n0 * g0.get(gk, rep) + gsaved[gk]) / (n0 + gshots[gk])
-        return s + rate * shots_pg + (team_u[team] if attribution == "team" else 0.0)
+        return s + rate * shots_pg + (team_u[team] if attribution == "team" or lam_team else 0.0)
 
     for k, (gid, hid, aid, gd, xgd) in enumerate(t.select("game_id", "home_id", "away_id", "gd", "xgd").iter_rows()):
         mu = strength(gid, hid) - strength(gid, aid) + h
@@ -74,6 +77,8 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
                     skater_update(theta, ids, mins, sign * lam * e, gain)
                 else:
                     team_u[team] += sign * lam * e
+            if update and lam_team and attribution == "player":
+                team_u[team] += sign * lam_team * e
             if update:
                 for gk, n, saved in games.goalies[(gid, team)]:
                     gshots[gk] += n
