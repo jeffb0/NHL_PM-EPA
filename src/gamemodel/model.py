@@ -25,7 +25,7 @@ def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float, g
 
 
 def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None, kappa: float = 0.0, early=None,
-                      lam_team: float = 0.0):
+                      lam_team: float = 0.0, starter: dict | None = None, gscale: float = 1.0):
     """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each game.
 
     With ``lam_team`` a team-level term is updated alongside the skaters and added to the team's strength (docs/structure/methodology.md, U1).
@@ -49,7 +49,9 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
         gk = games.goalies[(gid, team)][0][0]
         if lineup == "previous" and team in prev_lu:
             ids, gk = prev_lu[team], prev_gk[team]
-        m = np.array([float(np.mean(recent[i][-RECENT:])) if recent[i] else toi_last.get(i, POS_DEFAULT_MIN[pri.pos.get(i, "F")]) for i in ids.tolist()])
+        if starter is not None:                                     # the goalie the forecaster expected (docs/infoquality): ratings still update on who played
+            gk = starter.get((gid, team), gk)
+        m =np.array([float(np.mean(recent[i][-RECENT:])) if recent[i] else toi_last.get(i, POS_DEFAULT_MIN[pri.pos.get(i, "F")]) for i in ids.tolist()])
         m *= TEAM_MINUTES / m.sum()
         if feature is not None:
             fval[team] = feature(ids, m)
@@ -58,6 +60,7 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
         else:                                                       # thin-history players: prior plus the adjustment from their games so far (docs/prospects/hybrid.md)
             s = float(sum((theta.get(i, 0.0) + early.adj(i, cum.get(i))) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
         rate = (n0 * g0.get(gk, rep) + gsaved[gk]) / (n0 + gshots[gk])
+        rate = rep + gscale * (rate - rep)                          # gscale < 1 narrows goalie differences (docs/infoquality/methodology.md §6)
         return s + rate * shots_pg + (team_u[team] if attribution == "team" or lam_team else 0.0)
 
     for k, (gid, hid, aid, gd, xgd) in enumerate(t.select("game_id", "home_id", "away_id", "gd", "xgd").iter_rows()):
