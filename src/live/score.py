@@ -15,7 +15,9 @@ from src.live.odds import implied
 
 log = logging.getLogger("live")
 LOGS = ROOT / "data/live/logs"
-BOOKS = ["FanDuel", "DraftKings", "BetMGM"]
+BOOKS = ["FanDuel", "DraftKings", "BetMGM"]                                    # the market test's consensus (pre-registered; unchanged)
+PICK_BOOKS = [*BOOKS, "Caesars", "Hard Rock Bet", "theScore Bet"]              # where the owner's picks take the best price (docs/market/picks.md §2, from 2026-10-16)
+SECOND_SOURCE = ["Hard Rock Bet", "theScore Bet"]                              # from Action Network; left out of the source-error guard's median so the guard is as pre-registered
 EDGE = 0.03
 OUTLIER = 0.08
 MIN_GAMES, MIN_BETS = 300, 100
@@ -29,10 +31,12 @@ def scored_frame() -> pl.DataFrame:
     w = o.with_columns(imp.alias("q")).pivot(on="side", index=["game_id", "book"], values=["american", "q"]).drop_nulls()
     w = w.with_columns((pl.col("q_home") / (pl.col("q_home") + pl.col("q_away"))).alias("m_home"))
     # a book more than OUTLIER from the median of every listed book is a source error (wrong or reversed line), not a price: dropped
-    w = w.with_columns((pl.col("m_home") - pl.col("m_home").median().over("game_id")).abs().alias("_dev")).filter((pl.col("_dev") <= OUTLIER) & pl.col("book").is_in(BOOKS))
+    w = w.with_columns((pl.col("m_home") - pl.col("m_home").filter(~pl.col("book").is_in(SECOND_SOURCE)).median().over("game_id")).abs().alias("_dev")).filter(pl.col("_dev") <= OUTLIER)
+    pb = w.filter(pl.col("book").is_in(PICK_BOOKS)).group_by("game_id").agg(pl.col("american_home").max().alias("pick_best_home"), pl.col("american_away").max().alias("pick_best_away"))
+    w = w.filter(pl.col("book").is_in(BOOKS))
     mk = w.group_by("game_id").agg(pl.col("m_home").mean().alias("mkt_home"), pl.len().alias("n_books"), pl.col("q_home").min().alias("be_home"), pl.col("q_away").min().alias("be_away"),      # lowest break-even = best price
                                    pl.col("american_home").max().alias("best_home"), pl.col("american_away").max().alias("best_away"))
-    d = f.join(mk, on="game_id", how="left")
+    d = f.join(mk, on="game_id", how="left").join(pb, on="game_id", how="left")
     eh, ea = pl.col("p_home") - pl.col("be_home"), pl.col("p_away") - pl.col("be_away")
     d = d.with_columns(pl.when(eh >= EDGE).then(pl.lit("home")).when(ea >= EDGE).then(pl.lit("away")).otherwise(None).alias("bet"), pl.max_horizontal(eh, ea).alias("edge"))
     res_path = ROOT / "data/live/processed/games.parquet"

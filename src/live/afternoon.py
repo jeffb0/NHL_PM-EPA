@@ -42,12 +42,14 @@ def pick_status(pick: dict | None, r: dict) -> str:
     if r["mkt_home"] is None:
         return "No prices captured this afternoon."
     if pick is None:
-        if r["bet"] is None:
+        q = [(team, p, int(a), p - implied(int(a))) for team, p, a in ((r["home"], r["p_home"], r["pick_best_home"]), (r["away"], r["p_away"], r["pick_best_away"])) if a is not None]
+        q = [x for x in q if x[3] >= pk.MIN_EDGE]
+        if not q:
             return "No pick this morning, and none qualifies now."
-        team, price = (r["home"], r["best_home"]) if r["bet"] == "home" else (r["away"], r["best_away"])
-        return f"No pick this morning. {team} qualifies now at {pk.fmt(int(price))} (edge {r['edge']:+.1%}); it is not in the ledger."
+        team, _, price, edge = max(q, key=lambda x: x[3])
+        return f"No pick this morning. {team} qualifies now at {pk.fmt(price)} (edge {edge:+.1%}); it is not in the ledger."
     home = pick["side"] == "home"
-    p, price = (r["p_home"], r["best_home"]) if home else (r["p_away"], r["best_away"])
+    p, price = (r["p_home"], r["pick_best_home"]) if home else (r["p_away"], r["pick_best_away"])
     e_locked, e_now = p - implied(int(pick["american"])), p - implied(int(price))
     verdict = "still qualifies" if e_locked >= pk.MIN_EDGE else "NO LONGER QUALIFIES"
     return (f"Morning pick {pick['pick']} over {pick['against']}, {pick['units']} unit{'s' if pick['units'] != 1 else ''} at {pk.fmt(int(pick['american']))}: {verdict}. "
@@ -93,11 +95,13 @@ def run(day: str | None = None, season: int = 2026) -> str:
         feed = dl.lineup_feed(ctx, (False,))
         stamp = now.isoformat(timespec="seconds")
         f_rows, o_rows = [], []
+        extra = od.fetch_extra(day)
         for r in rows:
             g = {k: r[k] for k in ("game_id", "game_date", "start_utc", "away", "home")}
             f_rows.append(dl.forecast_row(ctx, g, feed.get((r["away"], r["home"])), None, stamp))
             prices, url = od.fetch(r["away"], r["home"])
             o_rows += [{"captured_utc": stamp, **{k: g[k] for k in ("game_id", "game_date", "away", "home")}, **p, "source": url} for p in prices]
+            o_rows += dl.extra_rows(extra, g, stamp)
         dl._append(dl.LOGS / "forecast_log.csv", dl.F_COLS, f_rows)
         dl._append(dl.LOGS / "odds_log.csv", dl.O_COLS, o_rows)
         now_rows = {r["game_id"]: r for r in sc.scored_frame().filter(pl.col("made_utc") == stamp).iter_rows(named=True)}

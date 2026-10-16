@@ -1,4 +1,4 @@
-from src.live.odds import american, devig, implied, parse
+from src.live.odds import AN_BOOKS, american, devig, implied, parse, parse_an
 
 HTML = """
 <table class="odds-table game-table"><thead><tr><th class="game-team" colspan="2">x</th>
@@ -29,3 +29,16 @@ def test_parse_keeps_books_sides_and_skips_missing_prices():
     tot = {(r["book"], r["side"]): (r["line"], r["american"]) for r in rows if r["market"] == "total"}
     assert tot[("DraftKings", "under")] == (5.5, 100) and tot[("BetMGM", "over")] == (5.5, -125)
     assert not [r for r in rows if r["market"] not in ("moneyline", "total")]                                  # the puck line is not logged
+
+
+def test_parse_action_network():
+    hr, ts = AN_BOOKS
+    ml = lambda team, side, odds: {"team_id": team, "side": side, "odds": odds, "is_live": False}          # noqa: E731
+    d = {"games": [{"away_team_id": 1, "home_team_id": 2, "teams": [{"id": 1, "abbr": "NJ"}, {"id": 2, "abbr": "TB"}],
+                    "markets": {str(hr): {"event": {"moneyline": [ml(1, "away", 150), ml(2, "home", -175)], "total": [{"side": "over", "odds": -110, "value": 6.5, "is_live": False}]}},
+                                str(ts): {"event": {"moneyline": [ml(2, "home", -170), ml(1, "away", 145)]}},
+                                "15": {"event": {"moneyline": [ml(1, "away", 160)]}}}}]}
+    rows = parse_an(d)[("NJD", "TBL")]
+    got = {(r["book"], r["market"], r["side"]): (r["american"], r["line"]) for r in rows}
+    assert got == {("Hard Rock Bet", "moneyline", "away"): (150, None), ("Hard Rock Bet", "moneyline", "home"): (-175, None), ("Hard Rock Bet", "total", "over"): (-110, 6.5),
+                   ("theScore Bet", "moneyline", "home"): (-170, None), ("theScore Bet", "moneyline", "away"): (145, None)}       # book 15 (not requested) is ignored

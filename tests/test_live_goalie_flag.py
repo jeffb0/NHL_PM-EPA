@@ -6,7 +6,7 @@ from src.live.digest import CONFIRMED, goalie_note, unconfirmed
 
 def _row(**kw):
     r = {"game_id": 1, "away": "AAA", "home": "BBB", "p_home": 0.60, "p_away": 0.40, "home_goalie": "H. One", "home_goalie_source": CONFIRMED, "away_goalie": "A. One", "away_goalie_source": "lineup feed (expected)",
-         "home_goalie_alt": None, "away_goalie_alt": "A. Two", "p_home_min": 0.55, "p_home_max": 0.60, "start_utc": "2026-10-13T23:00:00Z", "mkt_home": 0.52, "bet": "home", "edge": 0.06, "best_home": -110, "best_away": 100}
+         "home_goalie_alt": None, "away_goalie_alt": "A. Two", "p_home_min": 0.55, "p_home_max": 0.60, "start_utc": "2026-10-13T23:00:00Z", "mkt_home": 0.52, "pick_best_home": -110, "pick_best_away": 100}
     return {**r, **kw}
 
 
@@ -35,7 +35,7 @@ def test_afternoon_selection_and_status():
     pick = {"side": "home", "pick": "BBB", "against": "AAA", "units": 2, "american": -110, "p_model": 0.60}
     assert "still qualifies" in af.pick_status(pick, _row())
     assert "NO LONGER QUALIFIES" in af.pick_status(pick, _row(p_home=0.54, p_away=0.46))
-    assert "qualifies now" in af.pick_status(None, _row()) and "none qualifies now" in af.pick_status(None, _row(bet=None))
+    assert "BBB qualifies now at 1.91" in af.pick_status(None, _row()) and "none qualifies now" in af.pick_status(None, _row(p_home=0.53, p_away=0.47))
 
 
 def test_afternoon_digest():

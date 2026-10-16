@@ -43,11 +43,12 @@ def units(p_model: float, p_market: float, american: int) -> tuple[int, float]:
 
 
 def best_books() -> pl.DataFrame:
-    """Per game and capture: the best moneyline price for each side among the three books (after the source-error guard) and which book has it."""
+    """Per game and capture: the best moneyline price for each side among the picks books (after the source-error guard) and which book has it."""
     o = pl.read_csv(LOGS / "odds_log.csv").filter(pl.col("market") == "moneyline")
     w = o.with_columns(pl.col("american").map_elements(implied, return_dtype=pl.Float64).alias("q")).pivot(on="side", index=["game_id", "captured_utc", "book"], values=["american", "q"]).drop_nulls()
     w = w.with_columns((pl.col("q_home") / (pl.col("q_home") + pl.col("q_away"))).alias("m"))
-    w = w.with_columns((pl.col("m") - pl.col("m").median().over("game_id", "captured_utc")).abs().alias("_dev")).filter((pl.col("_dev") <= sc.OUTLIER) & pl.col("book").is_in(sc.BOOKS))
+    med = pl.col("m").filter(~pl.col("book").is_in(sc.SECOND_SOURCE)).median().over("game_id", "captured_utc")
+    w = w.with_columns((pl.col("m") - med).abs().alias("_dev")).filter((pl.col("_dev") <= sc.OUTLIER) & pl.col("book").is_in(sc.PICK_BOOKS))
     h = w.sort(["american_home", "book"], descending=[True, False]).unique(["game_id", "captured_utc"], keep="first", maintain_order=True).select("game_id", "captured_utc", pl.col("book").alias("book_home"))
     a = w.sort(["american_away", "book"], descending=[True, False]).unique(["game_id", "captured_utc"], keep="first", maintain_order=True).select("game_id", "captured_utc", pl.col("book").alias("book_away"))
     return h.join(a, on=["game_id", "captured_utc"])
@@ -68,7 +69,9 @@ def lock(day: str) -> list[dict]:
         if r["game_id"] in have or datetime.fromisoformat(r["start_utc"].replace("Z", "+00:00")) <= now:
             continue
         cands = []
-        for side, team, opp, p, mk, price, book in (("home", r["home"], r["away"], r["p_home"], r["mkt_home"], r["best_home"], r["book_home"]), ("away", r["away"], r["home"], r["p_away"], 1 - r["mkt_home"], r["best_away"], r["book_away"])):
+        for side, team, opp, p, mk, price, book in (("home", r["home"], r["away"], r["p_home"], r["mkt_home"], r["pick_best_home"], r["book_home"]), ("away", r["away"], r["home"], r["p_away"], 1 - r["mkt_home"], r["pick_best_away"], r["book_away"])):
+            if price is None:
+                continue
             u, ps = units(p, mk, int(price))
             if u:
                 cands.append({"locked_utc": now.isoformat(timespec="seconds"), "game_id": r["game_id"], "game_date": r["game_date"], "start_utc": r["start_utc"], "away": r["away"], "home": r["home"], "pick": team, "against": opp, "side": side,

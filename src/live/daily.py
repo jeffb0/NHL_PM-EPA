@@ -75,6 +75,12 @@ def forecast_row(ctx: dict, g: dict, news: dict | None, force_b2b: set | None, s
             "home_goalie_alt": alt(th), "away_goalie_alt": alt(ta), "p_home_min": round(lo, 5), "p_home_max": round(hi, 5)}
 
 
+def extra_rows(extra: tuple[dict, str], g: dict, stamp: str) -> list[dict]:
+    """Odds-log rows for one game from the second price source (fetch_extra's result for the game's date)."""
+    prices, url = extra
+    return [{"captured_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "away": g["away"], "home": g["home"], **p, "source": url} for p in prices.get((g["away"], g["home"]), [])]
+
+
 def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict:
     day = day or date.today().isoformat()
     if update:
@@ -93,6 +99,7 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     today = slate(day)
     games = today + slate(nxt)
     plays_today = {g["away"] for g in today} | {g["home"] for g in today}        # these teams are on a back-to-back in tomorrow's games
+    extra = {d: od.fetch_extra(d) for d in (day, nxt)}                               # Hard Rock Bet and theScore Bet, one request per date
     f_rows, o_rows, skipped = [], [], []
     for g in games:
         started = g["state"] not in ("FUT", "PRE") or (g["start_utc"] and datetime.fromisoformat(g["start_utc"].replace("Z", "+00:00")) <= now)
@@ -102,6 +109,7 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
         f_rows.append(forecast_row(ctx, g, feed.get((g["away"], g["home"])), plays_today if g["game_date"] == nxt else None, stamp))
         prices, url = od.fetch(g["away"], g["home"])
         o_rows += [{"captured_utc": stamp, "game_id": g["game_id"], "game_date": g["game_date"], "away": g["away"], "home": g["home"], **p, "source": url} for p in prices]
+        o_rows += extra_rows(extra[g["game_date"]], g, stamp)
     _append(LOGS / "forecast_log.csv", F_COLS, f_rows)
     _append(LOGS / "odds_log.csv", O_COLS, o_rows)
     with_odds = len({r["game_id"] for r in o_rows})

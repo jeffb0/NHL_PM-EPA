@@ -12,6 +12,8 @@ One unit = one dollar. Stakes are whole units, between 1 and 3 per pick. Sizing 
 For each game on the day's slate, at the daily run (scheduled 12:00 Eastern), on the moneyline only:
 
 1. Take the model's win probability for each side and the best available price among FanDuel, DraftKings and BetMGM (after the source-error guard of docs/market §8.1).
+   **From 2026-10-16 (owner's request): the best price among FanDuel, DraftKings, BetMGM, Caesars, Hard Rock Bet and theScore Bet.** The market probability used for sizing is still the three-book consensus of the market test.
+   Hard Rock Bet and theScore Bet come from a second source (Action Network, New Jersey lines; docs/market §8 item 13).
 2. A side qualifies when the model's probability is at least **3 percentage points** above that price's break-even probability.
 3. At most one pick per game. A game is locked once; later runs never change or add to it.
 4. **Goalie flag (from 2026-10-13; the daily run has been at 8:00 Eastern since 2026-10-06).** Most starting goalies are not confirmed at that hour. Each pick is shown with whether its edge survives the team's other goalie starting, for any side not yet confirmed:

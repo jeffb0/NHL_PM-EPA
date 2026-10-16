@@ -79,3 +79,6 @@ this is analysis of a model, not betting advice.
     The model is unchanged. Every forecast row now also records, for a side whose starter is not confirmed, the team's other goalie and the range of the home win probability over who starts (`p_home_min`, `p_home_max`).
     The picks ledger is not changed by the afternoon run (docs/market/picks.md).
 12. **2026-10-12: a de-shrinkage of the 5v5 play block was tested and left off** by the owner's decision (docs/deshrink). No change to the forecasts.
+13. **2026-10-16: more books are logged, for the picks only** (owner's request). Each run also captures Hard Rock Bet and theScore Bet moneyline and total prices from Action Network's scoreboard feed (New Jersey lines; one request per date); Caesars was already captured from the comparison page.
+    The owner's picks now take the best price among FanDuel, DraftKings, BetMGM, Caesars, Hard Rock Bet and theScore Bet (docs/market/picks.md §2). **The market test is unchanged:** its consensus, paper bets and scoring still use FanDuel, DraftKings and BetMGM only,
+    and the source-error guard's median is still taken over the comparison page's books (the two new books are checked against it but do not move it).

@@ -63,6 +63,47 @@ def parse(html: str) -> list[dict]:
     return out
 
 
+# books the comparison page does not carry, from Action Network's scoreboard feed (New Jersey lines; docs/market/methodology.md §8 item 13)
+AN_URL = "https://api.actionnetwork.com/web/v2/scoreboard/nhl"
+AN_BOOKS = {2724: "Hard Rock Bet", 4620: "theScore Bet"}
+AN_ABBR = {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
+
+
+def parse_an(d: dict) -> dict[tuple[str, str], list[dict]]:
+    """Moneyline and total prices per (away, home) from an Action Network scoreboard response, for the books in AN_BOOKS."""
+    out: dict = {}
+    for g in d.get("games", []):
+        ab = {t["id"]: AN_ABBR.get(t["abbr"], t["abbr"]) for t in g.get("teams", [])}
+        side_of = {g["away_team_id"]: "away", g["home_team_id"]: "home"}
+        rows = []
+        for bid, m in (g.get("markets") or {}).items():
+            book = AN_BOOKS.get(int(bid))
+            ev = (m or {}).get("event") or {}
+            if book is None:
+                continue
+            for o in ev.get("moneyline") or []:
+                if o.get("team_id") in side_of and isinstance(o.get("odds"), int) and not o.get("is_live"):
+                    rows.append({"book": book, "market": "moneyline", "side": side_of[o["team_id"]], "line": None, "american": o["odds"]})
+            for o in ev.get("total") or []:
+                if o.get("side") in ("over", "under") and isinstance(o.get("odds"), int) and not o.get("is_live"):
+                    rows.append({"book": book, "market": "total", "side": o["side"], "line": float(o["value"]) if o.get("value") is not None else None, "american": o["odds"]})
+        if g.get("away_team_id") in ab and g.get("home_team_id") in ab:
+            out[(ab[g["away_team_id"]], ab[g["home_team_id"]])] = rows
+    return out
+
+
+def fetch_extra(day: str, timeout: int = 30) -> tuple[dict[tuple[str, str], list[dict]], str]:
+    """Hard Rock Bet and theScore Bet prices for every game on ``day`` (an Eastern date, YYYY-MM-DD), keyed by (away, home). Empty on failure: the other books are still logged."""
+    url = f"{AN_URL}?bookIds={','.join(map(str, AN_BOOKS))}&periods=event&date={day.replace('-', '')}"
+    try:
+        r = requests.get(url, headers=UA, timeout=timeout)
+        r.raise_for_status()
+        return parse_an(r.json()), url
+    except (requests.RequestException, ValueError) as exc:
+        log.warning("Action Network fetch failed for %s: %s", day, exc)
+        return {}, url
+
+
 def fetch(away: str, home: str, timeout: int = 30) -> tuple[list[dict], str]:
     """Prices for a matchup. The page is keyed by the two nicknames in alphabetical order and shows the teams' next meeting."""
     a, h = sorted([SLUG[away], SLUG[home]])
