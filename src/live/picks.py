@@ -13,13 +13,14 @@ import numpy as np
 import polars as pl
 
 from src.config import ROOT
+from src.live import paths
 from src.live import score as sc
 from src.live.odds import implied
 from src.viz import style
 from src.viz.style import plt
 
 log = logging.getLogger("live")
-LOGS = ROOT / "data/live/logs"
+LOGS = paths.LOGS
 PICKS = LOGS / "picks_log.csv"
 COLS = ["locked_utc", "game_id", "game_date", "start_utc", "away", "home", "pick", "against", "side", "book", "american", "units", "p_model", "p_market", "p_sizing", "edge_vs_breakeven", "forecast_made_utc"]
 BANKROLL, KELLY, SHRINK, MIN_EDGE, MAX_UNITS = 100.0, 0.25, 0.5, 0.03, 3
@@ -102,6 +103,16 @@ def settled() -> pl.DataFrame | None:
         pl.when(pl.col("result") == "won").then(pl.col("units") * pay).when(pl.col("result") == "lost").then(-pl.col("units").cast(pl.Float64)).otherwise(None).alias("profit")).sort("start_utc", "game_id")
 
 
+PUBLIC_RECORD = paths.PUBLIC / "picks_record.csv"
+PUBLIC_COLS = ["locked_utc", "game_date", "start_utc", "away", "home", "pick", "against", "units", "decimal_odds", "book", "p_model", "away_final", "home_final", "last_period_type", "result", "profit"]
+
+
+def public_record(s: pl.DataFrame) -> pl.DataFrame:
+    """The ledger as published: each pick in units at its decimal odds, the model's probability, and the result; the market probability and sizing inputs stay private."""
+    paths.PUBLIC.mkdir(parents=True, exist_ok=True)
+    return s.select(PUBLIC_COLS)
+
+
 def summary(s: pl.DataFrame) -> dict:
     d = s.filter(pl.col("result").is_not_null())
     out = {"picks": s.height, "settled": d.height, "pending": s.height - d.height, "pending_units": int(s.filter(pl.col("result").is_null())["units"].sum())}
@@ -135,8 +146,8 @@ def report(s: pl.DataFrame, m: dict, today: str) -> str:
         L += [f"No settled picks yet. {m['pending']} pick(s) pending ({m['pending_units']} units).", ""]
     pend = s.filter(pl.col("result").is_null())
     if pend.height:
-        L += ["## Locked, not yet played", "", "| date | pick | units | odds (decimal) | book | model | market | gap over break-even |", "|---|---|---|---|---|---|---|---|"]
-        L += [f"| {r['game_date']} | **{r['pick']}** over {r['against']} | {r['units']} (${r['units']}) | {fmt(r['american'])} | {r['book']} | {r['p_model']:.1%} | {r['p_market']:.1%} | {r['edge_vs_breakeven']:+.1%} |" for r in pend.iter_rows(named=True)]
+        L += ["## Locked, not yet played", "", "| date | pick | units | odds (decimal) | book | model |", "|---|---|---|---|---|---|"]
+        L += [f"| {r['game_date']} | **{r['pick']}** over {r['against']} | {r['units']} (${r['units']}) | {fmt(r['american'])} | {r['book']} | {r['p_model']:.1%} |" for r in pend.iter_rows(named=True)]
         L.append("")
     done = s.filter(pl.col("result").is_not_null()).sort("start_utc", descending=True)
     if done.height:
@@ -170,7 +181,7 @@ def chart(s: pl.DataFrame) -> None:
     fig.autofmt_xdate()
     ax.set_title(f"Picks ledger: cumulative net profit through {d['game_date'].max()} ({int(d['n'].sum())} settled picks, {int(d['units'].sum())} units staked)")
     fig.tight_layout()
-    style.save(fig, ROOT / "reports/live", "picks_profit")
+    style.save(fig, paths.PUBLIC_REPORTS, "picks_profit")
 
 
 def run(day: str | None = None) -> dict:
@@ -182,9 +193,11 @@ def run(day: str | None = None) -> dict:
         return {"locked_now": new}
     m = summary(s)
     chart(s)
-    (ROOT / "reports/live").mkdir(parents=True, exist_ok=True)
-    (ROOT / "reports/live/picks.md").write_text(report(s, m, day), encoding="utf-8")
-    s.with_columns((1.0 + pl.when(pl.col("american") > 0).then(pl.col("american") / 100.0).otherwise(100.0 / -pl.col("american"))).round(3).alias("decimal_odds")).write_csv(LOGS / "picks_settled.csv")
+    paths.PUBLIC_REPORTS.mkdir(parents=True, exist_ok=True)
+    (paths.PUBLIC_REPORTS / "picks.md").write_text(report(s, m, day), encoding="utf-8")
+    full = s.with_columns((1.0 + pl.when(pl.col("american") > 0).then(pl.col("american") / 100.0).otherwise(100.0 / -pl.col("american"))).round(3).alias("decimal_odds"))
+    full.write_csv(LOGS / "picks_settled.csv")
+    public_record(full).write_csv(PUBLIC_RECORD)
     log.info("picks: %d locked now; %d settled, %d pending; profit %s units", len(new), m.get("settled", 0), m["pending"], f"{m['profit']:+.2f}" if m.get("settled") else "n/a")
     return {"locked_now": new, **m}
 

@@ -48,8 +48,8 @@ several hundred picks are needed before profit says anything about the model. Th
 
 ## 6. The ledger
 
-`data/live/logs/picks_log.csv` (append-only): when locked, the game, the side, the book and price, units, the model and market probabilities. `python -m src.live.picks` (also run by the daily job) locks the day's picks, settles finished games, and writes
-`reports/live/picks.md` and `reports/live/picks_profit.png` (cumulative profit through the season). A pick whose price is no longer available when the owner goes to place it is the owner's call; the ledger records the price at lock time.
+`data/private/logs/picks_log.csv` (append-only; private from 2026-10-18, its fingerprint is public): when locked, the game, the side, the book and price, units, the model and market probabilities. `python -m src.live.picks` (also run by the daily job) locks the day's picks, settles finished games, and writes
+`reports/live/picks.md`, `reports/live/picks_profit.png` (cumulative profit through the season) and the public record `data/live/public/picks_record.csv` (each pick in units and decimal odds with the model's probability and the result). A pick whose price is no longer available when the owner goes to place it is the owner's call; the ledger records the price at lock time.
 
 ## 7. Change log
 

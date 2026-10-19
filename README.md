@@ -217,13 +217,15 @@ Pre-registered ([methodology](docs/scoreeffects/methodology.md), [results](repor
 Pre-registered protocol: [docs/market/methodology.md](docs/market/methodology.md). Once a day, before the first game:
 
 ```
-python -m src.live.daily          # refresh completed games, forecast today's and tomorrow's games, capture prices, append to data/live/logs/
-python -m src.live.score          # score logged forecasts and prices against results -> reports/live/market_tracking.md
+python -m src.live.daily          # refresh completed games, forecast today's and tomorrow's games, capture prices, append to data/private/logs/ (private; see below)
+python -m src.live.score          # score logged forecasts and prices against results -> reports/live/market_summary.md (public totals) and data/private/reports/market_tracking.md
 python -m src.live.predict WPG DET 2026-10-04     # one game
 ```
 
 Forecasts use the frozen game model with in-season updating. Each run snapshots the published rosters and reads the RotoWire lineups page for listed starting goalies (confirmed or expected) and injury lists: players listed out, on injured reserve or suspended, and players no longer on the roster, are removed from a team's previous lineup and replaced from the roster. Prices are midday moneylines from FanDuel, DraftKings and BetMGM (scoresandodds.com), margin removed. The run is scheduled daily at 12:00 Eastern. Manual roster facts (suspensions, named starters) go in `data/external/roster_overrides.json`.
 Nothing is claimed about the market before 300 scored games. This is analysis of a model, not betting advice.
+
+**Public and private files.** The forecast, odds and scoring logs contain sportsbook prices and lineup-feed data, so they are kept in `data/private/`, a separate private repository. The public record is the picks ledger in units and decimal odds ([data/live/public/picks_record.csv](data/live/public/picks_record.csv)), the market test's totals ([reports/live/market_summary.md](reports/live/market_summary.md)), and a SHA-256 fingerprint of every private log at each run ([data/live/public/fingerprints.csv](data/live/public/fingerprints.csv)), which lets the private logs be checked against what existed at the time.
 
 **Picks ledger** ([rules](docs/market/picks.md), [ledger](reports/live/picks.md)): the daily run also locks moneyline picks for the day's games where the model is at least 3 points above break-even, sized at 1–3 one-dollar units (a quarter of the Kelly fraction at a probability halfway between market and model, on a fixed 100-unit reference bankroll), settles the previous day's picks and charts cumulative profit. It is bookkeeping for the owner's own small wagers; the model has no demonstrated edge.
 

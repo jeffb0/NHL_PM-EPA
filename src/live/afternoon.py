@@ -1,7 +1,7 @@
 """Afternoon goalie update:  python -m src.live.afternoon [YYYY-MM-DD]   (docs/market/methodology.md §8 item 11)
 
 For today's games whose starting goalie was not confirmed at the morning run and that have not started: fetches the lineup feed and prices again, re-forecasts, appends to the forecast and odds logs
-(so the market test scores the later forecast), and writes reports/live/update_digest.md and .html for the afternoon email. It does not refresh game data, does not lock or change picks, and does not touch the morning digest.
+(so the market test scores the later forecast), and writes data/private/reports/update_digest.md and .html for the afternoon email. It does not refresh game data, does not lock or change picks, and does not touch the morning digest.
 When no game qualifies the digest's first line is "NO UPDATE" and no email is sent."""
 
 from __future__ import annotations
@@ -13,17 +13,17 @@ from datetime import UTC, date, datetime
 
 import polars as pl
 
-from src.config import ROOT
 from src.live import daily as dl
 from src.live import digest as dg
 from src.live import odds as od
+from src.live import paths
 from src.live import picks as pk
 from src.live import predict as lp
 from src.live import score as sc
 from src.live.odds import implied
 
 log = logging.getLogger("live")
-OUT, OUT_HTML = ROOT / "reports/live/update_digest.md", ROOT / "reports/live/update_digest.html"
+OUT, OUT_HTML = paths.PRIVATE_REPORTS / "update_digest.md", paths.PRIVATE_REPORTS / "update_digest.html"
 
 
 def morning(day: str) -> pl.DataFrame:
@@ -104,6 +104,7 @@ def run(day: str | None = None, season: int = 2026) -> str:
             o_rows += dl.extra_rows(extra, g, stamp)
         dl._append(dl.LOGS / "forecast_log.csv", dl.F_COLS, f_rows)
         dl._append(dl.LOGS / "odds_log.csv", dl.O_COLS, o_rows)
+        paths.fingerprint("afternoon")
         now_rows = {r["game_id"]: r for r in sc.scored_frame().filter(pl.col("made_utc") == stamp).iter_rows(named=True)}
         rows = [r for r in rows if r["game_id"] in now_rows]
     led = pk._read()

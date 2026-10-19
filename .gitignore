@@ -18,5 +18,5 @@ reports/figures/value_surfaces/*.svg
 .DS_Store
 .venv-bayes/
 
-# the forecast and odds logs are append-only evidence for the market test: tracked
-!data/live/logs/
+# logs and reports with third-party data (sportsbook prices, lineup feed): a separate private repository (src/live/paths.py)
+data/private/

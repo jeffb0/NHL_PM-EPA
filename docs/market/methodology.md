@@ -15,7 +15,7 @@ Backtests cannot answer it (no historical odds are in the repository, and every 
 2. forecasts every game on the slate that has not started (today and tomorrow) with the frozen game model (docs/gamemodel: hyperparameters fixed, original rate model, in-season updating through the last completed game), each team's previous lineup,
    and the starting goalie with the most prior work unless `data/external/roster_overrides.json` names one;
 3. captures moneyline and total prices for each of those games from scoresandodds.com for FanDuel, DraftKings and BetMGM (other listed books are stored too);
-4. appends to `data/live/logs/forecast_log.csv` and `data/live/logs/odds_log.csv` with the capture time. Rows are never edited; a game forecast on two days has two rows.
+4. appends to `forecast_log.csv` and `odds_log.csv` (in `data/private/logs/` from 2026-10-18; item 14) with the capture time. Rows are never edited; a game forecast on two days has two rows.
 
 **The scored forecast for a game is the last one logged before its start time, with the prices captured in the same run.** These are morning prices, not closing lines; closing lines are sharper, so beating morning prices is a weaker claim than beating the close, and that is stated with every result.
 
@@ -82,3 +82,7 @@ this is analysis of a model, not betting advice.
 13. **2026-10-16: more books are logged, for the picks only** (owner's request). Each run also captures Hard Rock Bet and theScore Bet moneyline and total prices from Action Network's scoreboard feed (New Jersey lines; one request per date); Caesars was already captured from the comparison page.
     The owner's picks now take the best price among FanDuel, DraftKings, BetMGM, Caesars, Hard Rock Bet and theScore Bet (docs/market/picks.md §2). **The market test is unchanged:** its consensus, paper bets and scoring still use FanDuel, DraftKings and BetMGM only,
     and the source-error guard's median is still taken over the comparison page's books (the two new books are checked against it but do not move it).
+14. **2026-10-18: the logs move to a private repository; fingerprints are published** (owner's request, before making this repository public). The forecast, odds, scoring and picks logs and the emailed digests contain sportsbook prices and lineup-feed data,
+    so they now live in `data/private/` (a separate private git repository, ignored here) and were removed from this repository's history. Nothing about how they are written changed. To keep the evidence checkable, every daily and afternoon run appends the SHA-256, size and row count
+    of each private log to the public `data/live/public/fingerprints.csv`; a private log shown later can be checked against the fingerprint committed at the time. The public record is `reports/live/market_summary.md` (the test's totals),
+    `data/live/public/picks_record.csv` and `reports/live/picks.md` (the picks in units and decimal odds). The history rewrite also replaced the commit author's e-mail with GitHub's no-reply address; commit dates and contents are otherwise unchanged.

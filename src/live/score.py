@@ -1,6 +1,6 @@
 """Score logged forecasts and prices against results:  python -m src.live.score   (docs/market/methodology.md §4-§5)
 
-Writes reports/live/market_tracking.md and data/live/logs/scored.csv. Run src.live.update first so results are current."""
+Writes data/private/reports/market_tracking.md and data/private/logs/scored.csv (private: they contain sportsbook prices), and reports/live/market_summary.md (public: totals only). Run src.live.update first so results are current."""
 
 from __future__ import annotations
 
@@ -11,10 +11,11 @@ import polars as pl
 
 from src.config import ROOT
 from src.gamemodel import model as gm
+from src.live import paths
 from src.live.odds import implied
 
 log = logging.getLogger("live")
-LOGS = ROOT / "data/live/logs"
+LOGS = paths.LOGS
 BOOKS = ["FanDuel", "DraftKings", "BetMGM"]                                    # the market test's consensus (pre-registered; unchanged)
 PICK_BOOKS = [*BOOKS, "Caesars", "Hard Rock Bet", "theScore Bet"]              # where the owner's picks take the best price (docs/market/picks.md §2, from 2026-10-16)
 SECOND_SOURCE = ["Hard Rock Bet", "theScore Bet"]                              # from Action Network; left out of the source-error guard's median so the guard is as pre-registered
@@ -115,13 +116,29 @@ def report(d: pl.DataFrame, s: dict) -> str:
     return "\n".join(L)
 
 
+def public_summary(s: dict) -> str:
+    """The market test's running totals, without any game's prices (the per-game log is private)."""
+    L = ["# Model against the betting market — summary", "", "Protocol: [docs/market/methodology.md](../../docs/market/methodology.md). Forecasts are logged before each game and scored against the margin-free consensus of FanDuel, DraftKings and BetMGM. "
+         "The per-game log contains sportsbook prices and is kept private; its SHA-256 at every run is in [data/live/public/fingerprints.csv](../../data/live/public/fingerprints.csv). **Analysis of a model, not betting advice.**", "",
+         f"Games logged: {s['logged']}. Scored: {s['scored']}. Pending: {s['pending']}.", ""]
+    if s["scored"]:
+        few = s["scored"] < MIN_GAMES
+        L += [f"## Results so far{' (too few games for any claim: ' + str(s['scored']) + ' of ' + str(MIN_GAMES) + ')' if few else ''}", "", "| | model | market |", "|---|---|---|",
+              f"| log loss | {s['logloss_model']:.4f} | {s['logloss_market']:.4f} |", f"| Brier | {s['brier_model']:.4f} | {s['brier_market']:.4f} |", f"| picked the winner | {s['accuracy_model']:.1%} | {s['accuracy_market']:.1%} |", "",
+              f"Log-loss difference (market − model; positive favors the model): {s['diff_market_minus_model']:+.4f}" + (f", z = {s['z']:.2f}." if s.get("z") is not None else "."), ""]
+        if s.get("paper_bets"):
+            L += [f"Paper bets (one unit when the model is at least {EDGE:.0%} above break-even at the best of the three books): {s['paper_bets']} bets, {s['units']:+.2f} units, return {s['roi']:+.1%} per unit "
+                  f"(95% interval {s['roi_lo95']:+.1%} to {s['roi_hi95']:+.1%})" + ("; too few bets for any claim." if s["paper_bets"] < MIN_BETS else "."), ""]
+    return "\n".join(L)
+
+
 def run() -> dict:
     d = scored_frame()
     s = summarize(d)
     d.write_csv(LOGS / "scored.csv")
-    out = ROOT / "reports/live"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "market_tracking.md").write_text(report(d, s), encoding="utf-8")
+    for out, page in ((paths.PRIVATE_REPORTS, report(d, s)), (paths.PUBLIC_REPORTS, public_summary(s))):
+        out.mkdir(parents=True, exist_ok=True)
+        (out / ("market_tracking.md" if out == paths.PRIVATE_REPORTS else "market_summary.md")).write_text(page, encoding="utf-8")
     log.info("scored %d of %d logged games; %d pending", s["scored"], s["logged"], s["pending"])
     return s
 

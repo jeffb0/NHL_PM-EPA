@@ -118,7 +118,8 @@ def goalie_scale_test(proc, cfg, met) -> dict:
 
 def live_audit() -> dict:
     """Was the logged starter the goalie who started? First forecast on the game's date and last forecast before puck drop, by source."""
-    logs, proc = ROOT / "data/live/logs/forecast_log.csv", ROOT / "data/live/processed"
+    from src.live.paths import LOGS
+    logs, proc = LOGS / "forecast_log.csv", ROOT / "data/live/processed"
     if not logs.exists():
         return {}
     f = pl.read_csv(logs, infer_schema_length=None).with_columns(pl.col("made_utc").str.to_datetime(time_zone="UTC").alias("made"), pl.col("start_utc").str.to_datetime(time_zone="UTC").alias("start"))

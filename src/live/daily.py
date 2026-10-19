@@ -1,7 +1,7 @@
 """Daily forecast and odds log:  python -m src.live.daily [YYYY-MM-DD] [--no-update]   (docs/market/methodology.md §2)
 
 Refreshes the season's completed games, forecasts every game of the given day and the next that has not started, captures prices, and appends to
-data/live/logs/forecast_log.csv and odds_log.csv. Rows are only ever appended."""
+data/private/logs/forecast_log.csv and odds_log.csv (the private repository; src/live/paths.py). Rows are only ever appended."""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ from datetime import UTC, date, datetime, timedelta
 
 import requests
 
-from src.config import ROOT
 from src.live import lineups as ln
 from src.live import odds as od
+from src.live import paths
 from src.live import predict as lp
 
 log = logging.getLogger("live")
-LOGS = ROOT / "data/live/logs"
+LOGS = paths.LOGS
 F_COLS = ["made_utc", "game_id", "game_date", "start_utc", "away", "home", "p_home", "p_away", "exp_goals_home", "exp_goals_away", "model_mu", "home_goalie", "home_goalie_source", "away_goalie", "away_goalie_source",
           "home_lineup_source", "away_lineup_source", "home_games", "away_games", "completed_games", "model",
           "home_removed", "away_removed", "home_added", "away_added", "home_questionable", "away_questionable", "unmatched_out", "roster_snapshot",
@@ -121,7 +121,8 @@ def run(day: str | None = None, update: bool = True, season: int = 2026) -> dict
     sc.run()
     ledger = pk.run(day)
     from src.live import digest
-    digest.run(day)                                                # reports/live/daily_digest.md: the summary that is emailed
+    digest.run(day)                                                # data/private/reports/daily_digest.md: the summary that is emailed
+    paths.fingerprint("daily")                                    # public SHA-256 of every private log (data/live/public/fingerprints.csv)
     return {"forecasts": f_rows, "odds_rows": len(o_rows), "games_with_odds": with_odds, "skipped": skipped, "picks": ledger}
 
 

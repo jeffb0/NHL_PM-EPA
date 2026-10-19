@@ -1,6 +1,6 @@
 """Daily summary for email:  python -m src.live.digest [YYYY-MM-DD]
 
-Builds reports/live/daily_digest.md (plain text; first line is the subject) and reports/live/daily_digest.html (the same with charts drawn as HTML tables, so no image attachment is needed):
+Builds data/private/reports/daily_digest.md (plain text; first line is the subject) and daily_digest.html (the same with charts drawn as HTML tables, so no image attachment is needed):
 yesterday's settled picks with how each game went on expected goals, the season ledger with a cumulative-profit chart by date, today's locked picks and forecasts, and for the owner's teams (Jets, Senators)
 a stacked-bar chart of each skater's 5v5 impact in yesterday's game. Run after src.live.daily (which calls it). Prices are decimal odds."""
 
@@ -14,14 +14,15 @@ from datetime import date, timedelta
 import polars as pl
 
 from src.config import ROOT
+from src.live import paths
 from src.live import picks as pk
 from src.live import score as sc
 from src.live.odds import implied
 from src.scoreeffects import factors as sf
 
 log = logging.getLogger("live")
-OUT = ROOT / "reports/live/daily_digest.md"
-OUT_HTML = ROOT / "reports/live/daily_digest.html"
+OUT = paths.PRIVATE_REPORTS / "daily_digest.md"
+OUT_HTML = paths.PRIVATE_REPORTS / "daily_digest.html"
 LIVE = ROOT / "data/live/processed"
 FOCUS_TEAMS = ("WPG", "OTT")            # teams whose games get the per-player chart
 BLUE, ORANGE, GREY, RED, GREEN, INK, MUTED = "#2a78d6", "#eb6834", "#9a9994", "#c9403f", "#1a8f63", "#0b0b0b", "#52514e"
@@ -75,6 +76,15 @@ def goalie_note(r: dict, side: str, american: int) -> tuple[str, bool]:
     if worst >= pk.MIN_EDGE:
         return f"holds whichever goalie starts (edge at least {worst:+.1%}); not confirmed: {who}", False
     return f"GOALIE-DEPENDENT: edge {p - be:+.1%} with the listed starters, {worst:+.1%} at worst if the other goalie starts; not confirmed: {who}", True
+
+
+def rel(p) -> str:
+    """A path relative to the repository (no user name or machine folder in the email)."""
+    from pathlib import Path
+    try:
+        return Path(p).resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return Path(p).name
 
 
 def cumulative(s: pl.DataFrame) -> pl.DataFrame:
@@ -283,7 +293,7 @@ def build(day: str | None = None) -> tuple[str, str]:
                 t = x["players"].filter(pl.col("team") == team).sort("on_xgd_5v5", descending=True)
                 T.append(f"    {team} by 5v5 on-ice xG differential: best " + ", ".join(f"{r['name']} {r['on_xgd_5v5']:+.2f}" for r in t.head(3).iter_rows(named=True))
                          + "; lowest " + ", ".join(f"{r['name']} {r['on_xgd_5v5']:+.2f}" for r in t.tail(3).iter_rows(named=True)) + ".")
-            T.append(f"    Full charts: {x['dir']}")
+            T.append(f"    Full charts: {rel(x['dir'])}")
             H += [html_impact(x["players"], x["title"]), f'<p style="font-size:12px;color:{MUTED};margin:4px 0">{html.escape(x["line"])}</p>']
     foot = ("The model has no demonstrated edge over the market yet. This is record-keeping of your own picks, not betting advice. Prices are decimal odds as captured at the daily run and may have moved. "
             "One game is a small sample: the per-game numbers describe what happened and are not ratings.")
