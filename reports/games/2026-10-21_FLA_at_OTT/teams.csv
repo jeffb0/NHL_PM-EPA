@@ -1,0 +1,3 @@
+team,goals,xg,xg_score_adj,xg_5v5,xg_5v5_score_adj,xg_pp,xg_other,shots_on_goal,unblocked_attempts,goalie,goalie_shots,goalie_xg_faced,goalie_goals_against,goalie_saved_above_expected
+FLA,1,1.777,1.764,0.919,0.906,0.435,0.423,19,26,A. Schmid,30,2.721,5,-2.279
+OTT,5,2.721,2.681,1.435,1.396,1.285,0.000,30,38,L. Ullmark / S. Ersson,19,1.777,1,0.777

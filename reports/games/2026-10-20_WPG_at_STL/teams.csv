@@ -1,0 +1,3 @@
+team,goals,xg,xg_score_adj,xg_5v5,xg_5v5_score_adj,xg_pp,xg_other,shots_on_goal,unblocked_attempts,goalie,goalie_shots,goalie_xg_faced,goalie_goals_against,goalie_saved_above_expected
+WPG,1,2.387,2.354,1.811,1.778,0.067,0.509,33,49,S. Skinner,28,2.902,2,0.902
+STL,2,2.902,2.881,1.783,1.762,0.940,0.178,28,41,J. Hofer,33,2.387,1,1.387

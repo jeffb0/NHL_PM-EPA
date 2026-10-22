@@ -20,6 +20,7 @@ from src.viz.style import plt
 log = logging.getLogger("live")
 HOME_C, AWAY_C = style.SERIES[0], style.SERIES[1]
 UNBLOCKED = ["shot-on-goal", "missed-shot", "goal"]
+OWN, MATES, AGAINST = "#2a78d6", "#1baf7a", "#eb6834"         # impact-chart components: blue, aqua, orange (colour-blind-safe in every pairing; same as the email)
 
 
 def load(game_id: int) -> dict:
@@ -65,13 +66,13 @@ def fig_impact(d: dict, pt: pl.DataFrame):
     g = d["g"]
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 7.6), sharex=True)
     lim = 1.3 * max(float(pt["on_xgf_5v5"].max()), float(pt["on_xga_5v5"].max()))             # room on the right for the net figure
-    for ax, ab, col in ((axes[0], g["away_abbrev"], AWAY_C), (axes[1], g["home_abbrev"], HOME_C)):
+    for ax, ab in ((axes[0], g["away_abbrev"]), (axes[1], g["home_abbrev"])):
         t = pt.filter(pl.col("team") == ab).sort("on_xgd_5v5")
         y = np.arange(t.height)
         own, mates, ag, net = (t[c].to_numpy() for c in ("own_xg_5v5", "mates_xg_5v5", "on_xga_5v5", "on_xgd_5v5"))
-        ax.barh(y, own, color=col, height=0.72, edgecolor=style.SURFACE, linewidth=1.5)
-        ax.barh(y, mates, left=own, color=col, alpha=0.45, height=0.72, edgecolor=style.SURFACE, linewidth=1.5)
-        ax.barh(y, -ag, color="#9a9994", height=0.72, edgecolor=style.SURFACE, linewidth=1.5)
+        ax.barh(y, own, color=OWN, height=0.72, edgecolor=style.SURFACE, linewidth=2)
+        ax.barh(y, mates, left=own, color=MATES, height=0.72, edgecolor=style.SURFACE, linewidth=2)
+        ax.barh(y, -ag, color=AGAINST, height=0.72, edgecolor=style.SURFACE, linewidth=2)
         ax.scatter(net, y, s=46, color=style.TEXT, zorder=6, edgecolor=style.SURFACE, linewidth=1.2)
         for yi, n in zip(y, net):
             ax.text(lim, yi, f"{n:+.2f}", va="center", ha="right", fontsize=8.5, color=style.TEXT, fontweight="bold")
@@ -80,12 +81,12 @@ def fig_impact(d: dict, pt: pl.DataFrame):
         ax.set_xlim(-lim / 1.3 * 1.05, lim)
         ax.set_ylim(-0.6, t.height - 0.4)
         ax.grid(axis="y", visible=False)
-        ax.set_title(ab, color=col, fontsize=13)
+        ax.set_title(ab, color=style.TEXT, fontsize=13)
         ax.set_xlabel("expected goals at 5v5 while on the ice   (against  ←  →  for)")
     h = axes[0]
-    h.barh([-9], [0], color=AWAY_C, label="his own shots")
-    h.barh([-9], [0], color=AWAY_C, alpha=0.45, label="linemates' shots")
-    h.barh([-9], [0], color="#9a9994", label="against")
+    h.barh([-9], [0], color=OWN, label="his own shots")
+    h.barh([-9], [0], color=MATES, label="linemates' shots")
+    h.barh([-9], [0], color=AGAINST, label="against")
     h.scatter([], [], s=46, color=style.TEXT, label="net (number at right)")
     fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=4, bbox_to_anchor=(0.5, 0.0))
     fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: net 5v5 impact by skater (sorted best to worst)", x=0.02, ha="left", fontweight="bold", fontsize=12)

@@ -2,8 +2,8 @@
 
 |    season |    games |     events |   giveaways |   takeaways |   shot_attempts |    goals |   pct_missing_coords |   pct_unblocked_in_attacking_half |
 |----------:|---------:|-----------:|------------:|------------:|----------------:|---------:|---------------------:|----------------------------------:|
-| 2026.0000 | 134.0000 | 43259.0000 |   4440.0000 |   1122.0000 |      15321.0000 | 827.0000 |               0.0000 |                            0.9770 |
+| 2026.0000 | 153.0000 | 49324.0000 |   5050.0000 |   1276.0000 |      17560.0000 | 942.0000 |               0.0000 |                            0.9772 |
 
-* Direction inference: zone-vote vs `homeTeamDefendingSide` agreement = 1.0000 over 433 game-periods where both exist.
+* Direction inference: zone-vote vs `homeTeamDefendingSide` agreement = 1.0000 over 494 game-periods where both exist.
 * Game-periods with undetermined direction: 0
-* Shifts parsed: 101106
+* Shifts parsed: 115043

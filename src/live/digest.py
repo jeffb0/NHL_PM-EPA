@@ -26,6 +26,7 @@ OUT_HTML = paths.PRIVATE_REPORTS / "daily_digest.html"
 LIVE = ROOT / "data/live/processed"
 FOCUS_TEAMS = ("WPG", "OTT")            # teams whose games get the per-player chart
 BLUE, ORANGE, GREY, RED, GREEN, INK, MUTED = "#2a78d6", "#eb6834", "#9a9994", "#c9403f", "#1a8f63", "#0b0b0b", "#52514e"
+OWN, MATES, AGAINST = "#2a78d6", "#1baf7a", "#eb6834"   # stacked-bar components: blue, aqua, orange (the reference palette's first three slots, colour-blind-safe in every pairing)
 BLOCK = "\u2588"            # full block: the unit of the text bars
 VERDICT = {(True, True): ("deserved", "won and had the better of the chances"), (True, False): ("fortunate", "won despite being out-chanced"),
            (False, True): ("unlucky", "lost despite having the better of the chances"), (False, False): ("outplayed", "lost and was out-chanced")}
@@ -128,23 +129,22 @@ def html_profit_chart(cum: pl.DataFrame, max_days: int = 45) -> str:
 
 def html_impact(players: pl.DataFrame, title: str, width: int = 16) -> str:
     """Stacked horizontal bars per skater, drawn with block characters in a monospace block (small enough to pass through the mail tool as text):
-    expected goals against at 5v5 to the left of the centre line, for to the right (his own shots dark, linemates' light), net at the end; sorted by net within team."""
+    expected goals against at 5v5 to the left of the centre line (orange), for to the right (his own shots blue, linemates' aqua), net at the end; sorted by net within team."""
     lim = max(float(players["on_xgf_5v5"].max()), float(players["on_xga_5v5"].max()), 0.1)
     per = width / lim
     teams = players["team"].unique(maintain_order=True).to_list()
     out = [f'<p style="margin:14px 0 2px 0"><b>{html.escape(title)}</b></p>',
-           f'<p style="margin:0 0 4px 0;font-size:11px;color:{MUTED}">Expected goals at 5v5 while on the ice. Grey (left) = against; dark = his own shots; light = linemates\' shots; number = net. Sorted best to worst.</p>',
+           f'<p style="margin:0 0 4px 0;font-size:11px;color:{MUTED}">Expected goals at 5v5 while on the ice: <b><font color={AGAINST}>{BLOCK * 2} against</font></b> (left of the line), <b><font color={OWN}>{BLOCK * 2} his own shots</font></b>, <b><font color={MATES}>{BLOCK * 2} linemates\' shots</font></b>; number = net for minus against. Sorted best to worst.</p>',
            '<pre style="font-family:Consolas,Menlo,monospace;font-size:12px;line-height:14px;margin:0">']
-    for team, dark, light in zip(teams, (ORANGE, BLUE), ("#f5b9a2", "#9dc0ef")):
+    for team in teams:
         t = players.filter(pl.col("team") == team).sort("on_xgd_5v5", descending=True)
-        out.append(f"<b><font color={dark}>{html.escape(team)}</font></b>")
+        out.append(f"<b>{html.escape(team)}</b>")
         for r in t.iter_rows(named=True):
             a = min(int(round(r["on_xga_5v5"] * per)), width)
             own = min(int(round(r["own_xg_5v5"] * per)), width)
             tot = min(max(int(round(r["on_xgf_5v5"] * per)), own), width)
             name = f"{r['name']} ({r['position']})"[:21].ljust(21)
-            col = GREEN if r["on_xgd_5v5"] > 0 else RED if r["on_xgd_5v5"] < 0 else MUTED
-            out.append(f"{html.escape(name)} {' ' * (width - a)}<font color={GREY}>{BLOCK * a}</font>|<font color={dark}>{BLOCK * own}</font><font color={light}>{BLOCK * (tot - own)}</font>{' ' * (width - tot)} <b><font color={col}>{r['on_xgd_5v5']:+.2f}</font></b>")
+            out.append(f"{html.escape(name)} {' ' * (width - a)}<font color={AGAINST}>{BLOCK * a}</font>|<font color={OWN}>{BLOCK * own}</font><font color={MATES}>{BLOCK * (tot - own)}</font>{' ' * (width - tot)} <b>{r['on_xgd_5v5']:+.2f}</b>")
         out.append("")
     out.append("</pre>")
     return "\n".join(out)
