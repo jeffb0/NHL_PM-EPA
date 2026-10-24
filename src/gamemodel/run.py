@@ -71,7 +71,9 @@ def run() -> dict:
     t_all = games.table
     t = t_all.filter(pl.col("season") >= TUNE[0])
     tt = t.filter(pl.col("season").is_in(TUNE))
-    log.info("%d games from 2019 (%d tuning, %d test)", t.height, tt.height, t.filter(pl.col("season").is_in(TEST)).height)
+    log.info(
+        "%d games from 2019 (%d tuning, %d test)", t.height, tt.height, t.filter(pl.col("season").is_in(TEST)).height
+    )
 
     def player_mu(seasons, **kw) -> np.ndarray:
         return np.concatenate([gm.run_player_season(games, pri, T, **kw) for T in seasons])
@@ -82,7 +84,8 @@ def run() -> dict:
         best = None
         for lam, alpha, n0 in itertools.product(LAMS, ALPHAS, N0S):
             if lam == 0 and alpha != ALPHAS[0]:
-                continue                                                     # alpha is irrelevant without a skater update
+                # alpha is irrelevant without a skater update
+                continue
             sc = tune_score(tt, player_mu(TUNE, lam=lam, alpha=alpha, n0=n0, attribution=attr))
             if best is None or sc < best[0]:
                 best = (sc, lam, alpha, n0)
@@ -103,45 +106,77 @@ def run() -> dict:
     # ---- frozen hyperparameters, all seasons from 2019, out-of-sample logistic step
     hp, ht = tune["P"], tune["P_team"]
     seasons = TUNE + TEST
-    mus = {"P": player_mu(seasons, lam=hp["lam"], alpha=hp["alpha"], n0=hp["n0"]),
-           "P_pre": player_mu(seasons, lam=0.0, alpha=0.0, n0=hp["n0"], update=False),
-           "P_team": player_mu(seasons, lam=ht["lam"], alpha=ht["alpha"], n0=ht["n0"], attribution="team"),
-           "P_prev": player_mu(seasons, lam=hp["lam"], alpha=hp["alpha"], n0=hp["n0"], lineup="previous"),
-           "G1": gm.run_team_rating(games, tune["G1"]["k"], tune["G1"]["rho"], 1.0, pri.home_adv)[keep],
-           "G2": gm.run_team_rating(games, tune["G2"]["k"], tune["G2"]["rho"], tune["G2"]["alpha"], pri.home_adv)[keep], "G0": None}
+    mus = {
+        "P": player_mu(seasons, lam=hp["lam"], alpha=hp["alpha"], n0=hp["n0"]),
+        "P_pre": player_mu(seasons, lam=0.0, alpha=0.0, n0=hp["n0"], update=False),
+        "P_team": player_mu(seasons, lam=ht["lam"], alpha=ht["alpha"], n0=ht["n0"], attribution="team"),
+        "P_prev": player_mu(seasons, lam=hp["lam"], alpha=hp["alpha"], n0=hp["n0"], lineup="previous"),
+        "G1": gm.run_team_rating(games, tune["G1"]["k"], tune["G1"]["rho"], 1.0, pri.home_adv)[keep],
+        "G2": gm.run_team_rating(games, tune["G2"]["k"], tune["G2"]["rho"], tune["G2"]["alpha"], pri.home_adv)[keep],
+        "G0": None,
+    }
     te = t["season"].is_in(TEST).to_numpy()
     y = t["home_win"].to_numpy()[te]
     dates = t["date"].to_numpy()[te]
     seas = t["season"].to_numpy()[te]
     probs = {k: predict(t, v)[te] for k, v in mus.items()}
     ll = {k: gm.logloss(p, y) for k, p in probs.items()}
-    res: dict = {"n_test_games": int(te.sum()), "home_advantage_goals": pri.home_adv, "tuned": tune,
-                 "logloss": {k: float(v.mean()) for k, v in ll.items()}, "brier": {k: float(((p - y) ** 2).mean()) for k, p in probs.items()},
-                 "accuracy": {k: float(((p > 0.5) == (y > 0.5)).mean()) for k, p in probs.items()}, "calibration_slope": {k: cal_slope(p, y) for k, p in probs.items() if k != "G0"},
-                 "logloss_by_season": {str(T): {k: float(v[seas == T].mean()) for k, v in ll.items()} for T in TEST}}
+    res: dict = {
+        "n_test_games": int(te.sum()),
+        "home_advantage_goals": pri.home_adv,
+        "tuned": tune,
+        "logloss": {k: float(v.mean()) for k, v in ll.items()},
+        "brier": {k: float(((p - y) ** 2).mean()) for k, p in probs.items()},
+        "accuracy": {k: float(((p > 0.5) == (y > 0.5)).mean()) for k, p in probs.items()},
+        "calibration_slope": {k: cal_slope(p, y) for k, p in probs.items() if k != "G0"},
+        "logloss_by_season": {str(T): {k: float(v[seas == T].mean()) for k, v in ll.items()} for T in TEST},
+    }
     bench = "G1" if res["logloss"]["G1"] <= res["logloss"]["G2"] else "G2"
     res["best_team_benchmark"] = bench
-    res["paired"] = {"P_vs_G0": paired(ll["P"], ll["G0"], dates), "P_vs_G1": paired(ll["P"], ll["G1"], dates), "P_vs_G2": paired(ll["P"], ll["G2"], dates), "P_vs_P_pre": paired(ll["P"], ll["P_pre"], dates),
-                     "P_vs_P_team": paired(ll["P"], ll["P_team"], dates), "P_vs_P_prev": paired(ll["P"], ll["P_prev"], dates), "P_pre_vs_best_team": paired(ll["P_pre"], ll[bench], dates),
-                     "P_team_vs_best_team": paired(ll["P_team"], ll[bench], dates)}
-    z = lambda k: res["paired"][k]["z"]                                       # noqa: E731
-    res["gates"] = {"GM1": {"z": z("P_vs_G0"), "pass": bool(z("P_vs_G0") > 2)}, "GM2": {"z": z(f"P_vs_{bench}"), "benchmark": bench, "pass": bool(z(f"P_vs_{bench}") > 2)},
-                    "GM3": {"z": z("P_vs_P_pre"), "pass": bool(z("P_vs_P_pre") > 2)}, "GM4": {"z": z("P_vs_P_team"), "pass": bool(z("P_vs_P_team") > 2)},
-                    "GM5": {"slope": res["calibration_slope"]["P"], "pass": bool(0.8 <= res["calibration_slope"]["P"] <= 1.2)}}
-    out = t.filter(pl.col("season").is_in(TEST)).select("game_id", "season", "date", pl.col("home_abbrev").alias("home"), pl.col("away_abbrev").alias("away"), "home_win").with_columns(
-        *[pl.Series(f"p_{k}", v) for k, v in probs.items()])
+    res["paired"] = {
+        "P_vs_G0": paired(ll["P"], ll["G0"], dates),
+        "P_vs_G1": paired(ll["P"], ll["G1"], dates),
+        "P_vs_G2": paired(ll["P"], ll["G2"], dates),
+        "P_vs_P_pre": paired(ll["P"], ll["P_pre"], dates),
+        "P_vs_P_team": paired(ll["P"], ll["P_team"], dates),
+        "P_vs_P_prev": paired(ll["P"], ll["P_prev"], dates),
+        "P_pre_vs_best_team": paired(ll["P_pre"], ll[bench], dates),
+        "P_team_vs_best_team": paired(ll["P_team"], ll[bench], dates),
+    }
+    z = lambda k: res["paired"][k]["z"]
+    res["gates"] = {
+        "GM1": {"z": z("P_vs_G0"), "pass": bool(z("P_vs_G0") > 2)},
+        "GM2": {"z": z(f"P_vs_{bench}"), "benchmark": bench, "pass": bool(z(f"P_vs_{bench}") > 2)},
+        "GM3": {"z": z("P_vs_P_pre"), "pass": bool(z("P_vs_P_pre") > 2)},
+        "GM4": {"z": z("P_vs_P_team"), "pass": bool(z("P_vs_P_team") > 2)},
+        "GM5": {"slope": res["calibration_slope"]["P"], "pass": bool(0.8 <= res["calibration_slope"]["P"] <= 1.2)},
+    }
+    out = (
+        t.filter(pl.col("season").is_in(TEST))
+        .select(
+            "game_id",
+            "season",
+            "date",
+            pl.col("home_abbrev").alias("home"),
+            pl.col("away_abbrev").alias("away"),
+            "home_win",
+        )
+        .with_columns(*[pl.Series(f"p_{k}", v) for k, v in probs.items()])
+    )
     out.write_csv(outdir / "game_predictions.csv")
     res["market"] = market(cfg, out)
     (met / "game_model.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")
     log.info("log loss %s", {k: round(v, 4) for k, v in res["logloss"].items()})
     log.info("gates %s", {k: (round(v.get("z", v.get("slope")), 2), v["pass"]) for k, v in res["gates"].items()})
     from src.gamemodel.report import run as report
+
     report()
     return res
 
 
 def market(cfg, out: pl.DataFrame) -> dict | None:
-    """Comparison with de-vigged closing probabilities when data/external/odds.csv (game_date, home, away, p_home_close) is supplied."""
+    """Comparison with de-vigged closing probabilities when data/external/odds.csv (game_date, home, away, p_home_close)
+    is supplied."""
     path = cfg.path("data/external/odds.csv")
     if not path.exists():
         return None
@@ -149,7 +184,12 @@ def market(cfg, out: pl.DataFrame) -> dict | None:
     j = out.join(o.select("date", "home", "away", "p_home_close"), on=["date", "home", "away"], how="inner")
     y = j["home_win"].to_numpy()
     lm, lp = gm.logloss(j["p_home_close"].to_numpy(), y), gm.logloss(j["p_P"].to_numpy(), y)
-    return {"n_games": j.height, "logloss_market": float(lm.mean()), "logloss_P": float(lp.mean()), "P_vs_market": paired(lp, lm, j["date"].to_numpy())}
+    return {
+        "n_games": j.height,
+        "logloss_market": float(lm.mean()),
+        "logloss_P": float(lp.mean()),
+        "P_vs_market": paired(lp, lm, j["date"].to_numpy()),
+    }
 
 
 def main():

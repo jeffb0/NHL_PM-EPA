@@ -1,4 +1,5 @@
-"""Fetch each skater's career page (pre-NHL seasons, draft):  python -m src.prospects.ingest   (docs/prospects/methodology.md §2)."""
+"""Fetch each skater's career page (pre-NHL seasons, draft):  python -m src.prospects.ingest
+(docs/prospects/methodology.md §2)."""
 
 from __future__ import annotations
 
@@ -38,7 +39,10 @@ def main() -> None:
         d = _get_json(URL.format(pid=pid), cfg.data.request_timeout_s)
         if d is None:
             return False
-        _write_gz(out / f"{pid}.json.gz", {k: d.get(k) for k in ("playerId", "position", "birthDate", "draftDetails", "seasonTotals")})
+        _write_gz(
+            out / f"{pid}.json.gz",
+            {k: d.get(k) for k in ("playerId", "position", "birthDate", "draftDetails", "seasonTotals")},
+        )
         return True
 
     with ThreadPoolExecutor(4) as pool:

@@ -83,7 +83,7 @@ it is not presented as adding information to them.
 * Opening-night rosters are reconstructed from the first two games played; the real 2026-27 rosters will be published, so the backtest slightly understates roster knowledge and
   ignores preseason injuries it could not see.
 * No games-missed or injury model, so forecasts assume a healthy roster; no trade-deadline or in-season roster change.
-* The player values use the projection layer's total (`total_gar_all` with rolling-refit persistent components), **not** the owner-preferred position-weighted-plus-TR total (docs/transition §9), because
+* The player values use the projection layer's total (`total_gar_all` with rolling-refit persistent components), **not** the author-preferred position-weighted-plus-TR total (docs/transition §9), because
   the projection layer and its leakage controls are built on the former. Adding TR to the projection is a separate step.
 * Coaching, systems and schedule strength are not modeled; points include overtime-loss points, which are partly luck.
 * Five test seasons; a team-season SD of about 12 points means differences between forecasts of 1–2 points RMSE are not resolvable.

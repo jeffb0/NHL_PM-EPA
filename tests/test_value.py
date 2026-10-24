@@ -9,7 +9,9 @@ from src.value.fit import score
 
 
 def frame(rows):
-    return pl.DataFrame(rows, schema_overrides={"x": pl.Float64, "y": pl.Float64, "G": pl.Float64}, infer_schema_length=None)
+    return pl.DataFrame(
+        rows, schema_overrides={"x": pl.Float64, "y": pl.Float64, "G": pl.Float64}, infer_schema_length=None
+    )
 
 
 def obs(kind, x, y, g, strength="5v5", **kw):
@@ -19,8 +21,8 @@ def obs(kind, x, y, g, strength="5v5", **kw):
 def test_eb_shrink_limits():
     n = np.array([0, 10, 1e9])
     out = _eb_shrink(n, np.array([0.5, 0.5, 0.5]), np.array([0.1, 0.1, 0.1]), k=10)
-    assert out[0] == pytest.approx(0.1)          # no data -> prior
-    assert out[1] == pytest.approx(0.3)          # n == k -> midpoint
+    assert out[0] == pytest.approx(0.1)  # no data -> prior
+    assert out[1] == pytest.approx(0.3)  # n == k -> midpoint
     assert out[2] == pytest.approx(0.5, abs=1e-6)  # lots of data -> raw mean
 
 
@@ -31,7 +33,9 @@ def test_method_of_moments_k_large_when_no_between_variance():
 
 
 def test_tabular_mc_recovers_cell_means_with_k0():
-    rows = [obs("takeaway", 80, 0, 0.2)] * 50 + [obs("takeaway", 80, 0, 0.0)] * 50 + [obs("takeaway", -80, 0, 0.01)] * 100
+    rows = (
+        [obs("takeaway", 80, 0, 0.2)] * 50 + [obs("takeaway", 80, 0, 0.0)] * 50 + [obs("takeaway", -80, 0, 0.01)] * 100
+    )
     m = TabularValue("zones", k=0).fit(frame(rows))
     p = m.predict(frame([obs("takeaway", 80, 0, 0), obs("shot", 82, 1, 0), obs("takeaway", -80, 0, 0)]))
     assert p[0] == pytest.approx(0.1) and p[1] == pytest.approx(0.1)  # 'shot' location valued as control
@@ -113,9 +117,16 @@ def test_auto_shrinkage_is_per_level_and_never_worse_than_parent_level():
 
 def test_vectorized_predict_matches_reference_loop():
     rng = np.random.default_rng(3)
-    rows = [obs(k, float(x), float(y), float(g), strength=st) for k, x, y, g, st in zip(
-        rng.choice(["takeaway", "faceoff", "loose_opp_miss", "loose_unobserved"], 3000), rng.uniform(-99, 99, 3000),
-        rng.uniform(-42, 42, 3000), rng.uniform(0, 0.2, 3000), rng.choice(["5v5", "PP", "PK", "3v3"], 3000))]
+    rows = [
+        obs(k, float(x), float(y), float(g), strength=st)
+        for k, x, y, g, st in zip(
+            rng.choice(["takeaway", "faceoff", "loose_opp_miss", "loose_unobserved"], 3000),
+            rng.uniform(-99, 99, 3000),
+            rng.uniform(-42, 42, 3000),
+            rng.uniform(0, 0.2, 3000),
+            rng.choice(["5v5", "PP", "PK", "3v3"], 3000),
+        )
+    ]
     m = TabularValue("grid10", k="auto").fit(frame(rows))
     test = frame(rows[:500] + [obs("takeaway", 1.0, 1.0, 0, strength="4v4"), obs("shot", None, None, 0)])
     assert np.allclose(m.predict(test), m._predict_loop(test))

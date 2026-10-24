@@ -21,12 +21,12 @@ from pathlib import Path
 
 os.environ.setdefault("XLA_FLAGS", "--xla_force_host_platform_device_count=4")
 
-import jax.numpy as jnp  # noqa: E402
-import numpy as np  # noqa: E402
-import numpyro  # noqa: E402
-import numpyro.distributions as dist  # noqa: E402
-from jax import random  # noqa: E402
-from numpyro.infer import MCMC, NUTS  # noqa: E402
+import jax.numpy as jnp
+import numpy as np
+import numpyro
+import numpyro.distributions as dist
+from jax import random
+from numpyro.infer import MCMC, NUTS
 
 numpyro.set_host_device_count(4)
 
@@ -71,21 +71,35 @@ def summarize(samples: dict, d: dict, learn_sigma: bool) -> dict:
 
     def eff(z, s):
         return np.asarray(z) * s
+
     if learn_sigma:
         sd_uF, sd_uD = np.asarray(samples["sd_u_F"])[:, None], np.asarray(samples["sd_u_D"])[:, None]
         pos = d["u_pos"][None, :]
         u = np.asarray(samples["zu"]) * np.where(pos == 1, sd_uD, sd_uF)
         v = np.asarray(samples["zv"]) * np.asarray(samples["sd_v"])[:, None]
-        out["sigma_posterior"] = {k: {"mean": float(np.mean(samples[k])), "sd": float(np.std(samples[k]))} for k in samples if k.startswith("sd_")}
+        out["sigma_posterior"] = {
+            k: {"mean": float(np.mean(samples[k])), "sd": float(np.std(samples[k]))}
+            for k in samples
+            if k.startswith("sd_")
+        }
     else:
         s2 = dict(zip([str(n) for n in d["s2_names"]], [float(x) for x in d["s2_vals"]]))
         s = np.where(d["u_pos"] == 1, np.sqrt(s2["u_D"]), np.sqrt(s2["u_F"]))
         u, v = eff(samples["zu"], s), eff(samples["zv"], np.sqrt(s2["v"]))
-    for name, draws, mean, sd in (("shooter", u, d["lap_u_mean"], d["lap_u_sd"]), ("goalie", v, d["lap_v_mean"], d["lap_v_sd"])):
+    for name, draws, mean, sd in (
+        ("shooter", u, d["lap_u_mean"], d["lap_u_sd"]),
+        ("goalie", v, d["lap_v_mean"], d["lap_v_sd"]),
+    ):
         m, s_ = draws.mean(0), draws.std(0)
-        out[name] = {"n": int(len(m)), "corr_means": float(np.corrcoef(m, mean)[0, 1]), "mean_abs_diff_means": float(np.abs(m - mean).mean()),
-                     "sd_ratio_laplace_over_nuts_median": float(np.median(sd / s_)), "sd_ratio_p05_p95": [float(np.quantile(sd / s_, 0.05)), float(np.quantile(sd / s_, 0.95))],
-                     "nuts_mean_inside_laplace95": float(np.mean(np.abs(m - mean) <= 1.96 * sd)), "sd_nuts_median": float(np.median(s_))}
+        out[name] = {
+            "n": int(len(m)),
+            "corr_means": float(np.corrcoef(m, mean)[0, 1]),
+            "mean_abs_diff_means": float(np.abs(m - mean).mean()),
+            "sd_ratio_laplace_over_nuts_median": float(np.median(sd / s_)),
+            "sd_ratio_p05_p95": [float(np.quantile(sd / s_, 0.05)), float(np.quantile(sd / s_, 0.95))],
+            "nuts_mean_inside_laplace95": float(np.mean(np.abs(m - mean) <= 1.96 * sd)),
+            "sd_nuts_median": float(np.median(s_)),
+        }
     return out
 
 
@@ -94,7 +108,14 @@ def run(path: str, warmup: int, draws: int, seed: int) -> dict:
     res = {"input": Path(path).name, "n_shots": int(len(d["y"])), "multi_season": bool(d["multi"])}
     for tag, learn in (("fixed_sigma", False), ("free_sigma", True)):
         t0 = time.time()
-        mcmc = MCMC(NUTS(make_model(d, learn), target_accept_prob=0.85), num_warmup=warmup, num_samples=draws, num_chains=4, chain_method="parallel", progress_bar=False)
+        mcmc = MCMC(
+            NUTS(make_model(d, learn), target_accept_prob=0.85),
+            num_warmup=warmup,
+            num_samples=draws,
+            num_chains=4,
+            chain_method="parallel",
+            progress_bar=False,
+        )
         mcmc.run(random.PRNGKey(seed))
         s = mcmc.get_samples()
         extra = mcmc.get_extra_fields()
@@ -102,11 +123,16 @@ def run(path: str, warmup: int, draws: int, seed: int) -> dict:
         r["seconds"] = time.time() - t0
         r["divergences"] = int(np.sum(np.asarray(extra["diverging"])))
         from numpyro.diagnostics import summary
+
         sm = summary(mcmc.get_samples(group_by_chain=True), prob=0.9, group_by_chain=True)
         r["max_r_hat"] = float(max(float(np.max(v["r_hat"])) for v in sm.values()))
         r["min_n_eff"] = float(min(float(np.min(v["n_eff"])) for v in sm.values()))
         res[tag] = r
-        print(tag, json.dumps({k: v for k, v in r.items() if k in ("seconds", "divergences", "max_r_hat", "min_n_eff")}), flush=True)
+        print(
+            tag,
+            json.dumps({k: v for k, v in r.items() if k in ("seconds", "divergences", "max_r_hat", "min_n_eff")}),
+            flush=True,
+        )
     return res
 
 
@@ -119,7 +145,13 @@ def main():
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     res = run(a.input, a.warmup, a.draws, a.seed)
-    out = Path(a.out or Path(a.input).parents[2] / "reports" / "metrics" / f"fin_nuts_{Path(a.input).stem.replace('fin_nuts_', '')}.json")
+    out = Path(
+        a.out
+        or Path(a.input).parents[2]
+        / "reports"
+        / "metrics"
+        / f"fin_nuts_{Path(a.input).stem.replace('fin_nuts_', '')}.json"
+    )
     out.write_text(json.dumps(res, indent=2))
     print("wrote", out)
 

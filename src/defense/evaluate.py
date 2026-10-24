@@ -21,7 +21,9 @@ def split_blocks(d: ridge.Design, beta: np.ndarray) -> tuple[np.ndarray, np.ndar
     return base, dfn
 
 
-def features(fit_d: ridge.Design, beta: np.ndarray, next_stints: pl.DataFrame) -> tuple[ridge.Design, np.ndarray, dict[str, np.ndarray]]:
+def features(
+    fit_d: ridge.Design, beta: np.ndarray, next_stints: pl.DataFrame
+) -> tuple[ridge.Design, np.ndarray, dict[str, np.ndarray]]:
     """Apply season-Y coefficients to season Y+1 stints.
 
     Returns the Y+1 design (Y's player columns), the base prediction (intercept + covariates + attacker
@@ -36,7 +38,9 @@ def features(fit_d: ridge.Design, beta: np.ndarray, next_stints: pl.DataFrame) -
     return nd, base, feats
 
 
-def defense_term(model: str, feats: dict[str, np.ndarray], core: list[str], w_stack: dict[str, float] | None) -> np.ndarray:
+def defense_term(
+    model: str, feats: dict[str, np.ndarray], core: list[str], w_stack: dict[str, float] | None
+) -> np.ndarray:
     zero = np.zeros_like(feats["xg"])
     if model == "B0":
         return zero
@@ -61,8 +65,14 @@ def stack_weights(pairs: list[tuple[ridge.Design, np.ndarray, dict[str, np.ndarr
     return dict(zip(COMPONENTS, coef.tolist()))
 
 
-def pair_losses(nd: ridge.Design, base: np.ndarray, feats: dict[str, np.ndarray], core: list[str],
-                w_stack: dict[str, float] | None, target: str = "xg") -> dict[str, pl.DataFrame]:
+def pair_losses(
+    nd: ridge.Design,
+    base: np.ndarray,
+    feats: dict[str, np.ndarray],
+    core: list[str],
+    w_stack: dict[str, float] | None,
+    target: str = "xg",
+) -> dict[str, pl.DataFrame]:
     """Per-game sums of minute-weighted squared error, one column per model (for the game bootstrap)."""
     y = nd.y()[:, 0] if target == "xg" else 60.0 * nd.goals / nd.w
     cols = {}
@@ -89,8 +99,15 @@ def summarize_losses(per_game: pl.DataFrame, reps: int, seed: int) -> dict:
         boots.append(E[k].sum(0) / W[k].sum())
     boots = np.array(boots)
     out = {"mse": dict(zip(models, mse.tolist())), "n_games": n, "minutes": float(W.sum() / 2)}
-    out["diff_se"] = {f"{a}-{b}": float(np.std(boots[:, i] - boots[:, j])) for i, a in enumerate(models) for j, b in enumerate(models) if i != j}
-    out["diff"] = {f"{a}-{b}": float(mse[i] - mse[j]) for i, a in enumerate(models) for j, b in enumerate(models) if i != j}
+    out["diff_se"] = {
+        f"{a}-{b}": float(np.std(boots[:, i] - boots[:, j]))
+        for i, a in enumerate(models)
+        for j, b in enumerate(models)
+        if i != j
+    }
+    out["diff"] = {
+        f"{a}-{b}": float(mse[i] - mse[j]) for i, a in enumerate(models) for j, b in enumerate(models) if i != j
+    }
     return out
 
 

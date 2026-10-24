@@ -1,7 +1,7 @@
 # Team context ("system / chemistry") — methodology and pre-registration
 
 *Written 2026-09-29 before any team-context analysis was run. The gates in §4 are fixed here; changes after results are seen are
-logged in §7. Scope is deliberately bounded (model owner's request): investigate, quantify, and add what helps; do not try to separate
+logged in §7. Scope is deliberately bounded (author's request): investigate, quantify, and add what helps; do not try to separate
 chemistry from everything else the model already captures.*
 
 ## 1. Question

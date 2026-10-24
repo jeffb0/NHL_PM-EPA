@@ -40,8 +40,12 @@ def terminal_values(poss: pl.DataFrame, shots_xg: pl.DataFrame) -> pl.DataFrame:
     return p.with_columns(
         pl.when(pl.col("end_type").is_in(list(SCORING_END))).then(pl.col("xg").fill_null(0)).otherwise(0.0).alias("G"),
         (pl.col("end_type") == "goal").cast(pl.Int8).alias("goal"),
-        pl.when(pl.col("end_type").is_in(list(SCORING_END))).then(1)
-        .when(pl.col("end_type").is_in(list(CENSORED_END))).then(0).otherwise(2).alias("end_class"),
+        pl.when(pl.col("end_type").is_in(list(SCORING_END)))
+        .then(1)
+        .when(pl.col("end_type").is_in(list(CENSORED_END)))
+        .then(0)
+        .otherwise(2)
+        .alias("end_class"),
     ).drop("xg")
 
 
@@ -69,8 +73,9 @@ def decision_frame(obs: pl.DataFrame, poss: pl.DataFrame, exclude_en: bool = Tru
     V_dec(s) = E[G_p | p's terminal decision happens at s]. Each row is valued as a `control`
     state at its location, so the model learns location x strength (x score) only.
     """
-    d = obs.filter(pl.col("obs_kind").is_in(DECISION_KINDS) & pl.col("x").is_not_null() & pl.col("y").is_not_null()).join(
-        poss.select("poss_id", "G", "goal"), on="poss_id")
+    d = obs.filter(
+        pl.col("obs_kind").is_in(DECISION_KINDS) & pl.col("x").is_not_null() & pl.col("y").is_not_null()
+    ).join(poss.select("poss_id", "G", "goal"), on="poss_id")
     d = d.with_columns(pl.col("strength").replace_strict(STRENGTH_GROUP, default="other").alias("_sg"))
     if exclude_en:
         d = d.filter(~pl.col("_sg").is_in(["EN", "other"]))
@@ -99,7 +104,15 @@ def decision_bakeoff(dec: pl.DataFrame, cfg) -> dict:
     tied = [r for r in rows if r["tied_with_best"]]
     chosen = sorted(tied, key=lambda r: (not r["spec"].startswith("mc"), r["mse"]))[0]["spec"] if tied else best
     test = score(make(parse_spec(chosen), cfg.seed).fit(tv).predict(te), te["G"].to_numpy(), te["goal"].to_numpy())
-    return {"rows": rows, "best_by_mse": best, "chosen": chosen, "test": test, "n_train": tr.height, "n_valid": va.height, "n_test": te.height}
+    return {
+        "rows": rows,
+        "best_by_mse": best,
+        "chosen": chosen,
+        "test": test,
+        "n_train": tr.height,
+        "n_valid": va.height,
+        "n_test": te.height,
+    }
 
 
 def score(v: np.ndarray, g: np.ndarray, goal: np.ndarray) -> dict:
@@ -111,13 +124,29 @@ def score(v: np.ndarray, g: np.ndarray, goal: np.ndarray) -> dict:
     beta = np.linalg.lstsq(X, g, rcond=None)[0]
     q = np.quantile(v, np.linspace(0, 1, 11))
     idx = np.clip(np.searchsorted(q, v, side="right") - 1, 0, 9)
-    rel = [{"bin": b, "n": int((idx == b).sum()), "mean_v": float(v[idx == b].mean()), "mean_g": float(g[idx == b].mean()),
-            "goal_rate": float(goal[idx == b].mean())} for b in range(10) if (idx == b).any()]
+    rel = [
+        {
+            "bin": b,
+            "n": int((idx == b).sum()),
+            "mean_v": float(v[idx == b].mean()),
+            "mean_g": float(g[idx == b].mean()),
+            "goal_rate": float(goal[idx == b].mean()),
+        }
+        for b in range(10)
+        if (idx == b).any()
+    ]
     ece = sum(r["n"] * abs(r["mean_v"] - r["mean_g"]) for r in rel) / len(v)
     return {
-        "n": int(len(v)), "mse": mse, "r2_vs_const": 1 - mse / mse0, "soft_logloss": soft_ll,
-        "calib_intercept": float(beta[0]), "calib_slope": float(beta[1]), "ece": float(ece),
-        "brier_goal": float(np.mean((v - goal) ** 2)), "mean_v": float(v.mean()), "mean_g": float(g.mean()),
+        "n": int(len(v)),
+        "mse": mse,
+        "r2_vs_const": 1 - mse / mse0,
+        "soft_logloss": soft_ll,
+        "calib_intercept": float(beta[0]),
+        "calib_slope": float(beta[1]),
+        "ece": float(ece),
+        "brier_goal": float(np.mean((v - goal) ** 2)),
+        "mean_v": float(v.mean()),
+        "mean_g": float(g.mean()),
         "reliability": rel,
     }
 
@@ -150,12 +179,15 @@ def bakeoff(alive: pl.DataFrame, alive_hits: pl.DataFrame | None, cfg) -> dict:
     specs += [
         {"method": "mc", "scheme": "zones", "k": "auto", "score": True},
         {"method": "mc", "scheme": "grid10", "k": "auto", "score": True},
-        {"method": "gbm"}, {"method": "gbm", "score": True},
+        {"method": "gbm"},
+        {"method": "gbm", "score": True},
         {"method": "hazard", "scheme": "zones"},
     ]
     if alive_hits is not None:
-        specs += [{"method": "markov", "scheme": "zones", "k": "auto", "hits": True},
-                  {"method": "mc", "scheme": "zones", "k": "auto", "hits": True}]
+        specs += [
+            {"method": "markov", "scheme": "zones", "k": "auto", "hits": True},
+            {"method": "mc", "scheme": "zones", "k": "auto", "hits": True},
+        ]
     tr = alive.filter(pl.col("season").is_in(tr_s))
     va = alive.filter(pl.col("season").is_in(va_s))
     g, goal = va["G"].to_numpy(), va["goal"].to_numpy()
@@ -176,9 +208,24 @@ def bakeoff(alive: pl.DataFrame, alive_hits: pl.DataFrame | None, cfg) -> dict:
         r = score(p, g, goal)
         r5 = score(p[va5], g[va5], goal[va5])
         n_params = len(m.table) if hasattr(m, "table") else None
-        rows.append({"spec": name, **{k: v for k, v in r.items() if k != "reliability"}, "mse_5v5": r5["mse"],
-                     "n_states": n_params, "k_used": getattr(m, "k_used", None), "fit_s": round(time.time() - t0, 1)})
-        log.info("bakeoff %-28s mse=%.6f r2=%.4f slope=%.3f (%.0fs)", name, r["mse"], r["r2_vs_const"], r["calib_slope"], time.time() - t0)
+        rows.append(
+            {
+                "spec": name,
+                **{k: v for k, v in r.items() if k != "reliability"},
+                "mse_5v5": r5["mse"],
+                "n_states": n_params,
+                "k_used": getattr(m, "k_used", None),
+                "fit_s": round(time.time() - t0, 1),
+            }
+        )
+        log.info(
+            "bakeoff %-28s mse=%.6f r2=%.4f slope=%.3f (%.0fs)",
+            name,
+            r["mse"],
+            r["r2_vs_const"],
+            r["calib_slope"],
+            time.time() - t0,
+        )
     best = min(rows, key=lambda r: r["mse"])["spec"]
     se_best = (preds[best] - g) ** 2
     for r in rows:
@@ -186,7 +233,11 @@ def bakeoff(alive: pl.DataFrame, alive_hits: pl.DataFrame | None, cfg) -> dict:
         r["d_mse_vs_best"] = float(diff.mean())
         r["se_d_mse"] = float(diff.std(ddof=1) / np.sqrt(len(diff)))
         r["tied_with_best"] = bool(r["d_mse_vs_best"] <= 2 * r["se_d_mse"] + 1e-15)
-    return {"rows": rows, "best_by_mse": best, "reliability": {k: score(v, g, goal)["reliability"] for k, v in preds.items() if k in (best,)}}
+    return {
+        "rows": rows,
+        "best_by_mse": best,
+        "reliability": {k: score(v, g, goal)["reliability"] for k, v in preds.items() if k in (best,)},
+    }
 
 
 def stability(alive: pl.DataFrame, specs: list[dict], cfg) -> dict:
@@ -203,8 +254,14 @@ def stability(alive: pl.DataFrame, specs: list[dict], cfg) -> dict:
             pb = make(s, cfg.seed).fit(alive.filter(pl.col("season") == b)).predict(va)
             cors.append(float(np.corrcoef(pa, pb)[0, 1]))
         pairs = [f"{a}-{b}" for a, b in zip(seasons[:-1], seasons[1:])]
-        within = [c for (a, b), c in zip(zip(seasons[:-1], seasons[1:]), cors) if regime_of(a, cfg) == regime_of(b, cfg)]
-        out[spec_name(s)] = {"pairs": dict(zip(pairs, cors)), "mean_r": float(np.mean(within)), "mean_r_all": float(np.mean(cors))}
+        within = [
+            c for (a, b), c in zip(zip(seasons[:-1], seasons[1:]), cors) if regime_of(a, cfg) == regime_of(b, cfg)
+        ]
+        out[spec_name(s)] = {
+            "pairs": dict(zip(pairs, cors)),
+            "mean_r": float(np.mean(within)),
+            "mean_r_all": float(np.mean(cors)),
+        }
         log.info("stability %-28s mean r=%.4f", spec_name(s), np.mean(cors))
     return out
 
@@ -264,7 +321,9 @@ def run(skip_bakeoff: bool = False) -> None:
         alive_hits = None
         hits_path = proc / "observations_hits.parquet"
         if hits_path.exists():
-            ph = terminal_values(pl.read_parquet(proc / "possessions_hits.parquet"), pl.read_parquet(proc / "shots_xg.parquet"))
+            ph = terminal_values(
+                pl.read_parquet(proc / "possessions_hits.parquet"), pl.read_parquet(proc / "shots_xg.parquet")
+            )
             alive_hits = alive_frame(pl.read_parquet(hits_path), ph, cfg.epa.exclude_empty_net)
         ck = mdir / "value_bakeoff_rows.checkpoint.json"
         if ck.exists():
@@ -288,9 +347,17 @@ def run(skip_bakeoff: bool = False) -> None:
             test[n] = score(p, te["G"].to_numpy(), te["goal"].to_numpy())
             te5 = (te["strength"] == "5v5").to_numpy()
             test[n]["by_strength"] = {
-                sg: {k: v for k, v in score(p[msk], te["G"].to_numpy()[msk], te["goal"].to_numpy()[msk]).items() if k != "reliability"}
-                for sg, msk in [("5v5", te5), ("PP", (te["strength"] == "PP").to_numpy()), ("PK", (te["strength"] == "PK").to_numpy()),
-                                ("4v4_3v3", te["strength"].is_in(["4v4", "3v3"]).to_numpy())]
+                sg: {
+                    k: v
+                    for k, v in score(p[msk], te["G"].to_numpy()[msk], te["goal"].to_numpy()[msk]).items()
+                    if k != "reliability"
+                }
+                for sg, msk in [
+                    ("5v5", te5),
+                    ("PP", (te["strength"] == "PP").to_numpy()),
+                    ("PK", (te["strength"] == "PK").to_numpy()),
+                    ("4v4_3v3", te["strength"].is_in(["4v4", "3v3"]).to_numpy()),
+                ]
             }
         results = {"bakeoff": bo, "stability": stab, "chosen": chosen, "test": test}
         results_path.write_text(json.dumps(results, indent=2))
@@ -309,36 +376,76 @@ def run(skip_bakeoff: bool = False) -> None:
     dres = decision_bakeoff(dec, cfg)
     (mdir / "value_decision.json").write_text(json.dumps(dres, indent=2))
     dspec = parse_spec(dres["chosen"])
-    dmodels = {s: make(dspec, cfg.seed).fit(dec.filter(pl.col("season").is_in(crossfit_train_seasons(s, cfg)))) for s in cfg.data.seasons}
+    dmodels = {
+        s: make(dspec, cfg.seed).fit(dec.filter(pl.col("season").is_in(crossfit_train_seasons(s, cfg))))
+        for s in cfg.data.seasons
+    }
     dmodels["all"] = make(dspec, cfg.seed).fit(dec)
-    log.info("V_dec chosen %s (valid R2 %.4f, test R2 %.4f)", dres["chosen"],
-             next(r["r2_vs_const"] for r in dres["rows"] if r["spec"] == dres["chosen"]), dres["test"]["r2_vs_const"])
+    log.info(
+        "V_dec chosen %s (valid R2 %.4f, test R2 %.4f)",
+        dres["chosen"],
+        next(r["r2_vs_const"] for r in dres["rows"] if r["spec"] == dres["chosen"]),
+        dres["test"]["r2_vs_const"],
+    )
     # attempt value V_att(s) = E[xG | shot attempt at s] (blocked = 0), same spec, shot rows only
     att = dec.filter(pl.col("obs_kind") == "shot")
-    amodels = {s: make(dspec, cfg.seed).fit(att.filter(pl.col("season").is_in(crossfit_train_seasons(s, cfg)))) for s in cfg.data.seasons}
+    amodels = {
+        s: make(dspec, cfg.seed).fit(att.filter(pl.col("season").is_in(crossfit_train_seasons(s, cfg))))
+        for s in cfg.data.seasons
+    }
     amodels["all"] = make(dspec, cfg.seed).fit(att)
-    a_tr, a_te = att.filter(pl.col("season").is_in(cfg.splits.train + cfg.splits.validation)), att.filter(pl.col("season").is_in(cfg.splits.test))
-    dres["attempt_test"] = {k: v for k, v in score(make(dspec, cfg.seed).fit(a_tr).predict(a_te), a_te["G"].to_numpy(), a_te["goal"].to_numpy()).items() if k != "reliability"}
+    a_tr, a_te = (
+        att.filter(pl.col("season").is_in(cfg.splits.train + cfg.splits.validation)),
+        att.filter(pl.col("season").is_in(cfg.splits.test)),
+    )
+    dres["attempt_test"] = {
+        k: v
+        for k, v in score(
+            make(dspec, cfg.seed).fit(a_tr).predict(a_te), a_te["G"].to_numpy(), a_te["goal"].to_numpy()
+        ).items()
+        if k != "reliability"
+    }
     (mdir / "value_decision.json").write_text(json.dumps(dres, indent=2))
-    joblib.dump({"spec": chosen, "models": models, "dec_spec": dres["chosen"], "dec_models": dmodels, "att_models": amodels}, vdir / "v_models.joblib")
+    joblib.dump(
+        {"spec": chosen, "models": models, "dec_spec": dres["chosen"], "dec_models": dmodels, "att_models": amodels},
+        vdir / "v_models.joblib",
+    )
 
     # ---- tabular artifacts per strength (always export the tabular zones+grid10 tables for transparency)
     table_spec = spec if spec["method"] in ("mc", "markov") else {"method": "mc", "scheme": "grid10", "k": "auto"}
     tab = make(table_spec, cfg.seed).fit(alive)
     frame = tab.to_frame()
-    meta = {"chosen_spec": chosen, "table_spec": spec_name(table_spec), "k_used": tab.k_used,  # per level
-            "n_alive_obs": alive.height, "seasons": cfg.data.seasons, "test_metrics": {k: {m: v for m, v in d.items() if m not in ("reliability", "by_strength")} for k, d in results["test"].items()},
-            "files": {}}
-    for sg, fname in [("5v5", "v_state_5v5"), ("PP", "v_state_pp"), ("PK", "v_state_pk"), ("4v4_3v3", "v_state_4v4_3v3")]:
+    meta = {
+        "chosen_spec": chosen,
+        "table_spec": spec_name(table_spec),
+        "k_used": tab.k_used,  # per level
+        "n_alive_obs": alive.height,
+        "seasons": cfg.data.seasons,
+        "test_metrics": {
+            k: {m: v for m, v in d.items() if m not in ("reliability", "by_strength")}
+            for k, d in results["test"].items()
+        },
+        "files": {},
+    }
+    for sg, fname in [
+        ("5v5", "v_state_5v5"),
+        ("PP", "v_state_pp"),
+        ("PK", "v_state_pk"),
+        ("4v4_3v3", "v_state_4v4_3v3"),
+    ]:
         f = vdir / f"{fname}.parquet"
         frame.filter(pl.col("sgroup") == sg).sort("state_id").write_parquet(f)
-        meta["files"][f.name] = {"sha256": hashlib.sha256(f.read_bytes()).hexdigest(), "n_states": frame.filter(pl.col("sgroup") == sg).height,
-                                 "n_obs": int(frame.filter(pl.col("sgroup") == sg)["n"].sum())}
+        meta["files"][f.name] = {
+            "sha256": hashlib.sha256(f.read_bytes()).hexdigest(),
+            "n_states": frame.filter(pl.col("sgroup") == sg).height,
+            "n_obs": int(frame.filter(pl.col("sgroup") == sg)["n"].sum()),
+        }
     (vdir / "v_state_metadata.json").write_text(json.dumps(meta, indent=2))
     log.info("wrote value surfaces: %s", list(meta["files"]))
 
 
 if __name__ == "__main__":
     import sys
+
     logging.basicConfig(level=logging.INFO)
     run(skip_bakeoff="--skip-bakeoff" in sys.argv)

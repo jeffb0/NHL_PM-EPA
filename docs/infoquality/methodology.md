@@ -1,6 +1,6 @@
 # Information quality on the day of a forecast — method
 
-*Written 2026-10-12 before the analysis was run. Requested by the model owner ("investigate opportunities to improve information quality on the day of prediction"). This is a measurement study, not a model change: nothing is adopted by it and there is no gate.*
+*Written 2026-10-12 before the analysis was run. Motivated by the question of how much better lineup and starting-goalie information on the day of a game could improve forecasts. This is a measurement study, not a model change: nothing is adopted by it and there is no gate.*
 
 ## 1. Questions
 

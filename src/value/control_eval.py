@@ -46,9 +46,22 @@ def run() -> dict:
             sa = make(spec, cfg.seed).fit(alive.filter(pl.col("season") == a)).predict(grid)
             sb = make(spec, cfg.seed).fit(alive.filter(pl.col("season") == b)).predict(grid)
             cors.append(float(np.corrcoef(sa, sb)[0, 1]))
-        out[name] = {**s, "surface_stability_mean_r": float(np.mean(cors)), "surface_stability_pairs": cors,
-                     "oz_spatial_sd": float(surf[oz].std()), "max_v": float(surf.max()), "min_v": float(surf.min())}
-        log.info("control %-18s mse=%.6f r2=%.4f stab=%.3f oz_sd=%.4f", name, s["mse"], s["r2_vs_const"], np.mean(cors), surf[oz].std())
+        out[name] = {
+            **s,
+            "surface_stability_mean_r": float(np.mean(cors)),
+            "surface_stability_pairs": cors,
+            "oz_spatial_sd": float(surf[oz].std()),
+            "max_v": float(surf.max()),
+            "min_v": float(surf.min()),
+        }
+        log.info(
+            "control %-18s mse=%.6f r2=%.4f stab=%.3f oz_sd=%.4f",
+            name,
+            s["mse"],
+            s["r2_vs_const"],
+            np.mean(cors),
+            surf[oz].std(),
+        )
     (cfg.path(cfg.data.metrics_dir) / "value_control_eval.json").write_text(json.dumps(out, indent=2))
     return out
 

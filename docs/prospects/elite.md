@@ -1,7 +1,7 @@
 # Elite-prospect priors and faster learning for inexperienced players — methodology and pre-registration
 
 *Written 2026-10-03 before any of this was fitted or scored. Motivation: the game model rates Gavin McKenna (first overall, 2026, playing at 18) as a generic rookie (0.13 goals above replacement per 60), and the earlier pre-NHL priors (docs/prospects)
-do not change that (0.12) because a single log-of-pick term learned nothing. The model owner's specification (2026-10-03): a rookie's expected production should depend on his draft position; top-three picks in their debut season should sit
+do not change that (0.12) because a single log-of-pick term learned nothing. The author's specification (2026-10-03): a rookie's expected production should depend on his draft position; top-three picks in their debut season should sit
 between a top-six forward and a star; players who make the NHL at 18, straight after being drafted, deserve extra weight because teams rarely keep such players unless they have clearly earned it; and the prior should give way to actual NHL performance
 as experience accumulates. The design, tests and rules below are fixed here; changes after results are seen are logged in §8.*
 
@@ -23,7 +23,7 @@ Each skater's share of the update is multiplied by g_i = 1 + κ w_i, with w_i = 
 
 ## 2. Why estimate rather than set the numbers
 
-The owner's prior (top-three picks between a top-six forward, about 0.35 per 60, and a star, about 0.60) is a reasonable belief, but the panel has real debut seasons to learn from. The estimate is reported next to that range.
+The author's prior (top-three picks between a top-six forward, about 0.35 per 60, and a star, about 0.60) is a reasonable belief, but the panel has real debut seasons to learn from. The estimate is reported next to that range.
 Draft slot bins have few players (about three top-three picks a year, not all of whom debut immediately), so the ridge will shrink them; the implied rating for a top-three D0 forward and its bootstrap interval are reported so the shrinkage is visible.
 
 ## 3. Tests
@@ -32,7 +32,7 @@ Draft slot bins have few players (about three top-three picks a year, not all of
    **true rookies** (no NHL game before the season, ≥ 200 minutes), **first-round rookies**, thin-history players (m_eff < 1,000), and all players (≥ 300 minutes).
 2. **Game level:** the game model (hyperparameters frozen) with preseason ratings from the new rate model, preseason-only and full, paired z on per-game log loss over the 6,502 test games.
 3. **Part B:** with the adopted preseason ratings, the full game model with the tuned κ against κ = 0 on the 6,502 test games.
-4. **Reported:** fitted coefficients; implied debut ratings by slot and timing for forwards and defensemen, with intervals; the 2026-27 rookies most affected; the owner's range for comparison.
+4. **Reported:** fitted coefficients; implied debut ratings by slot and timing for forwards and defensemen, with intervals; the 2026-27 rookies most affected; the author's range for comparison.
 
 ## 4. Gates and rules
 
@@ -42,10 +42,10 @@ Draft slot bins have few players (about three top-three picks a year, not all of
 | EP-2 | part A does no harm: all players z > −2, and both game-model comparisons z > −2 |
 | EP-3 | part B improves the full game model (paired z > 2) |
 
-**Part A** is rated sound in advance (draft position and debut age are standard, well-motivated priors). By the owner's standing rule it is implemented if EP-2 holds and the true-rookie z is above −1; a reliable improvement is claimed only if EP-1 passes.
+**Part A** is rated sound in advance (draft position and debut age are standard, well-motivated priors). By the author's standing rule it is implemented if EP-2 holds and the true-rookie z is above −1; a reliable improvement is claimed only if EP-1 passes.
 **Part B** changes the validated in-season dynamics for every player, so it is implemented only if EP-3 passes; if tuning selects κ = 0 there is nothing to implement.
 
-If the estimated top-three D0 rating falls outside the owner's 0.35–0.60 range, the estimate is used (not the range) and the difference is reported; the owner can override with an explicit decision, logged as such.
+If the estimated top-three D0 rating falls outside the author's 0.35–0.60 range, the estimate is used (not the range) and the difference is reported; the author can override with an explicit decision, logged as such.
 
 ## 5. What "implemented" means
 
@@ -65,7 +65,7 @@ part B learns from team results while the player dresses, not from his own shift
 
 *(any change to §1–§4 after results are seen is recorded here with its reason)*
 
-1. **Outcome, applied mechanically (2026-10-03).** Part A: EP-1 fails (true rookies z = 0.29), EP-2 holds (all players z = 0.65; game model preseason-only z = −1.08, full z = −1.52). By §4 it is **implemented**, with the estimated values, not the owner's range.
+1. **Outcome, applied mechanically (2026-10-03).** Part A: EP-1 fails (true rookies z = 0.29), EP-2 holds (all players z = 0.65; game model preseason-only z = −1.08, full z = −1.52). By §4 it is **implemented**, with the estimated values, not the author's range.
    Part B: tuning chose κ = 4 (the edge of the grid) but the test seasons show no gain (z = −0.25); EP-3 fails and it is **not implemented**. The grid was not widened.
-2. **The estimate is far below the owner's range.** Top-three forwards debuting at 18 are projected at 0.16 goals above replacement per 60 (90% interval 0.12–0.19), against 0.35–0.60. The 14 such debuts in the data averaged 0.11. Reported to the owner; no override has been made.
+2. **The estimate is far below the author's range.** Top-three forwards debuting at 18 are projected at 0.16 goals above replacement per 60 (90% interval 0.12–0.19), against 0.35–0.60. The 14 such debuts in the data averaged 0.11. Reported to the author; no override has been made.
 3. **Effective date.** The forward forecasts use the new rate model from the 2026-10-04 run; the 2026-10-03 forecasts were made with the original one.

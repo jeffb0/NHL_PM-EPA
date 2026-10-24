@@ -135,7 +135,7 @@ calibration stays as published; v3 is a separate step writing suffixed outputs.
 
 ## 5d. Position-specific weights (v4), written 2026-09-29 before it was fitted as a pre-registered spec
 
-**Why.** A model-owner review found a clear misfit: Josh Morrissey and Mason Appleton (2022) come out at the same total (2.73 goals above replacement)
+**Why.** A review by the author found a clear misfit: Josh Morrissey and Mason Appleton (2022) come out at the same total (2.73 goals above replacement)
 although Morrissey is an elite defenseman and Appleton a depth forward. Diagnostics found that defensemen's values are structurally compressed
 (possession value for defensemen has a standard deviation of 0.016 goals per 60 against 0.116 for defense; the D total tracks ice time and
 scoring only weakly, correlations 0.20 and 0.16 against 0.37 and 0.60 for forwards), and that the position-split team-level regression gives very

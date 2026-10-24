@@ -46,7 +46,7 @@ The projection layer's ridge (docs/projection §3, training floor 20 minutes as 
 | YP-2 | M+Y improves the preseason-only game model (paired z > 2) |
 | YP-3 | no harm: M+Y is not worse than M on all players (z > −2) and the full game model is not worse (z > −2) |
 
-Implementation follows the model owner's standing rule (docs/standings/improvements.md §4). The methodology is rated **sound** in advance (equivalency translations and draft priors are standard and the fade is principled),
+Implementation follows the author's standing rule (docs/standings/improvements.md §4). The methodology is rated **sound** in advance (equivalency translations and draft priors are standard and the fade is principled),
 so: implement if YP-3 holds and neither YP-1 nor YP-2 has z ≤ −1; a "reliable improvement" is claimed only for a gate with z > 2. "Implement" means M+Y becomes the rate model behind the standings forecast and the game model's
 preseason ratings; the published `player_projection.csv` is not changed in this step.
 

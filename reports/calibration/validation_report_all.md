@@ -116,7 +116,7 @@ Largest changes, latest season (qualified):
 
 **Shrinkage caveat.** Defense and the special-teams RAPM parts are used as published (no unshrunk analogue), so their team-level slopes may be inflated by shrinkage compression while the unshrunk components are not. The weights for those components are therefore less trustworthy than the others.
 
-**What is published.** `total_gar_all` (uncalibrated) and `total_gar_all_cal` (adopted weights, mean absolute change 0.52 goals among qualified skaters) are both in `player_value_calibrated_all`. The 5v5 `total_gar_cal` is unchanged (weights 1). Which total to treat as the headline is a decision for the model owner; given the thin margin, the failed as-pre-registered CAL-3 and the untested shrinkage caveat, my recommendation is to keep `total_gar_all` as the default and treat the calibrated column as an alternative until it survives a season of new data.
+**What is published.** `total_gar_all` (uncalibrated) and `total_gar_all_cal` (adopted weights, mean absolute change 0.52 goals among qualified skaters) are both in `player_value_calibrated_all`. The 5v5 `total_gar_cal` is unchanged (weights 1). Which total to treat as the headline is a decision for the author; given the thin margin, the failed as-pre-registered CAL-3 and the untested shrinkage caveat, my recommendation is to keep `total_gar_all` as the default and treat the calibrated column as an alternative until it survives a season of new data.
 
 **Limitations.** 284 team-seasons; primary-team assignment misplaces traded players' value; team residual variance includes goaltending and coaching; one forward horizon.
 

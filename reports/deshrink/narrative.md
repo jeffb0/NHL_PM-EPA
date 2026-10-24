@@ -1,11 +1,11 @@
 # De-shrinking the 5v5 play block — results
 
-*Run 2026-10-12 under docs/deshrink/methodology.md (pre-registered the same day, before the run). Numbers are in reports/metrics/deshrink.json. One deviation: the rule says implement; implementation is held for the owner's decision (methodology §7).*
+*Run 2026-10-12 under docs/deshrink/methodology.md (pre-registered the same day, before the run). Numbers are in reports/metrics/deshrink.json. One deviation: the rule says implement; implementation is held for the author's decision (methodology §7).*
 
 ## Verdict
 
 **The fix is built and it does not improve the forecasts.** Every comparison is slightly on the wrong side of zero. The pre-registered rule (implement unless z is below −1) is met on both primary tests, but the two checks where the fix was expected to matter most,
-early-season games and the standings projection, are the most negative. It is **not switched on** in the live forecast; that is a deviation from the rule and is the owner's call.
+early-season games and the standings projection, are the most negative. It is **not switched on** in the live forecast; that is a deviation from the rule and is the author's call.
 
 ## Tests (6,502 games, 2021–2025)
 

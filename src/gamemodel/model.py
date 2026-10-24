@@ -1,4 +1,5 @@
-"""Game-level rating models: player ratings with in-season updates (P and its ablations) and team-rating benchmarks (docs/gamemodel/methodology.md §3-§4)."""
+"""Game-level rating models: player ratings with in-season updates (P and its ablations) and team-rating benchmarks
+(docs/gamemodel/methodology.md §3-§4)."""
 
 from __future__ import annotations
 
@@ -15,8 +16,10 @@ RECENT = 10
 
 
 def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float, gain: np.ndarray | None = None) -> None:
-    """Move each dressed skater's rating so the team's strength with this lineup changes by ``step`` (normalised least-mean-squares step).
-    ``gain`` (docs/prospects/elite.md §1B) gives some players a larger share of the move; the team's total step is unchanged."""
+    """Move each dressed skater's rating so the team's strength with this lineup changes by ``step`` (normalised
+    least-mean-squares step).
+    ``gain`` (docs/prospects/elite.md §1B) gives some players a larger share of the move; the team's total step is
+    unchanged."""
     x = mins / 60.0
     g = np.ones(len(x)) if gain is None else gain
     d = step * g * x / float((g * x * x).sum())
@@ -24,20 +27,40 @@ def skater_update(theta: dict, ids: np.ndarray, mins: np.ndarray, step: float, g
         theta[i] = theta.get(i, 0.0) + di
 
 
-def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha: float, n0: float, attribution: str = "player", lineup: str = "actual", update: bool = True, feature=None, kappa: float = 0.0, early=None,
-                      lam_team: float = 0.0, starter: dict | None = None, gscale: float = 1.0):
-    """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each game.
+def run_player_season(
+    games: Games,
+    pri: Priors,
+    season: int,
+    lam: float,
+    alpha: float,
+    n0: float,
+    attribution: str = "player",
+    lineup: str = "actual",
+    update: bool = True,
+    feature=None,
+    kappa: float = 0.0,
+    early=None,
+    lam_team: float = 0.0,
+    starter: dict | None = None,
+    gscale: float = 1.0,
+):
+    """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each
+    game.
 
-    With ``lam_team`` a team-level term is updated alongside the skaters and added to the team's strength (docs/structure/methodology.md, U1).
+    With ``lam_team`` a team-level term is updated alongside the skaters and added to the team's strength
+    (docs/structure/methodology.md, U1).
 
-    With ``feature`` (a function of the dressed player ids and their projected minutes) the home-minus-away value of that roster feature is returned as a second array."""
+    With ``feature`` (a function of the dressed player ids and their projected minutes) the home-minus-away value of
+    that roster feature is returned as a second array."""
     t = games.table.filter(pl.col("season") == season)
     theta = dict(pri.theta0[season])
     toi_last, (g0, rep), shots_pg, h = pri.toi_last[season], pri.goalie0[season], pri.shots_pg[season], pri.home_adv
     recent: dict = defaultdict(list)
     career = pri.career.get(season, {}) if kappa else {}
-    played: dict = defaultdict(float)                              # minutes this season, for the experience-weighted update
-    cum: dict = {}                                                 # games and summed game lines this season, for the early-sample adjustment
+    # minutes this season, for the experience-weighted update
+    played: dict = defaultdict(float)
+    # games and summed game lines this season, for the early-sample adjustment
+    cum: dict = {}
     gsaved, gshots = defaultdict(float), defaultdict(float)
     team_u: dict = defaultdict(float)
     prev_lu, prev_gk = {}, {}
@@ -49,18 +72,31 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
         gk = games.goalies[(gid, team)][0][0]
         if lineup == "previous" and team in prev_lu:
             ids, gk = prev_lu[team], prev_gk[team]
-        if starter is not None:                                     # the goalie the forecaster expected (docs/infoquality): ratings still update on who played
+        # the goalie the forecaster expected (docs/infoquality): ratings still update on who played
+        if starter is not None:
             gk = starter.get((gid, team), gk)
-        m =np.array([float(np.mean(recent[i][-RECENT:])) if recent[i] else toi_last.get(i, POS_DEFAULT_MIN[pri.pos.get(i, "F")]) for i in ids.tolist()])
+        m = np.array(
+            [
+                float(np.mean(recent[i][-RECENT:]))
+                if recent[i]
+                else toi_last.get(i, POS_DEFAULT_MIN[pri.pos.get(i, "F")])
+                for i in ids.tolist()
+            ]
+        )
         m *= TEAM_MINUTES / m.sum()
         if feature is not None:
             fval[team] = feature(ids, m)
         if early is None:
             s = float(sum(theta.get(i, 0.0) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
-        else:                                                       # thin-history players: prior plus the adjustment from their games so far (docs/prospects/hybrid.md)
-            s = float(sum((theta.get(i, 0.0) + early.adj(i, cum.get(i))) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
+        # thin-history players: prior plus the adjustment from their games so far (docs/prospects/hybrid.md)
+        else:
+            s = float(
+                sum((theta.get(i, 0.0) + early.adj(i, cum.get(i))) * mi for i, mi in zip(ids.tolist(), m.tolist()))
+                / 60.0
+            )
         rate = (n0 * g0.get(gk, rep) + gsaved[gk]) / (n0 + gshots[gk])
-        rate = rep + gscale * (rate - rep)                          # gscale < 1 narrows goalie differences (docs/infoquality/methodology.md §6)
+        # gscale < 1 narrows goalie differences (docs/infoquality/methodology.md §6)
+        rate = rep + gscale * (rate - rep)
         return s + rate * shots_pg + (team_u[team] if attribution == "team" or lam_team else 0.0)
 
     for k, (gid, hid, aid, gd, xgd) in enumerate(t.select("game_id", "home_id", "away_id", "gd", "xgd").iter_rows()):
@@ -90,7 +126,8 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
                 recent[i].append(mi)
                 played[i] += mi
             if early is not None:
-                for i, line in zip(ids.tolist(), games.stats.get((gid, team), ())):       # a game being forecast has no lines yet
+                # a game being forecast has no lines yet
+                for i, line in zip(ids.tolist(), games.stats.get((gid, team), ())):
                     if i in early.thin:
                         c = cum.setdefault(i, np.zeros(8))
                         c[0] += 1.0
@@ -100,11 +137,14 @@ def run_player_season(games: Games, pri: Priors, season: int, lam: float, alpha:
 
 
 def run_team_rating(games: Games, k: float, rho: float, alpha: float, h: float) -> np.ndarray:
-    """Team rating in goals per game over every season in order (benchmarks G1 with alpha = 1 and G2): mu for every game of the table."""
+    """Team rating in goals per game over every season in order (benchmarks G1 with alpha = 1 and G2): mu for every game
+    of the table."""
     R: dict = defaultdict(float)
     mu_out = np.zeros(games.table.height)
     cur = None
-    for i, (season, hid, aid, gd, xgd) in enumerate(games.table.select("season", "home_id", "away_id", "gd", "xgd").iter_rows()):
+    for i, (season, hid, aid, gd, xgd) in enumerate(
+        games.table.select("season", "home_id", "away_id", "gd", "xgd").iter_rows()
+    ):
         if season != cur:
             for key in list(R):
                 R[key] *= rho

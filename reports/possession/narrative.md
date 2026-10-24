@@ -29,6 +29,6 @@ the roster model alone gains 0.05 points of standings RMSE (z = 2.6) and the pub
 What remains is the portable team residual itself, which the forecast already uses as a lump. It behaves like additive value that travels with players and that none of the components measures; identifying it is a measurement problem
 (what do those players do that the event data do not credit?), not a re-weighting problem.
 
-**Option for the model owner.** Adopting κ = 1.5 would be a judgment call outside the pre-registered rule (as the TR total was). Its effect on forecasts is a fraction of a point per team. It is not implemented.
+**Option for the author.** Adopting κ = 1.5 would be a judgment call outside the pre-registered rule (as the TR total was). Its effect on forecasts is a fraction of a point per team. It is not implemented.
 
 **Limitations.** Two unusual tuning seasons; a coarse grid; context variants informed by all-season estimates; game tests on the original rate model.

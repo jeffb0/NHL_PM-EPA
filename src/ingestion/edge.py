@@ -2,9 +2,12 @@
 
     python -m src.ingestion.edge [--seasons 2021 2022 ...] [--limit N]
 
-One call per skater-season to ``https://api-web.nhle.com/v1/edge/skater-detail/{playerId}/{seasonId}/2`` (regular season). Responses are cached
-verbatim under ``data/raw/edge/<season>/<playerId>.json.gz`` (a definitive 404 is cached as a marker), so the run is idempotent and resumable.
-EDGE statistics exist from the 2021-22 season. Parsed features are written to ``data/processed/edge_player_season.parquet``.
+One call per skater-season to ``https://api-web.nhle.com/v1/edge/skater-detail/{playerId}/{seasonId}/2`` (regular
+season). Responses are cached
+verbatim under ``data/raw/edge/<season>/<playerId>.json.gz`` (a definitive 404 is cached as a marker), so the run is
+idempotent and resumable.
+EDGE statistics exist from the 2021-22 season. Parsed features are written to
+``data/processed/edge_player_season.parquet``.
 """
 
 from __future__ import annotations
@@ -64,15 +67,47 @@ def parse(raw_dir: Path, pairs: list[tuple[int, int]]) -> pl.DataFrame:
         if d.get("missing"):
             continue
         zt = d.get("zoneTimeDetails") or {}
-        rows.append({"player_id": pid, "season": s, "edge_gp": _g(d, "player", "gamesPlayed"),
-                     "max_speed_mph": _g(d, "skatingSpeed", "speedMax", "imperial"), "max_speed_pctile": _g(d, "skatingSpeed", "speedMax", "percentile"),
-                     "bursts_over20": _g(d, "skatingSpeed", "burstsOver20", "value"), "bursts_pctile": _g(d, "skatingSpeed", "burstsOver20", "percentile"),
-                     "shot_speed_mph": _g(d, "topShotSpeed", "imperial"), "shot_speed_pctile": _g(d, "topShotSpeed", "percentile"),
-                     "distance_mi": _g(d, "totalDistanceSkated", "imperial"), "distance_pctile": _g(d, "totalDistanceSkated", "percentile"),
-                     "distance_max_game_mi": _g(d, "distanceMaxGame", "imperial"),
-                     "oz_share": zt.get("offensiveZonePctg"), "dz_share": zt.get("defensiveZonePctg"), "oz_share_ev": zt.get("offensiveZoneEvPctg")})
-    schema = {"player_id": pl.Int64, "season": pl.Int64, "edge_gp": pl.Int64, **{k: pl.Float64 for k in ("max_speed_mph", "max_speed_pctile", "bursts_over20", "bursts_pctile", "shot_speed_mph", "shot_speed_pctile",
-                                                                                                          "distance_mi", "distance_pctile", "distance_max_game_mi", "oz_share", "dz_share", "oz_share_ev")}}
+        rows.append(
+            {
+                "player_id": pid,
+                "season": s,
+                "edge_gp": _g(d, "player", "gamesPlayed"),
+                "max_speed_mph": _g(d, "skatingSpeed", "speedMax", "imperial"),
+                "max_speed_pctile": _g(d, "skatingSpeed", "speedMax", "percentile"),
+                "bursts_over20": _g(d, "skatingSpeed", "burstsOver20", "value"),
+                "bursts_pctile": _g(d, "skatingSpeed", "burstsOver20", "percentile"),
+                "shot_speed_mph": _g(d, "topShotSpeed", "imperial"),
+                "shot_speed_pctile": _g(d, "topShotSpeed", "percentile"),
+                "distance_mi": _g(d, "totalDistanceSkated", "imperial"),
+                "distance_pctile": _g(d, "totalDistanceSkated", "percentile"),
+                "distance_max_game_mi": _g(d, "distanceMaxGame", "imperial"),
+                "oz_share": zt.get("offensiveZonePctg"),
+                "dz_share": zt.get("defensiveZonePctg"),
+                "oz_share_ev": zt.get("offensiveZoneEvPctg"),
+            }
+        )
+    schema = {
+        "player_id": pl.Int64,
+        "season": pl.Int64,
+        "edge_gp": pl.Int64,
+        **{
+            k: pl.Float64
+            for k in (
+                "max_speed_mph",
+                "max_speed_pctile",
+                "bursts_over20",
+                "bursts_pctile",
+                "shot_speed_mph",
+                "shot_speed_pctile",
+                "distance_mi",
+                "distance_pctile",
+                "distance_max_game_mi",
+                "oz_share",
+                "dz_share",
+                "oz_share_ev",
+            )
+        },
+    }
     return pl.DataFrame(rows, schema=schema)
 
 
@@ -81,7 +116,9 @@ def run(seasons: list[int] | None = None, limit: int | None = None) -> pl.DataFr
     proc = cfg.path(cfg.data.processed_dir)
     raw_dir = cfg.path(cfg.data.raw_dir)
     seasons = seasons or [s for s in cfg.data.seasons if s >= FIRST_EDGE_SEASON]
-    ps = pl.read_parquet(proc / "player_season.parquet").filter(pl.col("season").is_in(seasons) & (pl.col("gp") > 0) & (pl.col("position") != "G"))
+    ps = pl.read_parquet(proc / "player_season.parquet").filter(
+        pl.col("season").is_in(seasons) & (pl.col("gp") > 0) & (pl.col("position") != "G")
+    )
     pairs = sorted({(int(p), int(s)) for p, s in ps.select("player_id", "season").iter_rows()})
     if limit:
         pairs = pairs[:limit]

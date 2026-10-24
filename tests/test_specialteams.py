@@ -16,10 +16,37 @@ def _toy(n=60):
     rows = []
     for i in range(n):
         adv_home = i % 2 == 0
-        h = [int(x) for x in rng.choice(np.arange(1, 9), 5, replace=False)] if adv_home else [int(x) for x in rng.choice(np.arange(1, 9), 4, replace=False)]
-        a = [int(x) for x in rng.choice(np.arange(11, 19), 4, replace=False)] if adv_home else [int(x) for x in rng.choice(np.arange(11, 19), 5, replace=False)]
-        rows.append({"game_id": i // 3, "period": 1, "a": 0.0, "b": 1.0, "minutes": 1.0, "home_on": h, "away_on": a, "nh": len(h), "na": len(a), "zone_home": "fly",
-                     "score_home": 0, "h_xg": 0.1, "a_xg": 0.05, "h_goals": 0.0, "a_goals": 0.0, "season": 2020, "grp": "adv"})
+        h = (
+            [int(x) for x in rng.choice(np.arange(1, 9), 5, replace=False)]
+            if adv_home
+            else [int(x) for x in rng.choice(np.arange(1, 9), 4, replace=False)]
+        )
+        a = (
+            [int(x) for x in rng.choice(np.arange(11, 19), 4, replace=False)]
+            if adv_home
+            else [int(x) for x in rng.choice(np.arange(11, 19), 5, replace=False)]
+        )
+        rows.append(
+            {
+                "game_id": i // 3,
+                "period": 1,
+                "a": 0.0,
+                "b": 1.0,
+                "minutes": 1.0,
+                "home_on": h,
+                "away_on": a,
+                "nh": len(h),
+                "na": len(a),
+                "zone_home": "fly",
+                "score_home": 0,
+                "h_xg": 0.1,
+                "a_xg": 0.05,
+                "h_goals": 0.0,
+                "a_goals": 0.0,
+                "season": 2020,
+                "grp": "adv",
+            }
+        )
     return pl.DataFrame(rows)
 
 
@@ -42,7 +69,7 @@ def test_roles_and_design_shapes():
 
 
 def test_ridge_recovers_role_specific_effect(monkeypatch):
-    monkeypatch.setattr(ridge, "JITTER", 1e-6)   # the toy has empty covariate columns, as thin real states can
+    monkeypatch.setattr(ridge, "JITTER", 1e-6)  # the toy has empty covariate columns, as thin real states can
     st = _toy(2000)
     rng = np.random.default_rng(1)
     # player 1 (as advantaged-side skater) raises the advantaged side's xG rate by 3 per 60
@@ -52,5 +79,5 @@ def test_ridge_recovers_role_specific_effect(monkeypatch):
     lookup = {(2020, p): (False, False) for p in list(range(1, 9)) + list(range(11, 19))}
     d = model.make_design(st, "adv", lookup)
     beta = ridge.fit(d, {"xg": 1.0})
-    coefs = ridge.coef_frame(d, beta).filter(pl.col("player_id") == 11)     # pseudo id 1 * 10 + role 1
+    coefs = ridge.coef_frame(d, beta).filter(pl.col("player_id") == 11)  # pseudo id 1 * 10 + role 1
     assert coefs["off_xg"][0] > 1.0

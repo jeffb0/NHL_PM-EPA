@@ -12,9 +12,9 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
-from matplotlib.patches import Arc, Circle, FancyBboxPatch, Rectangle  # noqa: E402
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Arc, Circle, FancyBboxPatch, Rectangle
 
 SURFACE = "#fcfcfb"
 TEXT = "#0b0b0b"
@@ -24,24 +24,44 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a
 POS_COLOR = {"F": SERIES[0], "D": SERIES[1]}
 BLUE_RAMP = ["#f4f8fe", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 SEQ = LinearSegmentedColormap.from_list("seq_blue", BLUE_RAMP)
-DIV = LinearSegmentedColormap.from_list("div_blue_red", ["#104281", "#3987e5", "#9ec5f4", "#f0efec", "#f2a9a8", "#e34948", "#a32a29"])
+DIV = LinearSegmentedColormap.from_list(
+    "div_blue_red", ["#104281", "#3987e5", "#9ec5f4", "#f0efec", "#f2a9a8", "#e34948", "#a32a29"]
+)
 RINK_LINE = "#8f8e89"
 RED_LINE = "#d98a89"
 BLUE_LINE = "#8fb3e0"
 
-plt.rcParams.update({
-    "figure.facecolor": SURFACE, "axes.facecolor": SURFACE, "savefig.facecolor": SURFACE,
-    "text.color": TEXT, "axes.labelcolor": TEXT2, "xtick.color": TEXT2, "ytick.color": TEXT2,
-    "axes.edgecolor": GRID, "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6,
-    "axes.spines.top": False, "axes.spines.right": False, "font.size": 10, "axes.titlesize": 11,
-    "axes.titleweight": "bold", "axes.titlelocation": "left", "legend.frameon": False, "lines.linewidth": 2,
-})
+plt.rcParams.update(
+    {
+        "figure.facecolor": SURFACE,
+        "axes.facecolor": SURFACE,
+        "savefig.facecolor": SURFACE,
+        "text.color": TEXT,
+        "axes.labelcolor": TEXT2,
+        "xtick.color": TEXT2,
+        "ytick.color": TEXT2,
+        "axes.edgecolor": GRID,
+        "axes.grid": True,
+        "grid.color": GRID,
+        "grid.linewidth": 0.6,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "font.size": 10,
+        "axes.titlesize": 11,
+        "axes.titleweight": "bold",
+        "axes.titlelocation": "left",
+        "legend.frameon": False,
+        "lines.linewidth": 2,
+    }
+)
 
 
 def draw_rink(ax, half: str | None = None, zorder: int = 5) -> None:
     """Draw NHL rink lines in feet (x -100..100, y -42.5..42.5), attacking +x."""
     lw = 1.1
-    boards = FancyBboxPatch((-100, -42.5), 200, 85, boxstyle="round,pad=0,rounding_size=28", fill=False, ec=RINK_LINE, lw=1.4, zorder=zorder)
+    boards = FancyBboxPatch(
+        (-100, -42.5), 200, 85, boxstyle="round,pad=0,rounding_size=28", fill=False, ec=RINK_LINE, lw=1.4, zorder=zorder
+    )
     ax.add_patch(boards)
     for artist in ax.collections:  # clip any heatmap drawn before the rink to the boards
         artist.set_clip_path(boards)
@@ -59,7 +79,18 @@ def draw_rink(ax, half: str | None = None, zorder: int = 5) -> None:
         for cy in (-22, 22):
             ax.add_patch(Circle((cx, cy), 1, color=RED_LINE, zorder=zorder))
     for gx, s in ((89, 1), (-89, -1)):
-        ax.add_patch(Arc((gx, 0), 12, 12, theta1=90 if s > 0 else -90, theta2=270 if s > 0 else 90, ec=RED_LINE, lw=lw, zorder=zorder))
+        ax.add_patch(
+            Arc(
+                (gx, 0),
+                12,
+                12,
+                theta1=90 if s > 0 else -90,
+                theta2=270 if s > 0 else 90,
+                ec=RED_LINE,
+                lw=lw,
+                zorder=zorder,
+            )
+        )
         ax.add_patch(Rectangle((gx if s > 0 else gx - 3.3, -3), 3.3, 6, fill=False, ec=RINK_LINE, lw=lw, zorder=zorder))
     ax.set_aspect("equal")
     ax.grid(False)

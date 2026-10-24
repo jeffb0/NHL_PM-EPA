@@ -1,6 +1,6 @@
 # Rest, travel and schedule effects in the game model — methodology and pre-registration
 
-*Written 2026-10-12 before any feature was computed or any test run. Motivation (model owner): the game model knows only home ice and the back-to-back flag. Three hypotheses about schedule effects are tested here.
+*Written 2026-10-12 before any feature was computed or any test run. Motivation: the game model knows only home ice and the back-to-back flag. Three hypotheses about schedule effects are tested here.
 The features, tests and rule below are fixed in advance; changes after results are seen are logged in §7.*
 
 ## 1. Hypotheses
@@ -42,7 +42,7 @@ As in the game-model backtest, the logistic step for test season T is fitted on 
 | SC-1 (per block) | the block improves the game model (paired z > 2) |
 | SC-2 (per block) | no harm (paired z > −2) |
 
-These are fitted empirical effects, not a mechanical correction, so the method is not rated sound in advance. By the owner's standing rule:
+These are fitted empirical effects, not a mechanical correction, so the method is not rated sound in advance. By the author's standing rule:
 
 * a block is **adopted** if its paired z is above 2;
 * if its paired z is between −1 and 2 it is adopted only if the evidence that the effect exists is otherwise clear: its likelihood-ratio test on 2019–2025 wins has p < 0.05 **and** every coefficient with a predicted sign and |t| > 2 has that sign;

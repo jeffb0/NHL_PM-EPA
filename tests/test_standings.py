@@ -6,7 +6,9 @@ from src.standings.run import _z, ols
 
 
 def test_allocate_minutes_keeps_top_and_hits_team_totals():
-    rows = [{"team_id": 1, "player_id": i, "pos_group": "F"} for i in range(16)] + [{"team_id": 1, "player_id": 100 + i, "pos_group": "D"} for i in range(9)]
+    rows = [{"team_id": 1, "player_id": i, "pos_group": "F"} for i in range(16)] + [
+        {"team_id": 1, "player_id": 100 + i, "pos_group": "D"} for i in range(9)
+    ]
     d = pl.DataFrame(rows)
     m = np.concatenate([np.linspace(1500, 300, 16), np.linspace(1500, 400, 9)])
     a = allocate_minutes(d, m, {"F": 9000.0, "D": 5000.0})

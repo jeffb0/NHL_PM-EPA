@@ -6,7 +6,7 @@ Changes after results are seen are logged in §9.*
 ## 1. What is being built
 
 Four components on the same goals-above-replacement scale as the 5v5 components, one per game state, at the
-model owner's request (2026-09-29):
+author's request (2026-09-29):
 
 | component | column | state (from the on-ice team's view) |
 |---|---|---|

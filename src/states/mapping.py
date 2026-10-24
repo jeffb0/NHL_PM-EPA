@@ -42,7 +42,15 @@ ZONE_DOC = {
 
 PRECISE_LOOSE = {"loose_opp_giveaway", "loose_own_giveaway", "loose_opp_block", "loose_own_block"}
 CONTROL_OBS = {"takeaway", "hit_mid", "shot", "giveaway", "lost_takeaway"}
-STRENGTH_GROUP = {"5v5": "5v5", "PP": "PP", "PK": "PK", "4v4": "4v4_3v3", "3v3": "4v4_3v3", "EN": "EN", "other": "other"}
+STRENGTH_GROUP = {
+    "5v5": "5v5",
+    "PP": "PP",
+    "PK": "PK",
+    "4v4": "4v4_3v3",
+    "3v3": "4v4_3v3",
+    "EN": "EN",
+    "other": "other",
+}
 
 
 def _side(y: np.ndarray, width: float) -> np.ndarray:
@@ -61,7 +69,7 @@ def zone_of(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     lr = np.where(y > 0, "L", "R")
     ez = np.full(x.shape, "", dtype=object)
     ez[ax > GOAL_X] = "behind"
-    slot = (np.abs(y) <= 11)
+    slot = np.abs(y) <= 11
     low = (ax >= 69) & (ax <= GOAL_X)
     deep = (ax >= 54) & (ax <= GOAL_X)
     ez[(ez == "") & low & slot] = "low_slot"

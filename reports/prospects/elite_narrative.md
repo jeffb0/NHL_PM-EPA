@@ -28,17 +28,17 @@ All 230 true rookies averaged 0.106; first-round rookies 0.102; top-ten picks 0.
 
 ## Interpretation
 
-**In this model's value measure, top picks have not played like stars as rookies.** The fourteen top-three forwards who debuted at 18 since 2018 produced, on average, about what a generic rookie does (0.11 per 60), nowhere near the 0.35–0.60 the owner's prior suggested.
+**In this model's value measure, top picks have not played like stars as rookies.** The fourteen top-three forwards who debuted at 18 since 2018 produced, on average, about what a generic rookie does (0.11 per 60), nowhere near the 0.35–0.60 the author's prior suggested.
 The value measure counts defense, turnovers and penalties as well as offense, and 18-year-olds who score often give much of it back; several of these picks also had poor first seasons by any measure.
 The fitted coefficients are small and of mixed sign (top-three +0.011, debut at 18 +0.012 for forwards), and the one informative feature remains pre-NHL production (0.18 per NHL-equivalent point per game).
 
 **So the adopted prior is a small bump, not a jump.** Gavin McKenna moves from 0.13 to 0.17, mainly through his college production, and Toronto's win probability against Ottawa from 42.6% to 42.8%. Viggo Björck (eighth overall, debuting at 18) is at 0.06 because his pre-NHL scoring translates low.
-The debut-at-18 signal the owner expected (teams only keep 18-year-olds who have earned it) is not visible in the data: the coefficient is slightly positive for forwards and negative for defensemen.
+The debut-at-18 signal the author expected (teams only keep 18-year-olds who have earned it) is not visible in the data: the coefficient is slightly positive for forwards and negative for defensemen.
 
-**It does not improve forecasts.** True-rookie projections are unchanged (z = 0.29), first-round rookies slightly worse (z = −0.44), and the game model is nil to slightly worse (0.00008 log loss). It was implemented because the rule fixed in advance says a sound method with no harm beyond the threshold is, and because the owner asked for draft-aware handling; nobody should expect it to move results.
+**It does not improve forecasts.** True-rookie projections are unchanged (z = 0.29), first-round rookies slightly worse (z = −0.44), and the game model is nil to slightly worse (0.00008 log loss). It was implemented because the rule fixed in advance says a sound method with no harm beyond the threshold is, and because the author asked for draft-aware handling; nobody should expect it to move results.
 
 **Faster learning for inexperienced players did not help.** Giving thin-history players a larger share of each in-season update looked better on the two tuning seasons at every step up to the largest multiplier tried, and did nothing on the five test seasons (z = −0.25). Not adopted.
 
-**The owner's alternative.** Setting top-three debut ratings by judgment (0.35–0.60) would be an explicit override of the estimate. For scale: rating McKenna as a star moves Toronto's win probability by about 2 points in a game. The record above is the evidence against it; this season's results for the few such players are the evidence that could support it.
+**The author's alternative.** Setting top-three debut ratings by judgment (0.35–0.60) would be an explicit override of the estimate. For scale: rating McKenna as a star moves Toronto's win probability by about 2 points in a game. The record above is the evidence against it; this season's results for the few such players are the evidence that could support it.
 
 **Limitations.** Fourteen top-three debuts; the value measure may under-credit young scorers (its possession and finishing parts are shrunk); only players who reached the NHL are in the data; no per-game individual value exists to update a rookie's rating from his own shifts.

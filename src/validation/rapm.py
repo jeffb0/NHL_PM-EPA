@@ -58,12 +58,39 @@ def build_stints(proc, seasons: list[int], goalie_ids: set[int]) -> pl.DataFrame
     games = pl.read_parquet(proc / "games.parquet").filter(pl.col("season").is_in(seasons)).select("game_id", "home_id")
     q = pl.read_parquet(proc / "shift_quality.parquet").filter(pl.col("onice_match_rate") >= 0.9).select("game_id")
     games = games.join(q, on="game_id")
-    sh = pl.read_parquet(proc / "shifts.parquet").join(games.select("game_id"), on="game_id").filter(~pl.col("player_id").is_in(list(goalie_ids)))
+    sh = (
+        pl.read_parquet(proc / "shifts.parquet")
+        .join(games.select("game_id"), on="game_id")
+        .filter(~pl.col("player_id").is_in(list(goalie_ids)))
+    )
     sh = sh.unique(subset=["game_id", "player_id", "period", "start", "end"])
-    ev = pl.read_parquet(proc / "events.parquet", columns=["game_id", "event_idx", "period", "t_period", "home_skaters", "away_skaters", "home_goalie", "away_goalie", "type", "is_home"]).join(games.select("game_id"), on="game_id")
-    ev = ev.with_columns((pl.col("away_goalie") * 1000 + pl.col("away_skaters") * 100 + pl.col("home_skaters") * 10 + pl.col("home_goalie")).alias("code")).sort("game_id", "event_idx")
+    ev = pl.read_parquet(
+        proc / "events.parquet",
+        columns=[
+            "game_id",
+            "event_idx",
+            "period",
+            "t_period",
+            "home_skaters",
+            "away_skaters",
+            "home_goalie",
+            "away_goalie",
+            "type",
+            "is_home",
+        ],
+    ).join(games.select("game_id"), on="game_id")
+    ev = ev.with_columns(
+        (
+            pl.col("away_goalie") * 1000
+            + pl.col("away_skaters") * 100
+            + pl.col("home_skaters") * 10
+            + pl.col("home_goalie")
+        ).alias("code")
+    ).sort("game_id", "event_idx")
     xg = pl.read_parquet(proc / "shots_xg.parquet").select("game_id", "event_idx", "xg")
-    shots = ev.filter(pl.col("type").is_in(["shot-on-goal", "missed-shot", "goal"])).join(xg, on=["game_id", "event_idx"])
+    shots = ev.filter(pl.col("type").is_in(["shot-on-goal", "missed-shot", "goal"])).join(
+        xg, on=["game_id", "event_idx"]
+    )
     shg = {k[0]: g for k, g in shots.group_by(["game_id"])}
     evg = {k[0]: g for k, g in ev.group_by(["game_id"])}
     tasks = []
@@ -73,14 +100,27 @@ def build_stints(proc, seasons: list[int], goalie_ids: set[int]) -> pl.DataFrame
         if e is None:
             continue
         home_id = games.filter(pl.col("game_id") == gid)["home_id"][0]
-        tasks.append((
-            gid,
-            {c: g[c].to_numpy() for c in ["period", "start", "end", "player_id", "team_id"]},
-            {"period": e["period"].to_numpy(), "t_period": e["t_period"].to_numpy(), "code": e["code"].to_numpy()},
-            {"period": s["period"].to_numpy(), "t_period": s["t_period"].to_numpy(), "xg": s["xg"].to_numpy(), "is_home": s["is_home"].to_numpy().astype(bool)}
-            if s is not None else {"period": np.array([]), "t_period": np.array([]), "xg": np.array([]), "is_home": np.array([], dtype=bool)},
-            home_id,
-        ))
+        tasks.append(
+            (
+                gid,
+                {c: g[c].to_numpy() for c in ["period", "start", "end", "player_id", "team_id"]},
+                {"period": e["period"].to_numpy(), "t_period": e["t_period"].to_numpy(), "code": e["code"].to_numpy()},
+                {
+                    "period": s["period"].to_numpy(),
+                    "t_period": s["t_period"].to_numpy(),
+                    "xg": s["xg"].to_numpy(),
+                    "is_home": s["is_home"].to_numpy().astype(bool),
+                }
+                if s is not None
+                else {
+                    "period": np.array([]),
+                    "t_period": np.array([]),
+                    "xg": np.array([]),
+                    "is_home": np.array([], dtype=bool),
+                },
+                home_id,
+            )
+        )
     rows = []
     with ProcessPoolExecutor(4) as pool:
         for r in pool.map(_game_stints, tasks, chunksize=32):
@@ -133,4 +173,6 @@ def fit_rapm(X, y, w, players, alpha) -> pl.DataFrame:
     m = Ridge(alpha=alpha, fit_intercept=True).fit(X, y, sample_weight=w)
     P = len(players)
     toi = np.asarray(X[:, :P].multiply(w[:, None]).sum(0)).ravel()  # offensive minutes
-    return pl.DataFrame({"player_id": players, "rapm_off_xgf60": m.coef_[:P], "rapm_def_xga60": m.coef_[P:2 * P], "rapm_minutes": toi})
+    return pl.DataFrame(
+        {"player_id": players, "rapm_off_xgf60": m.coef_[:P], "rapm_def_xga60": m.coef_[P : 2 * P], "rapm_minutes": toi}
+    )

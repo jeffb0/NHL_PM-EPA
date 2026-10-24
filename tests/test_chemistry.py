@@ -12,9 +12,22 @@ def _toy(n=4000, P=30, k=2, seed=0, synergy=True):
     for g in range(n):
         pick = rng.choice(P, 10, replace=False)
         h, a = pick[:5], pick[5:]
-        syn = lambda L: 0.5 * ((V[L].sum(0) ** 2).sum() - (V[L] ** 2).sum())  # noqa: E731
+        syn = lambda L: 0.5 * ((V[L].sum(0) ** 2).sum() - (V[L] ** 2).sum())
         y = beta[h].sum() - beta[a].sum() + (syn(h) - syn(a) if synergy else 0.0) + rng.normal(0, 0.3)
-        rows.append({"game_id": g // 40, "season": 2020, "minutes": 1.0, "home_on": ids[h].tolist(), "away_on": ids[a].tolist(), "zone_OZ": 0.0, "zone_DZ": 0.0, "zone_NZ": 0.0, "score": 0.0, "y": float(y)})
+        rows.append(
+            {
+                "game_id": g // 40,
+                "season": 2020,
+                "minutes": 1.0,
+                "home_on": ids[h].tolist(),
+                "away_on": ids[a].tolist(),
+                "zone_OZ": 0.0,
+                "zone_DZ": 0.0,
+                "zone_NZ": 0.0,
+                "score": 0.0,
+                "y": float(y),
+            }
+        )
     return pl.DataFrame(rows), ids, beta, V
 
 
@@ -37,11 +50,12 @@ def test_fm_recovers_planted_synergy_and_scores_unseen_data():
     add = fit_additive(D, players, centre, 1.0)
     fm = fit_fm(D, add, 2, 1.0, 1.0)
     Dt, _, _ = design(te, players, centre)
-    err = lambda p: float(((Dt.y - predict(Dt, p)) ** 2).mean())  # noqa: E731
-    assert err(fm) < 0.5 * err(add)                                   # interactions carry to unseen stints
+    err = lambda p: float(((Dt.y - predict(Dt, p)) ** 2).mean())
+    assert err(fm) < 0.5 * err(add)  # interactions carry to unseen stints
     G_true, G_fit = V @ V.T, fm.V @ fm.V.T
     iu = np.triu_indices(len(players), 1)
-    assert np.corrcoef(G_true[iu], G_fit[iu])[0, 1] > 0.9             # pair synergies are recovered (traits only up to rotation)
+    # pair synergies are recovered (traits only up to rotation)
+    assert np.corrcoef(G_true[iu], G_fit[iu])[0, 1] > 0.9
 
 
 def test_roster_synergy_matches_pair_sum():

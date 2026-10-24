@@ -13,7 +13,7 @@ Baseline: the standings backtest (docs/standings/methodology.md), M1 RMSE 14.58 
 * The projection layer is trained to minimise player-level error (minute-weighted); its summed forecast did worse at the team level than last season's raw rates (docs/projection, PR-6). Player-level
   optimality does not imply team-level optimality, because errors that are shared by teammates (system, coaching, the ridge's shrinkage toward zero) add up in a team sum while independent errors cancel.
 * Opening-roster uncertainty costs about 0.7 points (oracle roster 13.9 vs 14.6); availability (games missed) is part of it. **An availability/injury model is deliberately not a candidate here**:
-  the model owner deferred it (2026-09-30).
+  the author deferred it (2026-09-30).
 
 ## 2. Candidates considered and the ranking
 
@@ -43,7 +43,7 @@ Test seasons 2021–2025 (160 team-seasons); every fitted quantity (c, the ridge
 * **Secondary (reported):** paired z against B2 and M3; calibration slope; number of test seasons in which the candidate beats M1; for C3, the within-team minutes-share error against actual shares.
 * **Combination (reported, not a gate):** all implemented candidates together.
 
-## 4. Decision rules (the model owner's instruction, made mechanical)
+## 4. Decision rules (the author's instruction, made mechanical)
 
 A priori soundness (stated before the results): **C1 sound** (one fitted parameter, a transparent accounting identity, motivated by the team-context finding); **C3 sound** (standard coaching behaviour, two features);
 **C2 less certain** (many fitted parameters on few team-seasons; an outcome-trained correction can overfit).

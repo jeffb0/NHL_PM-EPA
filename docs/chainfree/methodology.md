@@ -45,7 +45,7 @@ Reported, not gated: YOY under ρ = 1 and ρ = 0; the forward slopes; the change
 ## 5. What the result can and cannot say
 
 A better team-level result under ρ = 0 supports the chained-prior explanation of the projection failure and would recommend
-chain-free components for forecasting uses; it would not by itself change the published defaults, which the model owner decides. A
+chain-free components for forecasting uses; it would not by itself change the published defaults, which the author decides. A
 worse or unchanged result would mean the failure comes from something else (the projection target, the component mix, or the noise
 in single-season estimates).
 

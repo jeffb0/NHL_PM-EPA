@@ -128,9 +128,7 @@ def ingest(seasons: list[int], limit: int | None = None) -> None:
         log.info("season %s: %d final games", season, len(gids))
         results = []
         with ThreadPoolExecutor(cfg.data.ingest_workers) as pool:
-            futs = [
-                pool.submit(_fetch_game, g, season, raw_dir, cfg.data.request_timeout_s) for g in gids
-            ]
+            futs = [pool.submit(_fetch_game, g, season, raw_dir, cfg.data.request_timeout_s) for g in gids]
             for i, f in enumerate(as_completed(futs), 1):
                 results.append(f.result())
                 if i % 200 == 0:

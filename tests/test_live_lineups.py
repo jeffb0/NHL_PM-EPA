@@ -23,13 +23,17 @@ def test_parse_reads_goalies_injuries_and_maps_team_codes():
     assert (g["away"], g["home"]) == ("WPG", "TBL")
     w = g["teams"]["WPG"]
     assert w["goalie"] == "stuart skinner" and w["goalie_status"] == "expected"
-    assert [n for n, _ in w["out"]] == ["connor hellebuyck", "some prospect"]          # SUSP and IR-NR are out; the power-play list is not an injury list
-    assert [n for n, _ in w["questionable"]] == ["alex iafallo"]                        # day-to-day stays in the lineup
+    # SUSP and IR-NR are out; the power-play list is not an injury list
+    assert [n for n, _ in w["out"]] == ["connor hellebuyck", "some prospect"]
+    assert [n for n, _ in w["questionable"]] == ["alex iafallo"]  # day-to-day stays in the lineup
     assert g["teams"]["TBL"]["goalie_status"] == "confirmed" and g["teams"]["TBL"]["out"] == []
 
 
 def test_resolve_matches_names_and_reports_the_unmatched():
-    roster = {"WPG": {norm("Stuart Skinner"): 1, norm("Connor Hellebuyck"): 2, norm("Alex Iafallo"): 3}, "TBL": {norm("Andrei Vasilevskiy"): 9}}
+    roster = {
+        "WPG": {norm("Stuart Skinner"): 1, norm("Connor Hellebuyck"): 2, norm("Alex Iafallo"): 3},
+        "TBL": {norm("Andrei Vasilevskiy"): 9},
+    }
     r = resolve(parse(HTML)[0], roster)
     assert r["WPG"]["goalie_id"] == 1 and r["WPG"]["out_ids"] == {2} and r["WPG"]["unmatched"] == ["some prospect"]
     assert r["TBL"]["goalie_id"] == 9 and r["TBL"]["out_ids"] == set()

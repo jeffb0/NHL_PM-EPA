@@ -1,6 +1,6 @@
 # Structural additions to the game model — methodology and pre-registration
 
-*Written 2026-10-12 before any candidate was computed or any test run. Motivation (model owner): the rest/travel test and the situational-angles test were both null; find something the model is genuinely missing.
+*Written 2026-10-12 before any candidate was computed or any test run. Motivation: the rest/travel test and the situational-angles test were both null; find something the model is genuinely missing.
 Those tests added outside facts to a model that already prices them. This one starts from the model's own structure (src/gamemodel/model.py) and asks what it leaves out by construction.
 The candidates, tests and rule below are fixed in advance; changes after results are seen are logged in §7.*
 

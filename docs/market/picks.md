@@ -1,6 +1,6 @@
 # Picks ledger and unit sizing — rules
 
-*Written 2026-10-04 at the model owner's request, before any pick was locked under these rules. This is a record-keeping and sizing tool for the owner's own small wagers. It is separate from the pre-registered market test
+*Written 2026-10-04 at the author's request, before any pick was locked under these rules. This is a record-keeping and sizing tool for the author's own small wagers. It is separate from the pre-registered market test
 (docs/market/methodology.md), whose flat one-unit paper entries remain the test metric. Nothing here is betting or financial advice; the model has no demonstrated edge over the market (see §5).*
 
 ## 1. Units
@@ -12,12 +12,12 @@ One unit = one dollar. Stakes are whole units, between 1 and 3 per pick. Sizing 
 For each game on the day's slate, at the daily run (scheduled 12:00 Eastern), on the moneyline only:
 
 1. Take the model's win probability for each side and the best available price among FanDuel, DraftKings and BetMGM (after the source-error guard of docs/market §8.1).
-   **From 2026-10-16 (owner's request): the best price among FanDuel, DraftKings, BetMGM, Caesars, Hard Rock Bet and theScore Bet.** The market probability used for sizing is still the three-book consensus of the market test.
+   **From 2026-10-16 (author's request): the best price among FanDuel, DraftKings, BetMGM, Caesars, Hard Rock Bet and theScore Bet.** The market probability used for sizing is still the three-book consensus of the market test.
    Hard Rock Bet and theScore Bet come from a second source (Action Network, New Jersey lines; docs/market §8 item 13).
 2. A side qualifies when the model's probability is at least **3 percentage points** above that price's break-even probability.
 3. At most one pick per game. A game is locked once; later runs never change or add to it.
 4. **Goalie flag (from 2026-10-13; the daily run has been at 8:00 Eastern since 2026-10-06).** Most starting goalies are not confirmed at that hour. Each pick is shown with whether its edge survives the team's other goalie starting, for any side not yet confirmed:
-   a pick whose edge over break-even would fall below 3 points in the worst case is marked **goalie-dependent**. The flag is information for the owner; it does not change what is locked or the stake.
+   a pick whose edge over break-even would fall below 3 points in the worst case is marked **goalie-dependent**. The flag is information for the author; it does not change what is locked or the stake.
    An afternoon update (about 17:00 Eastern, docs/market/methodology.md §8 item 11) re-forecasts those games and says whether each locked pick still clears 3 points at its locked price. It never adds, removes or resizes a pick in the ledger.
 
 ## 3. How many units
@@ -49,10 +49,10 @@ several hundred picks are needed before profit says anything about the model. Th
 ## 6. The ledger
 
 `data/private/logs/picks_log.csv` (append-only; private from 2026-10-18, its fingerprint is public): when locked, the game, the side, the book and price, units, the model and market probabilities. `python -m src.live.picks` (also run by the daily job) locks the day's picks, settles finished games, and writes
-`reports/live/picks.md`, `reports/live/picks_profit.png` (cumulative profit through the season) and the public record `data/live/public/picks_record.csv` (each pick in units and decimal odds with the model's probability and the result). A pick whose price is no longer available when the owner goes to place it is the owner's call; the ledger records the price at lock time.
+`reports/live/picks.md`, `reports/live/picks_profit.png` (cumulative profit through the season) and the public record `data/live/public/picks_record.csv` (each pick in units and decimal odds with the model's probability and the result). A pick whose price is no longer available when the author goes to place it is the author's call; the ledger records the price at lock time.
 
 ## 7. Change log
 
 *(any change to the sizing or locking rules is recorded here with its date; settled picks are never re-sized)*
 
-1. **2026-10-04: display in decimal odds.** At the owner's request prices are shown as decimal odds (total return per unit staked: 1.80 means a one-unit pick returns 1.80, a profit of 0.80) in the ledger report, the market report and the daily summary. The logs keep the American price as captured (`american`), and `picks_settled.csv` carries both. Sizing and settlement are unchanged.
+1. **2026-10-04: display in decimal odds.** At the author's request prices are shown as decimal odds (total return per unit staked: 1.80 means a one-unit pick returns 1.80, a profit of 0.80) in the ledger report, the market report and the daily summary. The logs keep the American price as captured (`american`), and `picks_settled.csv` carries both. Sizing and settlement are unchanged.

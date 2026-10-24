@@ -13,9 +13,25 @@ from src.possession.chains import ChainParams, build_game
 log = logging.getLogger(__name__)
 
 EVENT_COLS = [
-    "game_id", "event_idx", "period", "t_game", "type", "team_id", "opp_team_id", "player1", "player2",
-    "x", "y", "reason", "home_id", "home_skaters", "away_skaters", "home_goalie", "away_goalie",
-    "home_score", "away_score",
+    "game_id",
+    "event_idx",
+    "period",
+    "t_game",
+    "type",
+    "team_id",
+    "opp_team_id",
+    "player1",
+    "player2",
+    "x",
+    "y",
+    "reason",
+    "home_id",
+    "home_skaters",
+    "away_skaters",
+    "home_goalie",
+    "away_goalie",
+    "home_score",
+    "away_score",
 ]
 POSS_ID_STRIDE = 10_000  # poss_id = game_id * stride + local index (max ~400 per game)
 

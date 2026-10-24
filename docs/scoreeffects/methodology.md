@@ -1,6 +1,6 @@
 # Score-effects adjustment of expected goals — methodology and pre-registration
 
-*Written 2026-10-04 before any factor was estimated or any test run. Motivation (model owner, after WPG 3 at DET 2, where Winnipeg led 3–0 and was out-chanced 4.88 to 3.59): chances conceded while protecting a lead are not the same evidence
+*Written 2026-10-04 before any factor was estimated or any test run. Motivation (after WPG 3 at DET 2, where Winnipeg led 3–0 and was out-chanced 4.88 to 3.59): chances conceded while protecting a lead are not the same evidence
 about a team as chances conceded in a tied game, though they are not nothing either. The design, test and rule below are fixed here; changes after results are seen are logged in §7.*
 
 ## 1. What score effects are
@@ -36,7 +36,7 @@ The game model of docs/gamemodel with rate model and inputs as currently used fo
 | SE-1 | the score-adjusted update improves the game model (paired z > 2) |
 | SE-2 | no harm (paired z > −2) |
 
-The adjustment is rated sound in advance (a standard correction in hockey analytics with a clear mechanism and no fitted model parameters beyond league-average rates). By the owner's standing rule it is implemented in the forward forecasts if the primary z is above −1; a reliable improvement is claimed only if SE-1 passes.
+The adjustment is rated sound in advance (a standard correction in hockey analytics with a clear mechanism and no fitted model parameters beyond league-average rates). By the author's standing rule it is implemented in the forward forecasts if the primary z is above −1; a reliable improvement is claimed only if SE-1 passes.
 Because the forward forecasts are part of the prospective market test, adoption is logged in docs/market/methodology.md as a model change with its date.
 
 ## 6. Limitations stated in advance

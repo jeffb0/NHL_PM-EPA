@@ -28,9 +28,20 @@ from sklearn.linear_model import LogisticRegression
 from src.states.mapping import STRENGTH_GROUP, add_state_columns, location_precision, state_kind
 
 KIND_LEVELS = [
-    "control", "faceoff", "rebound", "loose_unobserved", "loose_opp_giveaway", "loose_own_giveaway",
-    "loose_opp_block", "loose_own_block", "loose_opp_miss", "loose_own_miss", "loose_opp_sog",
-    "loose_own_sog", "loose_opp_goal", "loose_own_goal",
+    "control",
+    "faceoff",
+    "rebound",
+    "loose_unobserved",
+    "loose_opp_giveaway",
+    "loose_own_giveaway",
+    "loose_opp_block",
+    "loose_own_block",
+    "loose_opp_miss",
+    "loose_own_miss",
+    "loose_opp_sog",
+    "loose_own_sog",
+    "loose_opp_goal",
+    "loose_own_goal",
 ]
 SG_LEVELS = ["5v5", "PP", "PK", "4v4_3v3"]
 
@@ -54,8 +65,14 @@ def method_of_moments_k(n: np.ndarray, mean: np.ndarray, var_within: float) -> f
 class TabularValue:
     """Tabular V over state ids with hierarchical EB shrinkage state -> parent -> kind -> strength."""
 
-    def __init__(self, scheme: str = "zones", k: float | str = "auto", method: str = "mc", use_score: bool = False,
-                 max_iter: int = 50):
+    def __init__(
+        self,
+        scheme: str = "zones",
+        k: float | str = "auto",
+        method: str = "mc",
+        use_score: bool = False,
+        max_iter: int = 50,
+    ):
         self.scheme, self.k, self.method, self.use_score, self.max_iter = scheme, k, method, use_score, max_iter
         self.k_used: float | None = None
 
@@ -66,7 +83,7 @@ class TabularValue:
 
     def _levels(self, d: pl.DataFrame, target: np.ndarray) -> dict:
         d = d.with_columns(pl.Series("_y", target))
-        agg = lambda key: d.group_by(key).agg(pl.len().alias("n"), pl.col("_y").mean().alias("m"))  # noqa: E731
+        agg = lambda key: d.group_by(key).agg(pl.len().alias("n"), pl.col("_y").mean().alias("m"))
         return {"sg": agg("sgroup"), "kind": agg("kind_id"), "parent": agg("parent_id"), "state": agg("state_id")}
 
     def _k(self, level: pl.DataFrame, var_within: float) -> float:
@@ -81,7 +98,9 @@ class TabularValue:
         self.k_used = {"kind": k_kind, "parent": k_par, "state": k_state}
         kind_df = lv["kind"].with_columns(pl.col("kind_id").str.split("|").list.first().alias("_sg"))
         kind_prior = np.array([sg.get(s, 0.0) for s in kind_df["_sg"]])
-        kind_v = dict(zip(kind_df["kind_id"], _eb_shrink(kind_df["n"].to_numpy(), kind_df["m"].to_numpy(), kind_prior, k_kind)))
+        kind_v = dict(
+            zip(kind_df["kind_id"], _eb_shrink(kind_df["n"].to_numpy(), kind_df["m"].to_numpy(), kind_prior, k_kind))
+        )
         par = lv["parent"].with_columns(pl.col("parent_id").str.split("|").list.slice(0, 2).list.join("|").alias("_k"))
         par_prior = np.array([kind_v.get(s, 0.0) for s in par["_k"]])
         par_v = dict(zip(par["parent_id"], _eb_shrink(par["n"].to_numpy(), par["m"].to_numpy(), par_prior, k_par)))
@@ -103,7 +122,9 @@ class TabularValue:
             lv = self._levels(d, target)
             pri = self._solve(lv, var_within)
             st = lv["state"]
-            prior = np.array([pri["parent"].get(self.parent_of[s], pri["kind"].get(self.kind_of[s], 0.0)) for s in st["state_id"]])
+            prior = np.array(
+                [pri["parent"].get(self.parent_of[s], pri["kind"].get(self.kind_of[s], 0.0)) for s in st["state_id"]]
+            )
             vals = _eb_shrink(st["n"].to_numpy(), st["m"].to_numpy(), prior, pri["k"])
             new_table = dict(zip(st["state_id"], vals))
             if not has_next:
@@ -121,14 +142,27 @@ class TabularValue:
 
     def predict(self, df: pl.DataFrame) -> np.ndarray:
         """Lookup with fallback state -> parent -> kind -> strength group (vectorized joins)."""
-        d = add_state_columns(df, self.scheme, self.use_score).select("state_id", "parent_id", "kind_id", "sgroup").with_row_index("_i")
-        lk = lambda m, key: pl.DataFrame({key: list(m.keys()), f"v_{key}": np.array(list(m.values()), dtype=float)}, schema={key: pl.Utf8, f"v_{key}": pl.Float64})  # noqa: E731
-        d = (d.join(lk(self.table, "state_id"), on="state_id", how="left")
-             .join(lk(self.pri["parent"], "parent_id"), on="parent_id", how="left")
-             .join(lk(self.pri["kind"], "kind_id"), on="kind_id", how="left")
-             .join(lk(self.pri["sg"], "sgroup"), on="sgroup", how="left")
-             .sort("_i"))
-        return d.select(pl.coalesce("v_state_id", "v_parent_id", "v_kind_id", "v_sgroup", pl.lit(0.0))).to_series().to_numpy()
+        d = (
+            add_state_columns(df, self.scheme, self.use_score)
+            .select("state_id", "parent_id", "kind_id", "sgroup")
+            .with_row_index("_i")
+        )
+        lk = lambda m, key: pl.DataFrame(
+            {key: list(m.keys()), f"v_{key}": np.array(list(m.values()), dtype=float)},
+            schema={key: pl.Utf8, f"v_{key}": pl.Float64},
+        )
+        d = (
+            d.join(lk(self.table, "state_id"), on="state_id", how="left")
+            .join(lk(self.pri["parent"], "parent_id"), on="parent_id", how="left")
+            .join(lk(self.pri["kind"], "kind_id"), on="kind_id", how="left")
+            .join(lk(self.pri["sg"], "sgroup"), on="sgroup", how="left")
+            .sort("_i")
+        )
+        return (
+            d.select(pl.coalesce("v_state_id", "v_parent_id", "v_kind_id", "v_sgroup", pl.lit(0.0)))
+            .to_series()
+            .to_numpy()
+        )
 
     def _predict_loop(self, df: pl.DataFrame) -> np.ndarray:
         """Reference (slow) implementation kept for testing the vectorized path."""
@@ -148,16 +182,18 @@ class TabularValue:
     def to_frame(self) -> pl.DataFrame:
         ids = list(self.table)
         parts = [s.split("|") for s in ids]
-        return pl.DataFrame({
-            "state_id": ids,
-            "sgroup": [p[0] for p in parts],
-            "kind": [p[1] for p in parts],
-            "spatial": [p[2] for p in parts],
-            "n": [int(self.n[s]) for s in ids],
-            "v_raw": [float(self.raw[s]) for s in ids],
-            "v_parent": [float(self.pri["parent"].get(self.parent_of[s], np.nan)) for s in ids],
-            "v": [float(self.table[s]) for s in ids],
-        })
+        return pl.DataFrame(
+            {
+                "state_id": ids,
+                "sgroup": [p[0] for p in parts],
+                "kind": [p[1] for p in parts],
+                "spatial": [p[2] for p in parts],
+                "n": [int(self.n[s]) for s in ids],
+                "v_raw": [float(self.raw[s]) for s in ids],
+                "v_parent": [float(self.pri["parent"].get(self.parent_of[s], np.nan)) for s in ids],
+                "v": [float(self.table[s]) for s in ids],
+            }
+        )
 
 
 def _features(df: pl.DataFrame, use_score: bool) -> np.ndarray:
@@ -186,9 +222,17 @@ class GBMValue:
     def __init__(self, use_score: bool = False, seed: int = 0, max_iter: int = 300):
         self.use_score = use_score
         self.model = HistGradientBoostingRegressor(
-            loss="poisson", max_iter=max_iter, learning_rate=0.05, max_leaf_nodes=31, min_samples_leaf=300,
-            l2_regularization=1.0, categorical_features=[5, 6], early_stopping=True, validation_fraction=0.1,
-            n_iter_no_change=20, random_state=seed,
+            loss="poisson",
+            max_iter=max_iter,
+            learning_rate=0.05,
+            max_leaf_nodes=31,
+            min_samples_leaf=300,
+            l2_regularization=1.0,
+            categorical_features=[5, 6],
+            early_stopping=True,
+            validation_fraction=0.1,
+            n_iter_no_change=20,
+            random_state=seed,
         )
 
     def fit(self, df: pl.DataFrame, target_col: str = "G") -> GBMValue:
@@ -245,7 +289,9 @@ class HazardValue:
         if len(rows) > self.max_rows:
             keep = rng.choice(len(rows), self.max_rows, replace=False)
             rows, bins, y = rows[keep], bins[keep], y[keep]
-        self.pid_levels = {p: i for i, p in enumerate(sorted(set(d["parent_id"].to_list()) | set(d["kind_id"].to_list())))}
+        self.pid_levels = {
+            p: i for i, p in enumerate(sorted(set(d["parent_id"].to_list()) | set(d["kind_id"].to_list())))
+        }
         self.coarse_levels = {c: i for i, c in enumerate(sorted(set(d["kind_id"].to_list())))}
         self.n_pid, self.n_coarse = len(self.pid_levels), len(self.coarse_levels)
         pid = np.array([self.pid_levels[p] for p in d["parent_id"]])
@@ -254,14 +300,30 @@ class HazardValue:
         self.clf = LogisticRegression(C=1.0, max_iter=300).fit(X, y)
         # E[xG | scoring-shot end, parent, bin] with shrinkage to parent mean
         shot = d.filter(pl.col("end_class") == 1).with_columns(
-            pl.Series("bin", np.clip(np.searchsorted(HAZ_EDGES, d.filter(pl.col("end_class") == 1)["tau"].to_numpy(), side="right") - 1, 0, len(HAZ_EDGES) - 2))
+            pl.Series(
+                "bin",
+                np.clip(
+                    np.searchsorted(HAZ_EDGES, d.filter(pl.col("end_class") == 1)["tau"].to_numpy(), side="right") - 1,
+                    0,
+                    len(HAZ_EDGES) - 2,
+                ),
+            )
         )
         overall = shot["terminal_xg"].mean()
         par = shot.group_by("parent_id").agg(pl.len().alias("n"), pl.col("terminal_xg").mean().alias("m"))
-        self.m_par = dict(zip(par["parent_id"], _eb_shrink(par["n"].to_numpy(), par["m"].to_numpy(), np.full(par.height, overall), 50)))
+        self.m_par = dict(
+            zip(
+                par["parent_id"], _eb_shrink(par["n"].to_numpy(), par["m"].to_numpy(), np.full(par.height, overall), 50)
+            )
+        )
         pb = shot.group_by("parent_id", "bin").agg(pl.len().alias("n"), pl.col("terminal_xg").mean().alias("m"))
         prior = np.array([self.m_par[p] for p in pb["parent_id"]])
-        self.m_pb = {(p, b): v for p, b, v in zip(pb["parent_id"], pb["bin"], _eb_shrink(pb["n"].to_numpy(), pb["m"].to_numpy(), prior, 50))}
+        self.m_pb = {
+            (p, b): v
+            for p, b, v in zip(
+                pb["parent_id"], pb["bin"], _eb_shrink(pb["n"].to_numpy(), pb["m"].to_numpy(), prior, 50)
+            )
+        }
         self.overall = overall
         return self
 

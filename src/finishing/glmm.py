@@ -31,7 +31,7 @@ S2_FLOOR = 1e-6
 @dataclass
 class Mode:
     beta: np.ndarray
-    chol: tuple                     # cho_factor output at the mode
+    chol: tuple  # cho_factor output at the mode
     prec: np.ndarray
     iters: int
     converged: bool
@@ -58,8 +58,16 @@ def _hessian(X: csr_matrix, w: np.ndarray, prec: np.ndarray) -> np.ndarray:
     return H
 
 
-def newton(X: csr_matrix, y: np.ndarray, offset: np.ndarray, prec: np.ndarray, beta0: np.ndarray | None = None,
-           max_iter: int = 30, tol: float = 1e-5, max_step: float = 5.0) -> Mode:
+def newton(
+    X: csr_matrix,
+    y: np.ndarray,
+    offset: np.ndarray,
+    prec: np.ndarray,
+    beta0: np.ndarray | None = None,
+    max_iter: int = 30,
+    tol: float = 1e-5,
+    max_step: float = 5.0,
+) -> Mode:
     beta = np.zeros(X.shape[1]) if beta0 is None else beta0.copy()
     converged = False
     n_it = 0
@@ -82,8 +90,16 @@ def newton(X: csr_matrix, y: np.ndarray, offset: np.ndarray, prec: np.ndarray, b
     return Mode(beta, c, prec, n_it, converged, ll)
 
 
-def em_variance(X: csr_matrix, y: np.ndarray, offset: np.ndarray, groups: dict[str, np.ndarray], s2_init: dict[str, float],
-                iters: int = 60, tol_sd: float = 1e-4, beta0: np.ndarray | None = None) -> tuple[dict[str, float], Mode, list[dict]]:
+def em_variance(
+    X: csr_matrix,
+    y: np.ndarray,
+    offset: np.ndarray,
+    groups: dict[str, np.ndarray],
+    s2_init: dict[str, float],
+    iters: int = 60,
+    tol_sd: float = 1e-4,
+    beta0: np.ndarray | None = None,
+) -> tuple[dict[str, float], Mode, list[dict]]:
     """Empirical-Bayes variance components by SQUAREM-accelerated EM.
 
     Plain EM here converges linearly at a rate of ~0.98-0.99 per step (the persistent and season-deviation
@@ -112,7 +128,12 @@ def em_variance(X: csr_matrix, y: np.ndarray, offset: np.ndarray, groups: dict[s
         r = s1 - s
         res_sd = float(np.max(np.abs(np.sqrt(s1) - np.sqrt(s))))
         trace.append({"cycle": cyc + 1, "em_residual_sd": res_sd, **{f"s2_{g}": float(x) for g, x in zip(names, s)}})
-        log.info("SQUAREM %d: EM residual (sd scale) %.6f  %s", cyc + 1, res_sd, {g: round(float(np.sqrt(x)), 4) for g, x in zip(names, s)})
+        log.info(
+            "SQUAREM %d: EM residual (sd scale) %.6f  %s",
+            cyc + 1,
+            res_sd,
+            {g: round(float(np.sqrt(x)), 4) for g, x in zip(names, s)},
+        )
         if res_sd < tol_sd:
             converged = True
             break
@@ -122,7 +143,7 @@ def em_variance(X: csr_matrix, y: np.ndarray, offset: np.ndarray, groups: dict[s
         alpha = -float(np.linalg.norm(r)) / nv if nv > 0 else -1.0
         alpha = min(alpha, -1.0)
         cand = np.maximum(s - 2 * alpha * r + alpha**2 * v, S2_FLOOR)
-        s = F(cand)                     # stabilizing EM step (keeps the iteration monotone in practice)
+        s = F(cand)  # stabilizing EM step (keeps the iteration monotone in practice)
     s2 = {g: float(x) for g, x in zip(names, s)}
     mode = newton(X, y, offset, precision_vector(X.shape[1], groups, s2), state["beta"])
     trace[-1]["converged"] = converged

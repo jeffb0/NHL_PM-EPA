@@ -44,19 +44,49 @@ def prepare(cfg, seasons: list[int], tag: str) -> str:
     u_idx, u_cols, u_ids = index(d["shooter"], lay.shooter)
     v_idx, v_cols, v_ids = index(d["goalie"], lay.goalie)
     posmap = lay.shooter_pos
-    out = {"y": df["goal"].to_numpy().astype(np.float32), "off": df["offset"].to_numpy(), "cell": cell, "u_idx": u_idx, "v_idx": v_idx,
-           "u_pos": np.array([1 if posmap[p] == "D" else 0 for p in u_ids]), "u_ids": u_ids, "v_ids": v_ids,
-           "lap_u_mean": fit.beta[u_cols], "lap_u_sd": sd[u_cols], "lap_v_mean": fit.beta[v_cols], "lap_v_sd": sd[v_cols],
-           "lap_cell_mean": fit.beta[cell_cols], "n_cell": len(cell_cols),
-           "s2_names": np.array(list(fit.s2)), "s2_vals": np.array(list(fit.s2.values())), "multi": np.array(multi)}
+    out = {
+        "y": df["goal"].to_numpy().astype(np.float32),
+        "off": df["offset"].to_numpy(),
+        "cell": cell,
+        "u_idx": u_idx,
+        "v_idx": v_idx,
+        "u_pos": np.array([1 if posmap[p] == "D" else 0 for p in u_ids]),
+        "u_ids": u_ids,
+        "v_ids": v_ids,
+        "lap_u_mean": fit.beta[u_cols],
+        "lap_u_sd": sd[u_cols],
+        "lap_v_mean": fit.beta[v_cols],
+        "lap_v_sd": sd[v_cols],
+        "lap_cell_mean": fit.beta[cell_cols],
+        "n_cell": len(cell_cols),
+        "s2_names": np.array(list(fit.s2)),
+        "s2_vals": np.array(list(fit.s2.values())),
+        "multi": np.array(multi),
+    }
     if multi:
         ss_idx, ss_cols, ss_ids = index(d["k_ss"], lay.shooter_season)
         gs_idx, gs_cols, _ = index(d["k_gs"], lay.goalie_season)
-        out.update({"ss_idx": ss_idx, "gs_idx": gs_idx, "ss_pos": np.array([1 if posmap[k // 10000] == "D" else 0 for k in ss_ids]),
-                    "lap_d_mean": fit.beta[ss_cols], "lap_d_sd": sd[ss_cols], "lap_e_mean": fit.beta[gs_cols], "lap_e_sd": sd[gs_cols]})
+        out.update(
+            {
+                "ss_idx": ss_idx,
+                "gs_idx": gs_idx,
+                "ss_pos": np.array([1 if posmap[k // 10000] == "D" else 0 for k in ss_ids]),
+                "lap_d_mean": fit.beta[ss_cols],
+                "lap_d_sd": sd[ss_cols],
+                "lap_e_mean": fit.beta[gs_cols],
+                "lap_e_sd": sd[gs_cols],
+            }
+        )
     path = proc / f"fin_nuts_{tag}.npz"
     np.savez_compressed(path, **out)
-    log.info("wrote %s: %d shots, %d shooters, %d goalies; sd %s", path.name, len(out["y"]), len(u_ids), len(v_ids), {k: round(float(np.sqrt(v)), 4) for k, v in fit.s2.items()})
+    log.info(
+        "wrote %s: %d shots, %d shooters, %d goalies; sd %s",
+        path.name,
+        len(out["y"]),
+        len(u_ids),
+        len(v_ids),
+        {k: round(float(np.sqrt(v)), 4) for k, v in fit.s2.items()},
+    )
     return str(path)
 
 

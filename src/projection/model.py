@@ -15,8 +15,10 @@ LAMBDAS = np.geomspace(1e-3, 3e1, 15)
 
 @dataclass(frozen=True)
 class Spec:
-    """Which feature blocks enter: the ten shrunk component rates (or only their total), age terms, height and weight."""
-    comps: str = "ten"          # "ten" | "total"
+    """Which feature blocks enter: the ten shrunk component rates (or only their total), age terms, height and
+    weight."""
+
+    comps: str = "ten"  # "ten" | "total"
     age: bool = True
     hw: bool = True
     extra: tuple[str, ...] = ()  # optional prior covariates (e.g. future EDGE features): columns already in the frame
@@ -38,7 +40,9 @@ def feature_names(spec: Spec) -> list[str]:
 
 
 def xmat(d: pl.DataFrame, spec: Spec) -> np.ndarray:
-    base = [d[f"rt_{c}"].to_numpy() for c in (COMPS if spec.comps == "ten" else ["total"])] + [d["no_history"].to_numpy()]
+    base = [d[f"rt_{c}"].to_numpy() for c in (COMPS if spec.comps == "ten" else ["total"])] + [
+        d["no_history"].to_numpy()
+    ]
     cols = [np.column_stack(base)]
     if spec.age:
         cols.append(age_basis(d["age"].to_numpy()))
@@ -54,7 +58,7 @@ class Ridge:
     mu: np.ndarray
     sd: np.ndarray
     ybar: float
-    beta: np.ndarray            # on standardized features
+    beta: np.ndarray  # on standardized features
     lam: float
     names: list[str] = field(default_factory=list)
 
@@ -80,7 +84,7 @@ def wridge(X: np.ndarray, y: np.ndarray, w: np.ndarray, lam: float) -> Ridge:
 def choose_lambda(X: np.ndarray, y: np.ndarray, w: np.ndarray, season: np.ndarray) -> float:
     """Leave-one-target-season-out weighted squared error over the grid."""
     if len(np.unique(season)) < 2:
-        return 0.1                                   # a single training season cannot be cross-validated by season
+        return 0.1  # a single training season cannot be cross-validated by season
     err = np.zeros(len(LAMBDAS))
     for s in np.unique(season):
         te = season == s
@@ -90,7 +94,13 @@ def choose_lambda(X: np.ndarray, y: np.ndarray, w: np.ndarray, season: np.ndarra
     return float(LAMBDAS[int(np.argmin(err))])
 
 
-def fit_models(train: pl.DataFrame, spec: Spec, target: str = "r_total", weight: str = "m", lam: float | dict[str, float] | None = None) -> dict[str, Ridge]:
+def fit_models(
+    train: pl.DataFrame,
+    spec: Spec,
+    target: str = "r_total",
+    weight: str = "m",
+    lam: float | dict[str, float] | None = None,
+) -> dict[str, Ridge]:
     """One ridge per position group."""
     out = {}
     for g in ("F", "D"):
@@ -125,6 +135,6 @@ def age_curve(models: dict[str, Ridge], spec: Spec, ages: np.ndarray) -> dict[st
     out = {}
     for g, m in models.items():
         k = feature_names(spec).index("age_lin")
-        coef = m.raw_coef()[k:k + 4]
+        coef = m.raw_coef()[k : k + 4]
         out[g] = age_basis(ages) @ coef
     return out

@@ -25,20 +25,43 @@ def test_american_and_devig():
 def test_parse_keeps_books_sides_and_skips_missing_prices():
     rows = parse(HTML)
     ml = {(r["book"], r["side"]): r["american"] for r in rows if r["market"] == "moneyline"}
-    assert ml == {("BetMGM", "away"): -110, ("DraftKings", "away"): -105, ("BetMGM", "home"): -110}          # DraftKings has no home price: skipped, not guessed
+    # DraftKings has no home price: skipped, not guessed
+    assert ml == {("BetMGM", "away"): -110, ("DraftKings", "away"): -105, ("BetMGM", "home"): -110}
     tot = {(r["book"], r["side"]): (r["line"], r["american"]) for r in rows if r["market"] == "total"}
     assert tot[("DraftKings", "under")] == (5.5, 100) and tot[("BetMGM", "over")] == (5.5, -125)
-    assert not [r for r in rows if r["market"] not in ("moneyline", "total")]                                  # the puck line is not logged
+    # the puck line is not logged
+    assert not [r for r in rows if r["market"] not in ("moneyline", "total")]
 
 
 def test_parse_action_network():
     hr, ts = AN_BOOKS
-    ml = lambda team, side, odds: {"team_id": team, "side": side, "odds": odds, "is_live": False}          # noqa: E731
-    d = {"games": [{"away_team_id": 1, "home_team_id": 2, "teams": [{"id": 1, "abbr": "NJ"}, {"id": 2, "abbr": "TB"}],
-                    "markets": {str(hr): {"event": {"moneyline": [ml(1, "away", 150), ml(2, "home", -175)], "total": [{"side": "over", "odds": -110, "value": 6.5, "is_live": False}]}},
-                                str(ts): {"event": {"moneyline": [ml(2, "home", -170), ml(1, "away", 145)]}},
-                                "15": {"event": {"moneyline": [ml(1, "away", 160)]}}}}]}
+    ml = lambda team, side, odds: {"team_id": team, "side": side, "odds": odds, "is_live": False}
+    d = {
+        "games": [
+            {
+                "away_team_id": 1,
+                "home_team_id": 2,
+                "teams": [{"id": 1, "abbr": "NJ"}, {"id": 2, "abbr": "TB"}],
+                "markets": {
+                    str(hr): {
+                        "event": {
+                            "moneyline": [ml(1, "away", 150), ml(2, "home", -175)],
+                            "total": [{"side": "over", "odds": -110, "value": 6.5, "is_live": False}],
+                        }
+                    },
+                    str(ts): {"event": {"moneyline": [ml(2, "home", -170), ml(1, "away", 145)]}},
+                    "15": {"event": {"moneyline": [ml(1, "away", 160)]}},
+                },
+            }
+        ]
+    }
     rows = parse_an(d)[("NJD", "TBL")]
     got = {(r["book"], r["market"], r["side"]): (r["american"], r["line"]) for r in rows}
-    assert got == {("Hard Rock Bet", "moneyline", "away"): (150, None), ("Hard Rock Bet", "moneyline", "home"): (-175, None), ("Hard Rock Bet", "total", "over"): (-110, 6.5),
-                   ("theScore Bet", "moneyline", "home"): (-170, None), ("theScore Bet", "moneyline", "away"): (145, None)}       # book 15 (not requested) is ignored
+    assert got == {
+        ("Hard Rock Bet", "moneyline", "away"): (150, None),
+        ("Hard Rock Bet", "moneyline", "home"): (-175, None),
+        ("Hard Rock Bet", "total", "over"): (-110, 6.5),
+        # book 15 (not requested) is ignored
+        ("theScore Bet", "moneyline", "home"): (-170, None),
+        ("theScore Bet", "moneyline", "away"): (145, None),
+    }

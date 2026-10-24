@@ -1,8 +1,11 @@
 """Where the live pipeline keeps its files (docs/market/methodology.md §8 item 14).
 
-Logs and reports that contain third-party data (sportsbook prices, the lineup and injury feed) live in data/private, which is its own private git repository and is ignored by this one.
-The public record lives in data/live/public and reports/live: the picks ledger in units and decimal odds, the market test's summary, and a fingerprint (SHA-256) of every private log at each run,
-so anyone can later check that a private log shown to them is the one that existed when the fingerprint was committed."""
+Logs and reports that contain third-party data (sportsbook prices, the lineup and injury feed) live in data/private,
+which is its own private git repository and is ignored by this one.
+The public record lives in data/live/public and reports/live: the picks ledger in units and decimal odds, the market
+test's summary, and a fingerprint (SHA-256) of every private log at each run,
+so anyone can later check that a private log shown to them is the one that existed when the fingerprint was
+committed."""
 
 from __future__ import annotations
 
@@ -37,7 +40,9 @@ def fingerprint(run: str, logs=None, out=None) -> list[dict]:
     for p in sorted(logs.glob("*.csv")):
         with open(p, encoding="utf-8") as fh:
             n = max(sum(1 for _ in fh) - 1, 0)
-        rows.append({"recorded_utc": now, "run": run, "file": p.name, "sha256": sha256(p), "bytes": p.stat().st_size, "rows": n})
+        rows.append(
+            {"recorded_utc": now, "run": run, "file": p.name, "sha256": sha256(p), "bytes": p.stat().st_size, "rows": n}
+        )
     out.parent.mkdir(parents=True, exist_ok=True)
     new = not out.exists()
     with open(out, "a", newline="", encoding="utf-8") as fh:

@@ -38,7 +38,7 @@ coefficient has a standard deviation of 0.09 per 60 for defensemen (about six ti
 
 ## 4. Application (only if adopted)
 
-`total_gar_all_tr = total_gar_all_pos + w_TR × tr_gar` (published beside the others; the default stays the uncalibrated total until the model owner decides),
+`total_gar_all_tr = total_gar_all_pos + w_TR × tr_gar` (published beside the others; the default stays the uncalibrated total until the author decides),
 with `w_TR` from the ridge toward 1, clipped to [0, 3].
 
 ## 5. Gates (failures are reported, not tuned away)
@@ -75,11 +75,11 @@ captured, or too noisy to add.
 
 *(any change to §2–§5 after results are seen is recorded here with its reason)*
 
-1. **Published as a variant although the gates failed (model owner's request, 2026-09-29).** TR-1, TR-2 and TR-3 fail, so by §5 the total is not changed. The owner asked to keep
+1. **Published as a variant although the gates failed (author's request, 2026-09-29).** TR-1, TR-2 and TR-3 fail, so by §5 the total is not changed. The author asked to keep
    `total_gar_all_tr` and `player_transition.csv` because they like how it orders defensemen; they are published as a judgment-based alternative, not as a
    validated improvement, and the default total is unchanged. A follow-up diagnostic (report, "What drives TR") found that TR is not a linemate or team artifact (correlations
    with teammates' and team offense are near zero) but that part of it is a top-end artifact of the linear orthogonalization.
-2. **Owner decision: `total_gar_all_tr` is the preferred (headline) skater total (2026-09-29).** After the diagnostic in the report, the model owner chose to
+2. **Owner decision: `total_gar_all_tr` is the preferred (headline) skater total (2026-09-29).** After the diagnostic in the report, the author chose to
    use the position-weighted total plus TR as the preferred view of skater value, on judgment (it orders elite offensive defensemen more plausibly), knowing that
    TR-1, TR-2 and TR-3 fail. This overrides the §5 adoption rule and is **not** a validated improvement: defensemen's TR has year-over-year reliability 0.13, adds
    nothing out of sample, and part of its effect on the very best defensemen is a top-end artifact of the linear orthogonalization. The weight on TR is the

@@ -36,9 +36,9 @@ Cumulative over the player's first n games of the season:
 |---|---|
 | HY-1 | the adjustment improves the full-season projection at n = 5 and at n = 10 (paired z > 2 at both) |
 | HY-2 | no harm to the game model (paired z > −2) |
-| HY-3 (reported) | the n = 2 adjustment improves the projection (paired z > 2): the owner's "even two games" claim |
+| HY-3 (reported) | the n = 2 adjustment improves the projection (paired z > 2): the author's "even two games" claim |
 
-The method is rated sound in advance (an empirical-Bayes update with data-set weights). It is implemented in the forward forecasts if HY-2 holds and the n = 5 and n = 10 player-level z are both above −1 (the owner's standing rule); a reliable improvement is claimed only where a z exceeds 2.
+The method is rated sound in advance (an empirical-Bayes update with data-set weights). It is implemented in the forward forecasts if HY-2 holds and the n = 5 and n = 10 player-level z are both above −1 (the author's standing rule); a reliable improvement is claimed only where a z exceeds 2.
 
 ## 6. What the result can say
 

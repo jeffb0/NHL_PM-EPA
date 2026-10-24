@@ -36,14 +36,22 @@ def make_model(kind: str, names: list[str], seed: int):
     if kind == "logit":
         spl = [names.index(c) for c in ("dist", "angle", "dt_prev", "speed_prev")]
         rest = [i for i in range(len(names)) if i not in spl]
-        ct = ColumnTransformer([
-            ("spl", SplineTransformer(n_knots=7, degree=3, extrapolation="constant"), spl),
-            ("lin", StandardScaler(), rest),
-        ])
+        ct = ColumnTransformer(
+            [
+                ("spl", SplineTransformer(n_knots=7, degree=3, extrapolation="constant"), spl),
+                ("lin", StandardScaler(), rest),
+            ]
+        )
         return make_pipeline(ct, LogisticRegression(C=1.0, max_iter=2000))
     return HistGradientBoostingClassifier(
-        max_iter=400, learning_rate=0.05, max_leaf_nodes=31, min_samples_leaf=200,
-        l2_regularization=1.0, early_stopping=True, validation_fraction=0.1, n_iter_no_change=20,
+        max_iter=400,
+        learning_rate=0.05,
+        max_leaf_nodes=31,
+        min_samples_leaf=200,
+        l2_regularization=1.0,
+        early_stopping=True,
+        validation_fraction=0.1,
+        n_iter_no_change=20,
         random_state=seed,
     )
 
@@ -66,10 +74,16 @@ def evaluate(y: np.ndarray, p: np.ndarray) -> dict:
     logit_p = np.log(p / (1 - p))
     slope = LogisticRegression(C=1e6, max_iter=1000).fit(logit_p[:, None], y).coef_[0, 0]
     return {
-        "n": int(len(y)), "goals": int(y.sum()), "sum_xg": float(p.sum()),
-        "log_loss": float(log_loss(y, p)), "brier": float(brier_score_loss(y, p)),
-        "auc": float(roc_auc_score(y, p)), "calib_in_large": float(p.sum() / y.sum()),
-        "ece": float(ece), "calib_slope": float(slope), "reliability": tab,
+        "n": int(len(y)),
+        "goals": int(y.sum()),
+        "sum_xg": float(p.sum()),
+        "log_loss": float(log_loss(y, p)),
+        "brier": float(brier_score_loss(y, p)),
+        "auc": float(roc_auc_score(y, p)),
+        "calib_in_large": float(p.sum() / y.sum()),
+        "ece": float(ece),
+        "calib_slope": float(slope),
+        "reliability": tab,
     }
 
 
@@ -95,12 +109,19 @@ def run() -> None:
         m = make_model(kind, names, cfg.seed).fit(X[tr], y[tr])
         fitted[kind] = m
         results[f"{kind}_valid"] = evaluate(y[va], m.predict_proba(X[va])[:, 1])
-        log.info("%s valid log-loss %.5f auc %.4f", kind, results[f"{kind}_valid"]["log_loss"], results[f"{kind}_valid"]["auc"])
+        log.info(
+            "%s valid log-loss %.5f auc %.4f",
+            kind,
+            results[f"{kind}_valid"]["log_loss"],
+            results[f"{kind}_valid"]["auc"],
+        )
     chosen = min(("logit", "gbm"), key=lambda k: results[f"{k}_valid"]["log_loss"])
     results["chosen"] = chosen
     for kind, m in fitted.items():
         results[f"{kind}_test"] = evaluate(y[te], m.predict_proba(X[te])[:, 1])
-    iso = IsotonicRegression(out_of_bounds="clip", y_min=1e-5, y_max=1 - 1e-5).fit(fitted[chosen].predict_proba(X[va])[:, 1], y[va])
+    iso = IsotonicRegression(out_of_bounds="clip", y_min=1e-5, y_max=1 - 1e-5).fit(
+        fitted[chosen].predict_proba(X[va])[:, 1], y[va]
+    )
     p_te_raw = fitted[chosen].predict_proba(X[te])[:, 1]
     results[f"{chosen}_test_isotonic"] = evaluate(y[te], iso.predict(p_te_raw))
     use_iso = cfg.xg.calibrate == "isotonic" and (
@@ -112,12 +133,19 @@ def run() -> None:
         results["logit_n_coef"] = int(len(coefs))
     else:
         from sklearn.inspection import permutation_importance
+
         sub = np.where(va)[0][:40000]
-        pi = permutation_importance(fitted["gbm"], X[sub], y[sub], scoring="neg_log_loss", n_repeats=3, random_state=cfg.seed)
+        pi = permutation_importance(
+            fitted["gbm"], X[sub], y[sub], scoring="neg_log_loss", n_repeats=3, random_state=cfg.seed
+        )
         results["gbm_permutation_importance"] = sorted(
-            ({"feature": n, "importance": float(v)} for n, v in zip(names, pi.importances_mean)), key=lambda r: -r["importance"]
+            ({"feature": n, "importance": float(v)} for n, v in zip(names, pi.importances_mean)),
+            key=lambda r: -r["importance"],
         )[:20]
-    joblib.dump({"model": fitted[chosen], "names": names, "isotonic": iso if use_iso else None}, model_dir / "xg_temporal.joblib")
+    joblib.dump(
+        {"model": fitted[chosen], "names": names, "isotonic": iso if use_iso else None},
+        model_dir / "xg_temporal.joblib",
+    )
 
     # ---- cross-fitted xG for every shot attempt
     X_all, _ = design_matrix(shots)
@@ -131,8 +159,22 @@ def run() -> None:
         xg[sel] = m.predict_proba(X_all[sel])[:, 1]
         log.info("cross-fit season %s: %d shots", s, sel.sum())
     out = shots.select(
-        "game_id", "event_idx", "season", "type", "team_id", "player1", "x", "y", "dist", "angle",
-        "shot_type_c", "rebound", "rush", "strength", "empty_net", "goal",
+        "game_id",
+        "event_idx",
+        "season",
+        "type",
+        "team_id",
+        "player1",
+        "x",
+        "y",
+        "dist",
+        "angle",
+        "shot_type_c",
+        "rebound",
+        "rush",
+        "strength",
+        "empty_net",
+        "goal",
     ).with_columns(pl.Series("xg", xg))
     out.write_parquet(proc / "shots_xg.parquet")
     cf = out.filter(pl.col("type").is_in(UNBLOCKED))
@@ -142,7 +184,12 @@ def run() -> None:
         for (s,), g in cf.group_by(["season"])
     }
     Path(metrics_dir / "xg_metrics.json").write_text(json.dumps(results, indent=2))
-    log.info("xG chosen=%s test log-loss=%.5f; cross-fit calib-in-large=%.4f", chosen, results[f"{chosen}_test"]["log_loss"], results["crossfit_all"]["calib_in_large"])
+    log.info(
+        "xG chosen=%s test log-loss=%.5f; cross-fit calib-in-large=%.4f",
+        chosen,
+        results[f"{chosen}_test"]["log_loss"],
+        results["crossfit_all"]["calib_in_large"],
+    )
 
 
 if __name__ == "__main__":

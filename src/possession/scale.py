@@ -6,11 +6,12 @@ import polars as pl
 
 from src.projection.data import COMPS
 
-PLAY5 = ("pm", "def", "to", "fo")          # the 5v5 play block: possession, defense, turnovers, faceoffs
+PLAY5 = ("pm", "def", "to", "fo")  # the 5v5 play block: possession, defense, turnovers, faceoffs
 
 
 def rescale(p: pl.DataFrame, kappa: dict[str, float] | None) -> pl.DataFrame:
-    """Multiply the possession rate by kappa["F"] or kappa["D"], and the whole 5v5 play block by kappa["play5"], then recompute the total rate. ``None`` or all ones returns the panel unchanged."""
+    """Multiply the possession rate by kappa["F"] or kappa["D"], and the whole 5v5 play block by kappa["play5"], then
+    recompute the total rate. ``None`` or all ones returns the panel unchanged."""
     if not kappa or all(abs(v - 1.0) < 1e-12 for v in kappa.values()):
         return p
     if "F" in kappa or "D" in kappa:

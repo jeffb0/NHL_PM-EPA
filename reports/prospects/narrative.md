@@ -39,6 +39,6 @@ The gain is concentrated in forwards with some NHL history (the faded columns st
 (the portable-residual result points the same way), which is what the chemistry model is meant to test.
 
 **Why it was still implemented.** The rule fixed in advance says a sound method with no adverse gate is implemented; it does improve the player projections, which matters for player-level uses (valuing prospects and young players), and its effect on team forecasts is negligible.
-The slightly negative standings check (z = −1.39, a difference of 0.03 points on 160 team-seasons) is flagged: if the model owner prefers, the priors can be switched off for the standings forecast by setting `implement` to false in the decision file, with no other change.
+The slightly negative standings check (z = −1.39, a difference of 0.03 points on 160 team-seasons) is flagged: if the author prefers, the priors can be switched off for the standings forecast by setting `implement` to false in the decision file, with no other change.
 
 **Limitations.** Points-based equivalencies; league names as free text; players who never reached the NHL are absent, so the factors are conditional on making it; the player-level target is the model's own value estimate.

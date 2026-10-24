@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 UV ?= uv
 
-.PHONY: install ingest all pipeline defense finishing components specialteams goaltending projection edge valuation calibration test lint smoke notebooks clean
+.PHONY: install ingest all pipeline defense finishing components specialteams goaltending projection edge valuation calibration test lint format smoke notebooks clean
 
 install:            ## create .venv (Python 3.11) and install pinned deps
 	$(UV) venv --python 3.11 .venv
@@ -45,15 +45,18 @@ valuation:          ## replacement level, goals per win, combined component tabl
 calibration:        ## joint calibration of component scales (needs valuation)
 	$(PY) -m src.calibration.run
 
-test:
+test:               ## unit tests
 	$(PY) -m pytest tests -q
 
 smoke:              ## tiny end-to-end run on a handful of games (no full data needed)
 	$(PY) -m src.pipeline --smoke
 
-lint:
+lint:               ## style and static checks (the same ones CI runs)
 	$(PY) -m ruff check src tests
-	$(PY) -m mypy src --ignore-missing-imports
+	$(PY) -m ruff format --check src tests
+
+format:             ## apply the code formatter
+	$(PY) -m ruff format src tests
 
 notebooks:          ## execute notebooks against the pipeline outputs
 	$(PY) -m jupyter nbconvert --to notebook --execute --inplace notebooks/*.ipynb

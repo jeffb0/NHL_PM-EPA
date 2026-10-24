@@ -43,7 +43,7 @@ For a team's dressed skaters with projected ice-time shares π_i (the game model
 | CH-2 | the roster-fit covariate improves the full game model (paired z > 2) |
 | CH-3 | no harm: neither game-model comparison has z < −2 |
 
-A priori the method is rated **less certain** (many parameters, a non-convex fit, expected-goal targets that are noisy per stint). By the model owner's standing rule (docs/standings/improvements.md §4) it is implemented **only if CH-2 passes** (z > 2),
+A priori the method is rated **less certain** (many parameters, a non-convex fit, expected-goal targets that are noisy per stint). By the author's standing rule (docs/standings/improvements.md §4) it is implemented **only if CH-2 passes** (z > 2),
 which also requires CH-3. A CH-1 pass without CH-2 is reported as a finding about lineups, not adopted into forecasts.
 
 ## 7. What the result can say

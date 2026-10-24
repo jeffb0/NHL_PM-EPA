@@ -11,7 +11,7 @@ def test_skater_update_moves_team_strength_by_the_step():
     skater_update(theta, ids, mins, 0.3)
     after = sum(theta[i] * m / 60 for i, m in zip(ids, mins))
     assert abs((after - before) - 0.3) < 1e-12
-    assert theta[1] - 0.2 > theta[3] - 0.0 > 0            # more ice time, larger move
+    assert theta[1] - 0.2 > theta[3] - 0.0 > 0  # more ice time, larger move
 
 
 def test_logit_recovers_coefficients_and_paired_sign():

@@ -5,24 +5,19 @@ description = "Puck-Movement Expected Goals Added (PM-EPA): an EPA-style possess
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
-# Runtime dependencies are pinned in requirements.txt (reproducibility); install with `make install`.
+# Runtime dependencies are pinned in requirements.txt for reproducibility; install with `make install`.
 
 [tool.ruff]
-line-length = 140
+line-length = 120
 target-version = "py311"
+extend-exclude = ["notebooks/*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E731", "B905", "E501"]
 
-[tool.black]
-line-length = 140
-target-version = ["py311"]
-
-[tool.mypy]
-python_version = "3.11"
-ignore_missing_imports = true
-warn_unused_ignores = true
+[tool.ruff.format]
+quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

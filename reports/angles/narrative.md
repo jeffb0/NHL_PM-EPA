@@ -30,14 +30,14 @@ Adding all 19 at once makes the forecasts clearly worse (paired z = −4.0). Tea
 | lost last meeting by 3+ | revenge | −0.3 ± 1.2 | 0.81 | 949–1132 | 45.6 | 45.9 | −2.53 |
 | lost last meeting | revenge | −0.1 ± 0.7 | 0.90 | 2537–2816 | 47.4 | 47.5 | −1.75 |
 | previous game went past regulation | tired | +0.1 ± 1.0 | 0.91 | 1859–1833 | 50.4 | 50.3 | −1.10 |
-| back-to-back after losing by 3+ | the owner's example | +0.2 ± 2.5 | 0.93 | 229–322 | 41.6 | 41.4 | −1.05 |
+| back-to-back after losing by 3+ | the author's example | +0.2 ± 2.5 | 0.93 | 229–322 | 41.6 | 41.4 | −1.05 |
 | won 3+ straight | hot | +0.1 ± 1.2 | 0.95 | 1194–1010 | 54.2 | 54.1 | +0.05 |
 
 Ten of the 19 estimates point the way the saying claims and nine point the other way.
 
 ## Reading
 
-* **The owner's example.** Road teams on the second night of a back-to-back after losing the first by three or more went 139–229 (37.8%) over seven seasons, against 39.3% expected. Home teams in the same spot went 90–93 (49.2% against 45.6% expected, z = 1.0).
+* **The author's example.** Road teams on the second night of a back-to-back after losing the first by three or more went 139–229 (37.8%) over seven seasons, against 39.3% expected. Home teams in the same spot went 90–93 (49.2% against 45.6% expected, z = 1.0).
   A quoted "5–2" is seven games out of several hundred like them; a run of 5–2 or better turns up constantly in a 368-game sequence of 38% propositions.
 * **Why the records sound meaningful and are not.** Teams on winning streaks do win more (54.2%), and teams on losing streaks do win less (44.9%). The model already expected 54.1% and 45.7%, because good teams are the ones that go on streaks.
   The raw record measures team quality, home ice and rest; once those are priced, nothing is left.

@@ -23,7 +23,7 @@ Weights (tied rate divided by the state's rate): third period 0.91 when down two
 
 ## Interpretation
 
-**Score effects in expected goals are real but small at 5v5.** The one large effect is the one the owner described: a team trailing in the third period generates 10–11% more expected goals per minute than it would at even score. In the first two periods the differences are a few percent.
+**Score effects in expected goals are real but small at 5v5.** The one large effect is the one the author described: a team trailing in the third period generates 10–11% more expected goals per minute than it would at even score. In the first two periods the differences are a few percent.
 The familiar large score effect in hockey is in shot *counts*; expected goals already discount much of it, because a trailing team's extra shots are mostly low-quality, while a leading team's fewer shots include more rush chances.
 (Leading teams' rates are also slightly above the tied rate, partly because better teams are the ones that lead.)
 

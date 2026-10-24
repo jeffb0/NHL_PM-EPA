@@ -19,11 +19,18 @@ log = logging.getLogger("smoke")
 
 def run(n_games: int = 25) -> None:
     base = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
-    base["data"].update({
-        "seasons": [2024, 2025], "raw_dir": "data/raw", "processed_dir": "data/smoke/processed",
-        "value_dir": "data/smoke/value_surfaces", "output_dir": "data/smoke/outputs", "figures_dir": "reports/smoke/figures", "metrics_dir": "reports/smoke/metrics",
-        "scoring_regimes": [[2024, 2025]],
-    })
+    base["data"].update(
+        {
+            "seasons": [2024, 2025],
+            "raw_dir": "data/raw",
+            "processed_dir": "data/smoke/processed",
+            "value_dir": "data/smoke/value_surfaces",
+            "output_dir": "data/smoke/outputs",
+            "figures_dir": "reports/smoke/figures",
+            "metrics_dir": "reports/smoke/metrics",
+            "scoring_regimes": [[2024, 2025]],
+        }
+    )
     base["splits"] = {"train": [2024], "validation": [2025], "test": [2025], "cross_fit": True}
     base["metrics"]["bootstrap_reps"] = 50
     base["metrics"]["min_toi_ev"] = 20
@@ -33,6 +40,7 @@ def run(n_games: int = 25) -> None:
     os.environ["PM_EPA_CONFIG"] = str(cfg_path)
 
     from src.ingestion.nhl_api import ingest
+
     ingest([2024, 2025], limit=n_games)
     # restrict parsing to the first n games per season (raw dir may hold the full snapshot)
     from src.ingestion import parse as parse_mod
@@ -49,24 +57,32 @@ def run(n_games: int = 25) -> None:
     finally:
         parse_mod.Path.glob = orig_glob  # type: ignore[method-assign]
     from src.possession import build, onice
+
     onice.run()
     build.run()
     from src.xg import model
+
     model.run()
     from src.value import fit
+
     fit.run()
     from src.epa import run as epa_run
+
     epa_run.run()
     from src.metrics import aggregate
+
     aggregate.run()
     from src.validation import validate
+
     validate.run(include_rapm=False)
     import polars as pl
+
     lb = pl.read_csv(ROOT / "data/smoke/outputs/pm_epa_player_leaderboards.csv")
     assert lb.height > 0 and lb["pm_epa_per60_ev"].is_not_null().any(), "smoke leaderboard empty"
     # defensive model: stints + one ridge fit (selection needs several seasons, so it is not run here)
     from src.defense import ridge
     from src.defense import stints as dstints
+
     proc = ROOT / "data/smoke/processed"
     goalies = set(pl.read_parquet(proc / "players.parquet").filter(pl.col("position") == "G")["player_id"].to_list())
     st, q = dstints.build(proc, [2024, 2025], goalies, 0.9, 2)

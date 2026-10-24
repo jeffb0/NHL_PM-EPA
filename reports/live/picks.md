@@ -1,6 +1,6 @@
 # Picks ledger
 
-Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 units per pick; decimal odds as locked at the daily run. **Bookkeeping for the owner's own wagers, not advice; the model has no demonstrated edge over the market.**
+Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 units per pick; decimal odds as locked at the daily run. **Bookkeeping for the author's own wagers, not advice; the model has no demonstrated edge over the market.**
 
 **Season to date: +3.33 units ($+3.33) on 85 units staked; record 38–26; return +3.9% per unit (95% interval -19% to +26%).** 1 pick(s) pending (1 units).
 

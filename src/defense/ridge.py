@@ -29,12 +29,12 @@ FLIP_ZONE = {"OZ": "DZ", "DZ": "OZ", "NZ": "NZ", "fly": "fly"}
 
 @dataclass
 class Design:
-    X: sparse.csr_matrix   # rows = 2 * stints
-    w: np.ndarray          # minutes
-    S: np.ndarray          # 60 * component sums, shape (rows, len(targets))
+    X: sparse.csr_matrix  # rows = 2 * stints
+    w: np.ndarray  # minutes
+    S: np.ndarray  # 60 * component sums, shape (rows, len(targets))
     targets: list[str]
-    goals: np.ndarray      # attacking-team goals (secondary target)
-    groups: np.ndarray     # game_id per row
+    goals: np.ndarray  # attacking-team goals (secondary target)
+    groups: np.ndarray  # game_id per row
     players: list[int]
     n_cov: int
 
@@ -45,7 +45,7 @@ class Design:
     @property
     def pen(self) -> np.ndarray:
         d = np.zeros(self.X.shape[1])
-        d[1:1 + 2 * self.P] = 1.0
+        d[1 : 1 + 2 * self.P] = 1.0
         return d
 
     def y(self) -> np.ndarray:
@@ -84,11 +84,18 @@ def build_design(stints: pl.DataFrame, targets: list[str], players: list[int] | 
     sc = stints["score_home"].to_numpy()
     zone = np.r_[zone_h, zone_a]
     score = np.r_[sc, -sc]
-    cov = np.column_stack([
-        np.r_[np.ones(n), np.zeros(n)],
-        zone == "OZ", zone == "NZ", zone == "DZ",
-        score == -2, score == -1, score == 1, score == 2,
-    ]).astype(float)
+    cov = np.column_stack(
+        [
+            np.r_[np.ones(n), np.zeros(n)],
+            zone == "OZ",
+            zone == "NZ",
+            zone == "DZ",
+            score == -2,
+            score == -1,
+            score == 1,
+            score == 2,
+        ]
+    ).astype(float)
     X = sparse.hstack([sparse.csr_matrix(np.ones((2 * n, 1))), Xp, sparse.csr_matrix(cov)]).tocsr()
     th, ta = targets_from(stints, "h"), targets_from(stints, "a")
     S = 60.0 * np.column_stack([np.r_[th[t], ta[t]] for t in targets])
@@ -107,12 +114,16 @@ def gram(d: Design, row_weight: np.ndarray | None = None) -> tuple[np.ndarray, n
     return A, np.asarray(d.X.T @ S)
 
 
-JITTER = 0.0  # added to the diagonal; 0 for the 5v5 models (unchanged), set by the special-teams fits whose thin states can leave empty covariate columns
+# added to the diagonal; 0 for the 5v5 models (unchanged), set by the special-teams fits whose thin states can leave
+# empty covariate columns
+JITTER = 0.0
 
 
 def solve(A: np.ndarray, B: np.ndarray, pen: np.ndarray, alpha: float, prior: np.ndarray | None = None) -> np.ndarray:
     rhs = B if prior is None else B + alpha * pen[:, None] * prior
-    c = linalg.cho_factor(A + alpha * np.diag(pen) + (JITTER * np.eye(len(pen)) if JITTER else 0.0), lower=False, check_finite=False)
+    c = linalg.cho_factor(
+        A + alpha * np.diag(pen) + (JITTER * np.eye(len(pen)) if JITTER else 0.0), lower=False, check_finite=False
+    )
     return linalg.cho_solve(c, rhs, check_finite=False)
 
 
@@ -139,8 +150,12 @@ def cv_alpha(d: Design, alphas: list[float], folds: int, seed: int) -> dict[str,
     return {t: {a: v / wsum for a, v in e.items()} for t, e in err.items()}
 
 
-def fit(d: Design, alphas: dict[str, float], prior: dict[str, np.ndarray] | None = None,
-        gram_ab: tuple[np.ndarray, np.ndarray] | None = None) -> np.ndarray:
+def fit(
+    d: Design,
+    alphas: dict[str, float],
+    prior: dict[str, np.ndarray] | None = None,
+    gram_ab: tuple[np.ndarray, np.ndarray] | None = None,
+) -> np.ndarray:
     """Coefficients, shape (n_cols, len(targets)); each target uses its own alpha."""
     A, B = gram_ab if gram_ab is not None else gram(d)
     out = np.zeros((A.shape[0], len(d.targets)))
@@ -151,7 +166,9 @@ def fit(d: Design, alphas: dict[str, float], prior: dict[str, np.ndarray] | None
     return out
 
 
-def bootstrap(d: Design, alphas: dict[str, float], reps: int, seed: int, prior: dict[str, np.ndarray] | None = None) -> np.ndarray:
+def bootstrap(
+    d: Design, alphas: dict[str, float], reps: int, seed: int, prior: dict[str, np.ndarray] | None = None
+) -> np.ndarray:
     """Game-block Poisson bootstrap: coefficient draws, shape (reps, n_cols, len(targets))."""
     rng = np.random.default_rng(seed)
     games, inv = np.unique(d.groups, return_inverse=True)
@@ -167,15 +184,15 @@ def coef_frame(d: Design, beta: np.ndarray) -> pl.DataFrame:
     P = d.P
     data = {"player_id": d.players}
     for j, t in enumerate(d.targets):
-        data[f"off_{t}"] = beta[1:1 + P, j]
-        data[f"def_{t}"] = beta[1 + P:1 + 2 * P, j]
+        data[f"off_{t}"] = beta[1 : 1 + P, j]
+        data[f"def_{t}"] = beta[1 + P : 1 + 2 * P, j]
     return pl.DataFrame(data)
 
 
 def player_minutes(d: Design) -> pl.DataFrame:
     """5v5 minutes on ice per player (each stint counted once, via the defense block)."""
     P = d.P
-    mins = np.asarray(d.X[:, 1 + P:1 + 2 * P].multiply(d.w[:, None]).sum(0)).ravel()
+    mins = np.asarray(d.X[:, 1 + P : 1 + 2 * P].multiply(d.w[:, None]).sum(0)).ravel()
     return pl.DataFrame({"player_id": d.players, "toi_5v5": mins})
 
 
@@ -187,7 +204,7 @@ def prior_vector(d: Design, prev: pl.DataFrame | None, rho: float) -> dict[str, 
     out = {}
     for t in d.targets:
         v = np.zeros(d.X.shape[1])
-        v[1:1 + d.P] = rho * m[f"off_{t}"].to_numpy()
-        v[1 + d.P:1 + 2 * d.P] = rho * m[f"def_{t}"].to_numpy()
+        v[1 : 1 + d.P] = rho * m[f"off_{t}"].to_numpy()
+        v[1 + d.P : 1 + 2 * d.P] = rho * m[f"def_{t}"].to_numpy()
         out[t] = v
     return out

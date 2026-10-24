@@ -34,9 +34,9 @@ through *which* players on a team hold the value; for a stable roster most of th
 | PS-2 | the rescaled full game model is better (paired z > 2) |
 | PS-3 | no harm: neither comparison has z < −2 |
 
-The method is rated **sound** in advance (one or two scale parameters, motivated by three independent earlier results, tuned on separate seasons). By the model owner's standing rule: implement if PS-3 holds and neither PS-1 nor PS-2 has z ≤ −1;
+The method is rated **sound** in advance (one or two scale parameters, motivated by three independent earlier results, tuned on separate seasons). By the author's standing rule: implement if PS-3 holds and neither PS-1 nor PS-2 has z ≤ −1;
 a reliable improvement is claimed only for z > 2. If tuning selects κ = (1, 1) there is nothing to implement and the hypothesis is reported as not supported by the tuning seasons.
-"Implement" means the standings forecast and the game model's forward priors are built from the rescaled panel; the published player values (`player_value_all_in.csv`, the owner-preferred total) are **not** changed by this step.
+"Implement" means the standings forecast and the game model's forward priors are built from the rescaled panel; the published player values (`player_value_all_in.csv`, the author-preferred total) are **not** changed by this step.
 
 ## 6. What the result can say
 

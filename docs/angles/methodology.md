@@ -1,8 +1,8 @@
 # Situational "angles" from commentary and old-school handicapping — methodology and pre-registration
 
-*Written 2026-10-12 before any angle was computed or any test run. Motivation (model owner): broadcasters and trend bettors cite situational records ("road teams on the second night of a back-to-back after losing the first by three or more are 5–2").
+*Written 2026-10-12 before any angle was computed or any test run. Motivation: broadcasters and trend bettors cite situational records ("road teams on the second night of a back-to-back after losing the first by three or more are 5–2").
 Most such records are small samples picked after the fact, but some may describe something real that the model does not see. The angles, tests and rule below are fixed in advance; changes after results are seen are logged in §7.
-Sources for the list: the owner's example, and a web search of trend-betting articles (bounce-back after a blowout, revenge after a blowout, hot and cold streaks, first home game after a road trip, the zig-zag idea).*
+Sources for the list: the author's example, and a web search of trend-betting articles (bounce-back after a blowout, revenge after a blowout, hot and cold streaks, first home game after a road trip, the zig-zag idea).*
 
 ## 1. Why the model might miss these
 
@@ -26,7 +26,7 @@ For angles defined per team, the tested variable is **the home team's value minu
 | 7 | `shutout_loss` | it was shut out in its previous game | better (bounce-back) |
 | 8 | `scored5` | it scored 5 or more in its previous game | better (rolling) |
 | 9 | `prev_ot` | its previous game went past regulation | worse (tired) |
-| 10 | `b2b_after_blowout` | it played yesterday and lost by 3 or more (the owner's example) | better |
+| 10 | `b2b_after_blowout` | it played yesterday and lost by 3 or more (the author's example) | better |
 | 11 | `b2b_after_ot` | it played yesterday and the game went past regulation | worse |
 | 12 | `front_b2b` | it plays again tomorrow | worse (look-ahead, saving legs) |
 | 13 | `revenge` | it lost its most recent meeting with tonight's opponent this season | better |
@@ -50,7 +50,7 @@ The game model P of docs/gamemodel as configured for its backtest; the baseline 
 
 ## 4. Rule
 
-Nineteen angles are tested, so about one would pass |t| > 2 by chance and the chance that at least one shows a paired z above 2 is about one in three. The owner's standing rule (adopt at z > 2) is therefore tightened for this family:
+Nineteen angles are tested, so about one would pass |t| > 2 by chance and the chance that at least one shows a paired z above 2 is about one in three. The author's standing rule (adopt at z > 2) is therefore tightened for this family:
 
 * an angle is **adopted** only if it passes Benjamini–Hochberg at 10% on the full-sample fit **and** its out-of-sample paired z is above 2;
 * an angle that passes one of the two is **flagged for follow-up** (a prospective check on this season's games), not adopted;

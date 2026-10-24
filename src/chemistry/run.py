@@ -36,13 +36,22 @@ def game_z(D: cm.Design, pa: cm.Params, pf: cm.Params, mask: np.ndarray | None =
         d, g, w = d[mask], g[mask], w[mask]
     _, inv = np.unique(g, return_inverse=True)
     s = np.bincount(inv, weights=d)
-    return {"mean_diff_per_minute": float(d.sum() / w.sum()), "z": float(s.mean() / (s.std(ddof=1) / np.sqrt(len(s)))), "n_games": int(len(s)), "minutes": float(w.sum())}
+    return {
+        "mean_diff_per_minute": float(d.sum() / w.sum()),
+        "z": float(s.mean() / (s.std(ddof=1) / np.sqrt(len(s)))),
+        "n_games": int(len(s)),
+        "minutes": float(w.sum()),
+    }
 
 
 def new_combo_mask(D: cm.Design, T: int, proc) -> np.ndarray:
     """Stints with at least one skater who was not on that team (primary team) the season before."""
     g = pl.read_parquet(proc / "games.parquet").select("game_id", "home_abbrev", "away_abbrev")
-    prev = pl.read_parquet(proc / "player_value_calibrated_all.parquet").filter(pl.col("season") == T - 1).select(pl.col("player_id").cast(pl.Int64), "team")
+    prev = (
+        pl.read_parquet(proc / "player_value_calibrated_all.parquet")
+        .filter(pl.col("season") == T - 1)
+        .select(pl.col("player_id").cast(pl.Int64), "team")
+    )
     teams = sorted(set(g["home_abbrev"].to_list()) | set(g["away_abbrev"].to_list()))
     code = {t: i for i, t in enumerate(teams)}
     pid = prev["player_id"].to_numpy()
@@ -73,16 +82,29 @@ def run() -> dict:
     folds = {T: fold(T) for T in TUNE_FOLDS}
     tune: dict = {"additive": {}, "fm": {}}
     for ab in ALPHA_B:
-        tune["additive"][str(ab)] = float(np.mean([wmse(Dt, cm.fit_additive(D, pl_, c, ab)) for D, pl_, c, Dt in folds.values()]))
+        tune["additive"][str(ab)] = float(
+            np.mean([wmse(Dt, cm.fit_additive(D, pl_, c, ab)) for D, pl_, c, Dt in folds.values()])
+        )
     ab = float(min(tune["additive"], key=tune["additive"].get))
     adds = {T: cm.fit_additive(D, pl_, c, ab) for T, (D, pl_, c, _) in folds.items()}
     log.info("additive alpha_b = %g (forward error %s)", ab, {k: round(v, 5) for k, v in tune["additive"].items()})
     for k, av in itertools.product(RANKS, ALPHA_V):
-        tune["fm"][f"{k}|{av:g}"] = float(np.mean([wmse(folds[T][3], cm.fit_fm(folds[T][0], adds[T], k, ab, av)) for T in TUNE_FOLDS]))
+        tune["fm"][f"{k}|{av:g}"] = float(
+            np.mean([wmse(folds[T][3], cm.fit_fm(folds[T][0], adds[T], k, ab, av)) for T in TUNE_FOLDS])
+        )
         log.info("fm k=%d alpha_v=%g forward error %.5f", k, av, tune["fm"][f"{k}|{av:g}"])
     best = min(tune["fm"], key=tune["fm"].get)
     k, av = int(best.split("|")[0]), float(best.split("|")[1])
-    res: dict = {"tuned": {"alpha_b": ab, "rank": k, "alpha_v": av, "forward_error_additive": tune["additive"][str(ab)], "forward_error_fm": tune["fm"][best]}, "tuning_grid": tune}
+    res: dict = {
+        "tuned": {
+            "alpha_b": ab,
+            "rank": k,
+            "alpha_v": av,
+            "forward_error_additive": tune["additive"][str(ab)],
+            "forward_error_fm": tune["fm"][best],
+        },
+        "tuning_grid": tune,
+    }
     del folds
 
     # ---- CH-1 on the test seasons, and the traits used by the game model (seasons from 2019)
@@ -96,25 +118,47 @@ def run() -> dict:
         fits[T] = (players, fm.V, np.asarray((D.Ah + D.Aa).T @ D.w).ravel())
         if T in TEST:
             mask = new_combo_mask(Dt, T, proc)
-            per[str(T)] = {"wmse_A": wmse(Dt, add), "wmse_F": wmse(Dt, fm), "all": game_z(Dt, add, fm), "new_combinations": game_z(Dt, add, fm, mask), "share_minutes_new": float(Dt.w[mask].sum() / Dt.w.sum()),
-                           "sd_additive": float(np.std((Dt.Ah - Dt.Aa) @ fm.beta)), "sd_synergy": float(np.std(cm._syn(Dt.Ah, fm.V)[0] - cm._syn(Dt.Aa, fm.V)[0]))}
+            per[str(T)] = {
+                "wmse_A": wmse(Dt, add),
+                "wmse_F": wmse(Dt, fm),
+                "all": game_z(Dt, add, fm),
+                "new_combinations": game_z(Dt, add, fm, mask),
+                "share_minutes_new": float(Dt.w[mask].sum() / Dt.w.sum()),
+                "sd_additive": float(np.std((Dt.Ah - Dt.Aa) @ fm.beta)),
+                "sd_synergy": float(np.std(cm._syn(Dt.Ah, fm.V)[0] - cm._syn(Dt.Aa, fm.V)[0])),
+            }
             d = Dt.w * ((Dt.y - cm.predict(Dt, add)) ** 2 - (Dt.y - cm.predict(Dt, fm)) ** 2)
             for key, m in (("d", np.ones(len(d), bool)), ("dn", mask)):
                 _, inv = np.unique(Dt.game[m], return_inverse=True)
                 tot[key].append(np.bincount(inv, weights=d[m]))
-            log.info("season %d: A %.5f F %.5f z %.2f (new combinations z %.2f)", T, per[str(T)]["wmse_A"], per[str(T)]["wmse_F"], per[str(T)]["all"]["z"], per[str(T)]["new_combinations"]["z"])
+            log.info(
+                "season %d: A %.5f F %.5f z %.2f (new combinations z %.2f)",
+                T,
+                per[str(T)]["wmse_A"],
+                per[str(T)]["wmse_F"],
+                per[str(T)]["all"]["z"],
+                per[str(T)]["new_combinations"]["z"],
+            )
         if T == TEST[-1]:
             fm2 = cm.fit_fm(D, add, k, ab, av, seed=1)
             iu = np.triu_indices(len(players), 1)
             res["seed_check_pair_synergy_corr"] = float(np.corrcoef((fm.V @ fm.V.T)[iu], (fm2.V @ fm2.V.T)[iu])[0, 1])
-    z = lambda s: float(s.mean() / (s.std(ddof=1) / np.sqrt(len(s))))            # noqa: E731
-    res["stint"] = {"by_season": per, "pooled_z": z(np.concatenate(tot["d"])), "pooled_z_new_combinations": z(np.concatenate(tot["dn"]))}
-    # stability of pair synergies between non-overlapping fits (2021-22 and 2023-24), players with >= 500 minutes in both
+    z = lambda s: float(s.mean() / (s.std(ddof=1) / np.sqrt(len(s))))
+    res["stint"] = {
+        "by_season": per,
+        "pooled_z": z(np.concatenate(tot["d"])),
+        "pooled_z_new_combinations": z(np.concatenate(tot["dn"])),
+    }
+    # stability of pair synergies between non-overlapping fits (2021-22 and 2023-24), players with >= 500 minutes in
+    # both
     (p1, V1, m1), (p2, V2, m2) = fits[2023], fits[2025]
     common = np.intersect1d(p1[m1 >= 500], p2[m2 >= 500])
     G1, G2 = V1[np.searchsorted(p1, common)], V2[np.searchsorted(p2, common)]
     iu = np.triu_indices(len(common), 1)
-    res["pair_synergy_stability"] = {"n_players": int(len(common)), "corr": float(np.corrcoef((G1 @ G1.T)[iu], (G2 @ G2.T)[iu])[0, 1])}
+    res["pair_synergy_stability"] = {
+        "n_players": int(len(common)),
+        "corr": float(np.corrcoef((G1 @ G1.T)[iu], (G2 @ G2.T)[iu])[0, 1]),
+    }
 
     # ---- CH-2: roster-fit covariate in the game model (frozen hyperparameters, original rate model)
     hp = json.loads((met / "game_model.json").read_text())["tuned"]["P"]
@@ -138,18 +182,44 @@ def run() -> dict:
         return p[te]
 
     game: dict = {}
-    for name, kw in (("P", {"lam": hp["lam"], "alpha": hp["alpha"], "n0": hp["n0"]}), ("P_pre", {"lam": 0.0, "alpha": 0.0, "n0": hp["n0"], "update": False})):
+    for name, kw in (
+        ("P", {"lam": hp["lam"], "alpha": hp["alpha"], "n0": hp["n0"]}),
+        ("P_pre", {"lam": 0.0, "alpha": 0.0, "n0": hp["n0"], "update": False}),
+    ):
         parts = [gm.run_player_season(games, pri, T, feature=feat(T), **kw) for T in seasons]
         mu, ch = np.concatenate([a for a, _ in parts]), np.concatenate([b for _, b in parts])
         X0 = np.column_stack([mu, t["b2b_home"].to_numpy(), t["b2b_away"].to_numpy()])
         X1 = np.column_stack([X0, ch])
         l0, l1 = gm.logloss(oos(X0), y_all[te]), gm.logloss(oos(X1), y_all[te])
-        game[name] = {"logloss_without": float(l0.mean()), "logloss_with": float(l1.mean()), **grun.paired(l1, l0, t["date"].to_numpy()[te]),
-                      "coef_all_seasons": float(gm.logit_fit(X1[s_arr >= grun.TUNE[0]], y_all)[-1]), "sd_chem_diff": float(ch.std()), "corr_chem_mu": float(np.corrcoef(ch, mu)[0, 1])}
-        log.info("game %s: %.5f -> %.5f z %.2f", name, game[name]["logloss_without"], game[name]["logloss_with"], game[name]["z"])
+        game[name] = {
+            "logloss_without": float(l0.mean()),
+            "logloss_with": float(l1.mean()),
+            **grun.paired(l1, l0, t["date"].to_numpy()[te]),
+            "coef_all_seasons": float(gm.logit_fit(X1[s_arr >= grun.TUNE[0]], y_all)[-1]),
+            "sd_chem_diff": float(ch.std()),
+            "corr_chem_mu": float(np.corrcoef(ch, mu)[0, 1]),
+        }
+        log.info(
+            "game %s: %.5f -> %.5f z %.2f",
+            name,
+            game[name]["logloss_without"],
+            game[name]["logloss_with"],
+            game[name]["z"],
+        )
     res["game"] = {"n_games": int(te.sum()), **game}
-    g = {"CH1": {"z": res["stint"]["pooled_z"], "z_new_combinations": res["stint"]["pooled_z_new_combinations"], "pass": bool(res["stint"]["pooled_z"] > 2)},
-         "CH2": {"z": game["P"]["z"], "pass": bool(game["P"]["z"] > 2)}, "CH3": {"z_P": game["P"]["z"], "z_P_pre": game["P_pre"]["z"], "pass": bool(game["P"]["z"] > -2 and game["P_pre"]["z"] > -2)}}
+    g = {
+        "CH1": {
+            "z": res["stint"]["pooled_z"],
+            "z_new_combinations": res["stint"]["pooled_z_new_combinations"],
+            "pass": bool(res["stint"]["pooled_z"] > 2),
+        },
+        "CH2": {"z": game["P"]["z"], "pass": bool(game["P"]["z"] > 2)},
+        "CH3": {
+            "z_P": game["P"]["z"],
+            "z_P_pre": game["P_pre"]["z"],
+            "pass": bool(game["P"]["z"] > -2 and game["P_pre"]["z"] > -2),
+        },
+    }
     res["gates"] = g
     res["implement"] = bool(g["CH2"]["pass"] and g["CH3"]["pass"])
     (met / "chemistry.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")

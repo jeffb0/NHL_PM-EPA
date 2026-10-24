@@ -1,6 +1,8 @@
-"""Snapshot the published rosters for an upcoming season (dated, never overwritten):  python -m src.ingestion.rosters_next 2026
+"""Snapshot the published rosters for an upcoming season (dated, never overwritten):  python -m
+src.ingestion.rosters_next 2026
 
-Rosters change daily until opening night, so each run writes ``data/raw/rosters_next/<season>/<YYYY-MM-DD>/<TEAM>.json.gz`` and a manifest."""
+Rosters change daily until opening night, so each run writes
+``data/raw/rosters_next/<season>/<YYYY-MM-DD>/<TEAM>.json.gz`` and a manifest."""
 
 from __future__ import annotations
 
@@ -20,7 +22,8 @@ def main(season: int) -> None:
     out = raw / "rosters_next" / str(season) / stamp
     man = {}
     for t in teams:
-        if (out / f"{t}.json.gz").exists():                         # one snapshot per team per day: a second run the same day keeps the first
+        # one snapshot per team per day: a second run the same day keeps the first
+        if (out / f"{t}.json.gz").exists():
             man[t] = "kept"
             continue
         d = _get_json(ROSTER_URL.format(team=t, sid=season_id(season)), cfg.data.request_timeout_s)
@@ -29,7 +32,9 @@ def main(season: int) -> None:
             continue
         _write_gz(out / f"{t}.json.gz", d)
         man[t] = sum(len(d.get(g, [])) for g in ("forwards", "defensemen", "goalies"))
-    (out / "manifest.json").write_text(json.dumps({"fetched_utc": datetime.now(UTC).isoformat(timespec="seconds"), "players_by_team": man}, indent=2))
+    (out / "manifest.json").write_text(
+        json.dumps({"fetched_utc": datetime.now(UTC).isoformat(timespec="seconds"), "players_by_team": man}, indent=2)
+    )
     print(man)
 
 

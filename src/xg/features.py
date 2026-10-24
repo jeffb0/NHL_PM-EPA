@@ -16,9 +16,16 @@ SHOT_TYPES = ["wrist", "snap", "slap", "backhand", "tip-in", "deflected", "wrap-
 PREV_TYPES = ["faceoff", "hit", "giveaway", "takeaway", "shot-on-goal", "missed-shot", "blocked-shot"]
 
 
-def build_shot_features(events: pl.DataFrame, players: pl.DataFrame, rush_window_s: float = 4, rebound_window_s: float = 3) -> pl.DataFrame:
-    ev = events.filter(~pl.col("type").is_in(["period-start", "delayed-penalty", "game-end"])).sort("game_id", "event_idx")
-    prev = [pl.col(c).shift(1).over("game_id", "period").alias(f"prev_{c}") for c in ["type", "team_id", "x", "y", "t_period"]]
+def build_shot_features(
+    events: pl.DataFrame, players: pl.DataFrame, rush_window_s: float = 4, rebound_window_s: float = 3
+) -> pl.DataFrame:
+    ev = events.filter(~pl.col("type").is_in(["period-start", "delayed-penalty", "game-end"])).sort(
+        "game_id", "event_idx"
+    )
+    prev = [
+        pl.col(c).shift(1).over("game_id", "period").alias(f"prev_{c}")
+        for c in ["type", "team_id", "x", "y", "t_period"]
+    ]
     ev = ev.with_columns(prev)
     shots = ev.filter(pl.col("type").is_in(SHOT_EVENTS) & pl.col("x").is_not_null() & pl.col("y").is_not_null())
     # previous event coordinates in the shooter's frame
@@ -29,28 +36,49 @@ def build_shot_features(events: pl.DataFrame, players: pl.DataFrame, rush_window
     hand = players.select("player_id", "shoots")
     shots = (
         shots.with_columns(
-            px.alias("prev_x_s"), py.alias("prev_y_s"), dt.alias("dt_prev"),
+            px.alias("prev_x_s"),
+            py.alias("prev_y_s"),
+            dt.alias("dt_prev"),
             ((89 - pl.col("x")) ** 2 + pl.col("y") ** 2).sqrt().alias("dist"),
             pl.arctan2(pl.col("y").abs(), 89 - pl.col("x")).degrees().alias("angle"),
         )
         .with_columns(
-            ((pl.col("x") - pl.col("prev_x_s")) ** 2 + (pl.col("y") - pl.col("prev_y_s")) ** 2).sqrt().fill_null(0).alias("dist_prev"),
+            ((pl.col("x") - pl.col("prev_x_s")) ** 2 + (pl.col("y") - pl.col("prev_y_s")) ** 2)
+            .sqrt()
+            .fill_null(0)
+            .alias("dist_prev"),
         )
         .with_columns(
             (pl.col("dist_prev") / pl.col("dt_prev").clip(1, None)).alias("speed_prev"),
-            (same & pl.col("prev_type").is_in(["shot-on-goal", "missed-shot", "blocked-shot"]) & (pl.col("dt_prev") <= rebound_window_s)).fill_null(False).alias("rebound"),
-            ((pl.col("prev_x_s") < 25) & (pl.col("dt_prev") <= rush_window_s) & pl.col("prev_type").is_in(PREV_TYPES)).fill_null(False).alias("rush"),
+            (
+                same
+                & pl.col("prev_type").is_in(["shot-on-goal", "missed-shot", "blocked-shot"])
+                & (pl.col("dt_prev") <= rebound_window_s)
+            )
+            .fill_null(False)
+            .alias("rebound"),
+            ((pl.col("prev_x_s") < 25) & (pl.col("dt_prev") <= rush_window_s) & pl.col("prev_type").is_in(PREV_TYPES))
+            .fill_null(False)
+            .alias("rush"),
             (pl.col("opp_goalie") == 0).alias("empty_net"),
             (pl.col("own_goalie") == 0).alias("own_goalie_pulled"),
             pl.col("score_diff").clip(-3, 3).alias("score_c"),
             (pl.col("period") >= 4).alias("ot"),
-            pl.when(pl.col("shot_type").is_in(SHOT_TYPES)).then(pl.col("shot_type")).otherwise(pl.lit("other")).alias("shot_type_c"),
-            pl.when(pl.col("prev_type").is_in(PREV_TYPES)).then(pl.col("prev_type")).otherwise(pl.lit("other")).alias("prev_type_c"),
+            pl.when(pl.col("shot_type").is_in(SHOT_TYPES))
+            .then(pl.col("shot_type"))
+            .otherwise(pl.lit("other"))
+            .alias("shot_type_c"),
+            pl.when(pl.col("prev_type").is_in(PREV_TYPES))
+            .then(pl.col("prev_type"))
+            .otherwise(pl.lit("other"))
+            .alias("prev_type_c"),
             (pl.col("type") == "goal").cast(pl.Int8).alias("goal"),
         )
         .join(hand, left_on="player1", right_on="player_id", how="left")
         .with_columns(
-            (((pl.col("shoots") == "L") & (pl.col("y") < 0)) | ((pl.col("shoots") == "R") & (pl.col("y") > 0))).fill_null(False).alias("off_wing"),
+            (((pl.col("shoots") == "L") & (pl.col("y") < 0)) | ((pl.col("shoots") == "R") & (pl.col("y") > 0)))
+            .fill_null(False)
+            .alias("off_wing"),
         )
     )
     return shots
@@ -58,7 +86,11 @@ def build_shot_features(events: pl.DataFrame, players: pl.DataFrame, rush_window
 
 NUMERIC = ["dist", "angle", "x", "dt_prev", "dist_prev", "speed_prev", "score_c", "t_period"]
 BOOL = ["rebound", "rush", "empty_net", "own_goalie_pulled", "ot", "off_wing", "is_home"]
-CATEG = {"shot_type_c": SHOT_TYPES + ["other"], "prev_type_c": PREV_TYPES + ["other"], "strength": ["5v5", "PP", "PK", "4v4", "3v3", "EN"]}
+CATEG = {
+    "shot_type_c": SHOT_TYPES + ["other"],
+    "prev_type_c": PREV_TYPES + ["other"],
+    "strength": ["5v5", "PP", "PK", "4v4", "3v3", "EN"],
+}
 
 
 def design_matrix(shots: pl.DataFrame) -> tuple[np.ndarray, list[str]]:

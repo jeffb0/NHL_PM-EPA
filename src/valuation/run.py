@@ -35,23 +35,50 @@ def step_gpw(cfg):
     ts = gp.team_seasons(proc)
     res = gp.goals_per_win(ts, cfg.valuation.gpw_bootstrap, cfg.seed)
     _save(met / "val_gpw.json", res)
-    log.info("goals per win %.2f (95%% CI %.2f-%.2f), R2 %.3f, n=%d", res["goals_per_win"], *res["ci95"], res["r2"], res["n_team_seasons"])
+    log.info(
+        "goals per win %.2f (95%% CI %.2f-%.2f), R2 %.3f, n=%d",
+        res["goals_per_win"],
+        *res["ci95"],
+        res["r2"],
+        res["n_team_seasons"],
+    )
 
 
 def load_extras(proc) -> dict[str, pl.DataFrame]:
     """Turnover, faceoff and penalty components (src/components), when they have been built."""
-    spec = {"to": ("to_player_season.parquet", ["to_gar", "to_gar_sd", "to_gar_unadj", "to_rate_per60", "to_rep_per60"]), "fo": ("fo_player_season.parquet", ["fo_gar", "fo_gar_sd", "fo_draws", "fo_gaa"]),
-            "pen": ("pen_player_season.parquet", ["pen_gar", "pen_gar_sd", "drawn_per60_post", "taken_per60_post"])}
-    out = {k: pl.read_parquet(proc / f).select("player_id", "season", *cols) for k, (f, cols) in spec.items() if (proc / f).exists()}
+    spec = {
+        "to": ("to_player_season.parquet", ["to_gar", "to_gar_sd", "to_gar_unadj", "to_rate_per60", "to_rep_per60"]),
+        "fo": ("fo_player_season.parquet", ["fo_gar", "fo_gar_sd", "fo_draws", "fo_gaa"]),
+        "pen": ("pen_player_season.parquet", ["pen_gar", "pen_gar_sd", "drawn_per60_post", "taken_per60_post"]),
+    }
+    out = {
+        k: pl.read_parquet(proc / f).select("player_id", "season", *cols)
+        for k, (f, cols) in spec.items()
+        if (proc / f).exists()
+    }
     ra_path = proc / "to_ra_player_season.parquet"
     if "to" in out and ra_path.exists():
-        # DEFAULT (user decision, 2026-09-29): the role-adjusted turnover component (TO-RA) is the turnover component. The
+        # DEFAULT (user decision, 2026-09-29): the role-adjusted turnover component (TO-RA) is the turnover component.
+        # The
         # original charge stays as the memo columns `to_gar_orig` (and the total with it, `total_gar_to_orig`).
-        ra = pl.read_parquet(ra_path).select("player_id", "season", "to_ra_gar", "to_ra_gar_sd", "to_ra_rep_per60", "resid60", "inv60")
-        out["to"] = (out["to"].rename({"to_gar": "to_gar_orig", "to_gar_sd": "to_gar_orig_sd"}).drop("to_rate_per60", "to_rep_per60")
-                     .join(ra, on=["player_id", "season"], how="left")
-                     .rename({"to_ra_gar": "to_gar", "to_ra_gar_sd": "to_gar_sd", "to_ra_rep_per60": "to_rep_per60", "resid60": "to_rate_per60"})
-                     .with_columns(pl.col("to_gar_orig").fill_null(0.0), pl.col("to_gar_orig_sd").fill_null(0.0)))
+        ra = pl.read_parquet(ra_path).select(
+            "player_id", "season", "to_ra_gar", "to_ra_gar_sd", "to_ra_rep_per60", "resid60", "inv60"
+        )
+        out["to"] = (
+            out["to"]
+            .rename({"to_gar": "to_gar_orig", "to_gar_sd": "to_gar_orig_sd"})
+            .drop("to_rate_per60", "to_rep_per60")
+            .join(ra, on=["player_id", "season"], how="left")
+            .rename(
+                {
+                    "to_ra_gar": "to_gar",
+                    "to_ra_gar_sd": "to_gar_sd",
+                    "to_ra_rep_per60": "to_rep_per60",
+                    "resid60": "to_rate_per60",
+                }
+            )
+            .with_columns(pl.col("to_gar_orig").fill_null(0.0), pl.col("to_gar_orig_sd").fill_null(0.0))
+        )
     return out
 
 
@@ -67,18 +94,42 @@ def build_table(cfg, n_f: int, n_d: int, ps, dpm, shifts, fin_ps, sel, gpw: floa
     fin_alt = cb.fin_from_shifts(shifts, st)
     base = (n_f, n_d) == (cfg.valuation.regular_forwards, cfg.valuation.regular_defense)
     if base:  # the model's own values (with posterior draws); must agree with the shift-based recomputation
-        chk = fin_ps.select("player_id", "season", "fin_gar_5v5").join(fin_alt, on=["player_id", "season"], how="left").with_columns((pl.col("fin_gar_5v5") - pl.col("fin_gar").fill_null(0)).abs().alias("d"))
+        chk = (
+            fin_ps.select("player_id", "season", "fin_gar_5v5")
+            .join(fin_alt, on=["player_id", "season"], how="left")
+            .with_columns((pl.col("fin_gar_5v5") - pl.col("fin_gar").fill_null(0)).abs().alias("d"))
+        )
         log.info("finishing recomputation check: max abs diff %.2e", chk["d"].max())
         assert chk["d"].max() < 1e-6, "finishing shifts file inconsistent with the fitted player effects"
         fin = fin_ps.select("player_id", "season", pl.col("fin_gar_5v5").alias("fin_gar"))
         sd = fin_ps.select("player_id", "season", "fin_gar_sd", "fin_gar_lo", "fin_gar_hi")
     else:
         fin, sd = fin_alt, None
-    memo = fin_ps.select("player_id", "season", pl.col("attempts_5v5").alias("fin_attempts_5v5"), pl.col("raw_g_minus_xg_5v5"), pl.col("fin_gaa_5v5"),
-                         pl.col("fin_gar_other").alias("fin_gar_other_strengths_memo"), pl.col("attempts_other").alias("fin_attempts_other_memo"))
-    t = cb.combine(ps.join(st.select("player_id", "season", "fringe"), on=["player_id", "season"], how="left"), pm, dp, fin, sd, memo, gpw, load_extras(_paths(cfg)[0]))
-    t = t.join(st.select("player_id", "season", "fringe"), on=["player_id", "season"], how="left") if "fringe" not in t.columns else t
-    if "to_gar_orig" in t.columns:   # the original (not role-adjusted) turnover charge, as a variant total
+    memo = fin_ps.select(
+        "player_id",
+        "season",
+        pl.col("attempts_5v5").alias("fin_attempts_5v5"),
+        pl.col("raw_g_minus_xg_5v5"),
+        pl.col("fin_gaa_5v5"),
+        pl.col("fin_gar_other").alias("fin_gar_other_strengths_memo"),
+        pl.col("attempts_other").alias("fin_attempts_other_memo"),
+    )
+    t = cb.combine(
+        ps.join(st.select("player_id", "season", "fringe"), on=["player_id", "season"], how="left"),
+        pm,
+        dp,
+        fin,
+        sd,
+        memo,
+        gpw,
+        load_extras(_paths(cfg)[0]),
+    )
+    t = (
+        t.join(st.select("player_id", "season", "fringe"), on=["player_id", "season"], how="left")
+        if "fringe" not in t.columns
+        else t
+    )
+    if "to_gar_orig" in t.columns:  # the original (not role-adjusted) turnover charge, as a variant total
         t = t.with_columns((pl.col("total_gar") - pl.col("to_gar") + pl.col("to_gar_orig")).alias("total_gar_to_orig"))
     return t, rep_pm, fr
 
@@ -94,54 +145,150 @@ def step_combine(cfg):
     vc = cfg.valuation
     cache: dict = {}
     t, rep_pm, fr = build_table(cfg, vc.regular_forwards, vc.regular_defense, ps, dpm, shifts, fin_ps, sel, gpw, cache)
-    keep = ["player_id", "player_name", "team", "position", "pos_group", "season", "toi_5v5", "fringe",
-            "pm_gar", "def_gar", "fin_gar", "to_gar", "fo_gar", "pen_gar", "total_gar", "total_gar_lo", "total_gar_hi", "total_war", "total_war_sd",
-            "pm_wins", "def_wins", "fin_wins", "to_wins", "fo_wins", "pen_wins", "pm_gar_sd", "def_gar_sd", "fin_gar_sd", "to_gar_sd", "fo_gar_sd", "pen_gar_sd", "total_gar_sd", "to_gar_unadj", "to_gar_orig", "to_gar_orig_sd", "total_gar_to_orig", "inv60", "fo_draws", "drawn_per60_post", "taken_per60_post", "def_gar_perseason", "total_gar_perseason",
-            "pm_post_per60", "pm_rep_per60", "dpm_var_per60", "dpm_rep_per60", "pm_shrink_B",
-            "fin_attempts_5v5", "raw_g_minus_xg_5v5", "fin_gaa_5v5", "fin_gar_other_strengths_memo", "fin_attempts_other_memo",
-            "pm_epa_per60_ev", "dpm_val_per60", "qualified_ev"]
+    keep = [
+        "player_id",
+        "player_name",
+        "team",
+        "position",
+        "pos_group",
+        "season",
+        "toi_5v5",
+        "fringe",
+        "pm_gar",
+        "def_gar",
+        "fin_gar",
+        "to_gar",
+        "fo_gar",
+        "pen_gar",
+        "total_gar",
+        "total_gar_lo",
+        "total_gar_hi",
+        "total_war",
+        "total_war_sd",
+        "pm_wins",
+        "def_wins",
+        "fin_wins",
+        "to_wins",
+        "fo_wins",
+        "pen_wins",
+        "pm_gar_sd",
+        "def_gar_sd",
+        "fin_gar_sd",
+        "to_gar_sd",
+        "fo_gar_sd",
+        "pen_gar_sd",
+        "total_gar_sd",
+        "to_gar_unadj",
+        "to_gar_orig",
+        "to_gar_orig_sd",
+        "total_gar_to_orig",
+        "inv60",
+        "fo_draws",
+        "drawn_per60_post",
+        "taken_per60_post",
+        "def_gar_perseason",
+        "total_gar_perseason",
+        "pm_post_per60",
+        "pm_rep_per60",
+        "dpm_var_per60",
+        "dpm_rep_per60",
+        "pm_shrink_B",
+        "fin_attempts_5v5",
+        "raw_g_minus_xg_5v5",
+        "fin_gaa_5v5",
+        "fin_gar_other_strengths_memo",
+        "fin_attempts_other_memo",
+        "pm_epa_per60_ev",
+        "dpm_val_per60",
+        "qualified_ev",
+    ]
     st_cols: list[str] = []
-    if (proc / "st_rapm_player_season.parquet").exists() and (proc / "st_finishing.parquet").exists():   # special teams (src/specialteams): PP, PK, 4v4, 3v3
+    # special teams (src/specialteams): PP, PK, 4v4, 3v3
+    if (proc / "st_rapm_player_season.parquet").exists() and (proc / "st_finishing.parquet").exists():
         from src.specialteams.run import build_table as st_table
+
         stt = st_table(cfg)
         st_cols = [c for c in stt.columns if c.startswith("st_") and not c.endswith("_per60")]
-        t = t.join(stt.select("player_id", "season", *st_cols).with_columns(pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)), on=["player_id", "season"], how="left")
+        t = t.join(
+            stt.select("player_id", "season", *st_cols).with_columns(
+                pl.col("player_id").cast(t["player_id"].dtype), pl.col("season").cast(t["season"].dtype)
+            ),
+            on=["player_id", "season"],
+            how="left",
+        )
         t = t.with_columns([pl.col(c).fill_null(0.0) for c in st_cols])
         gars = [f"st_{c}_gar" for c in ("pp", "pk", "4v4", "3v3")]
-        t = t.with_columns((pl.col("total_gar") + pl.sum_horizontal(gars)).alias("total_gar_all"),
-                           (pl.col("total_gar_sd") ** 2 + pl.sum_horizontal([pl.col(f"{g}_sd") ** 2 for g in gars])).sqrt().alias("total_gar_all_sd"))
+        t = t.with_columns(
+            (pl.col("total_gar") + pl.sum_horizontal(gars)).alias("total_gar_all"),
+            (pl.col("total_gar_sd") ** 2 + pl.sum_horizontal([pl.col(f"{g}_sd") ** 2 for g in gars]))
+            .sqrt()
+            .alias("total_gar_all_sd"),
+        )
         t = t.with_columns((pl.col("total_gar_all") / gpw).alias("total_war_all"))
         keep += st_cols + ["total_gar_all", "total_gar_all_sd", "total_war_all"]
-    t = t.with_columns(((pl.col("pm_epa_per60_ev") - pl.col("pm_rep_per60")) * pl.col("toi_5v5") / 60).fill_null(0.0).alias("pm_raw_gar"),
-                       ((pl.col("to_rate_per60") - pl.col("to_rep_per60")) * pl.col("toi_5v5") / 60).fill_null(0.0).alias("to_raw_gar"))   # unshrunk memo values
+    t = t.with_columns(
+        ((pl.col("pm_epa_per60_ev") - pl.col("pm_rep_per60")) * pl.col("toi_5v5") / 60)
+        .fill_null(0.0)
+        .alias("pm_raw_gar"),
+        # unshrunk memo values
+        ((pl.col("to_rate_per60") - pl.col("to_rep_per60")) * pl.col("toi_5v5") / 60)
+        .fill_null(0.0)
+        .alias("to_raw_gar"),
+    )
     t = t.select([c for c in keep if c in t.columns] + ["pm_raw_gar", "to_raw_gar"])
     t.write_parquet(proc / "player_value_season.parquet")
     t.write_csv(out_dir / "player_value_season.csv")
     log.info("player_value_season: %d rows", t.height)
     # replacement levels actually used
-    dpm_rep = fr.select("season", pl.col("dpm_rep_per60_F").alias("dpm_rep_F"), pl.col("dpm_rep_per60_D").alias("dpm_rep_D"))
-    pm_rep = rep_pm.pivot(on="pos_group", index="season", values="pm_rep_per60").rename({"F": "pm_rep_F", "D": "pm_rep_D"})
+    dpm_rep = fr.select(
+        "season", pl.col("dpm_rep_per60_F").alias("dpm_rep_F"), pl.col("dpm_rep_per60_D").alias("dpm_rep_D")
+    )
+    pm_rep = rep_pm.pivot(on="pos_group", index="season", values="pm_rep_per60").rename(
+        {"F": "pm_rep_F", "D": "pm_rep_D"}
+    )
     reps = pm_rep.join(dpm_rep, on="season").sort("season")
     # sensitivity to the regular/fringe cutoffs
     sens = {}
     base_tot = t.select("player_id", "season", "total_gar")
     for n_f, n_d in vc.sensitivity:
         ta, _, _ = build_table(cfg, n_f, n_d, ps, dpm, shifts, fin_ps, sel, gpw, cache)
-        j = base_tot.join(ta.select("player_id", "season", pl.col("total_gar").alias("alt"), "toi_5v5"), on=["player_id", "season"])
+        j = base_tot.join(
+            ta.select("player_id", "season", pl.col("total_gar").alias("alt"), "toi_5v5"), on=["player_id", "season"]
+        )
         q = j.filter(pl.col("toi_5v5") >= vc.min_toi)
-        sens[f"{n_f}F_{n_d}D"] = {"corr_total_gar": float(np.corrcoef(q["total_gar"], q["alt"])[0, 1]),
-                                  "mean_shift_goals_per_1000min": float(((q["alt"] - q["total_gar"]) / q["toi_5v5"] * 1000).mean()),
-                                  "rank_corr_spearman": float(q.select(pl.corr(pl.col("total_gar").rank(), pl.col("alt").rank()))[0, 0])}
+        sens[f"{n_f}F_{n_d}D"] = {
+            "corr_total_gar": float(np.corrcoef(q["total_gar"], q["alt"])[0, 1]),
+            "mean_shift_goals_per_1000min": float(((q["alt"] - q["total_gar"]) / q["toi_5v5"] * 1000).mean()),
+            "rank_corr_spearman": float(q.select(pl.corr(pl.col("total_gar").rank(), pl.col("alt").rank()))[0, 0]),
+        }
     q = t.filter(pl.col("toi_5v5") >= vc.min_toi)
     comps = [c for c in ("pm_gar", "def_gar", "fin_gar", "to_gar", "fo_gar", "pen_gar") if c in q.columns]
     comp_sd = {c: float(q[c].std()) for c in (*comps, "total_gar")}
-    comp_corr = {f"{a}~{b}": float(np.corrcoef(q[a], q[b])[0, 1]) for i, a in enumerate(comps) for b in comps[i + 1:]}
+    comp_corr = {f"{a}~{b}": float(np.corrcoef(q[a], q[b])[0, 1]) for i, a in enumerate(comps) for b in comps[i + 1 :]}
     rec = cb.reconcile(t, proc)
-    pooled = {"F": float(reps["dpm_rep_F"].mean()), "D": float(reps["dpm_rep_D"].mean()), "sd_across_seasons_F": float(reps["dpm_rep_F"].std()), "sd_across_seasons_D": float(reps["dpm_rep_D"].std()),
-              "goals_per_1000min_per_sd_F": float(reps["dpm_rep_F"].std() * 1000 / 60), "goals_per_1000min_per_sd_D": float(reps["dpm_rep_D"].std() * 1000 / 60)}
-    _save(met / "val_combine.json", {"replacement_rates": reps.to_dicts(), "dpm_pooled_replacement": pooled, "dpm_fringe_effects": fr.to_dicts(), "sensitivity": sens, "component_sd_qualified": comp_sd,
-                                     "component_corr_qualified": comp_corr, "reconciliation": rec, "goals_per_win": gpw,
-                                     "mean_total_gar_qualified": float(q["total_gar"].mean()), "n_qualified": q.height})
+    pooled = {
+        "F": float(reps["dpm_rep_F"].mean()),
+        "D": float(reps["dpm_rep_D"].mean()),
+        "sd_across_seasons_F": float(reps["dpm_rep_F"].std()),
+        "sd_across_seasons_D": float(reps["dpm_rep_D"].std()),
+        "goals_per_1000min_per_sd_F": float(reps["dpm_rep_F"].std() * 1000 / 60),
+        "goals_per_1000min_per_sd_D": float(reps["dpm_rep_D"].std() * 1000 / 60),
+    }
+    _save(
+        met / "val_combine.json",
+        {
+            "replacement_rates": reps.to_dicts(),
+            "dpm_pooled_replacement": pooled,
+            "dpm_fringe_effects": fr.to_dicts(),
+            "sensitivity": sens,
+            "component_sd_qualified": comp_sd,
+            "component_corr_qualified": comp_corr,
+            "reconciliation": rec,
+            "goals_per_win": gpw,
+            "mean_total_gar_qualified": float(q["total_gar"].mean()),
+            "n_qualified": q.height,
+        },
+    )
     log.info("reconciliation joint slopes %s; sd GAR %s", rec["joint"], comp_sd)
 
 
@@ -151,6 +298,7 @@ def run_steps(steps: list[str]) -> None:
         log.info("=== valuation:%s ===", s)
         if s == "report":
             from src.valuation.report import run
+
             run()
         else:
             globals()[f"step_{s}"](cfg)

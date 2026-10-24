@@ -49,17 +49,25 @@ def test_missing_coordinates_map_to_na():
 
 
 def test_kinds_and_precision():
-    kinds = state_kind(np.array(["takeaway", "shot", "faceoff", "loose_opp_miss", "loose_opp_giveaway", "loose_unobserved"], dtype=object))
+    kinds = state_kind(
+        np.array(
+            ["takeaway", "shot", "faceoff", "loose_opp_miss", "loose_opp_giveaway", "loose_unobserved"], dtype=object
+        )
+    )
     assert list(kinds) == ["control", "control", "faceoff", "loose_opp_miss", "loose_opp_giveaway", "loose_unobserved"]
     assert list(location_precision(kinds)) == ["fine", "fine", "fine", "coarse", "fine", "none"]
 
 
 def test_state_ids_use_strength_group_and_coarse_for_imprecise_loose():
-    df = pl.DataFrame({
-        "obs_kind": ["takeaway", "loose_opp_miss", "faceoff"],
-        "x": [80.0, -70.0, 0.0], "y": [0.0, 10.0, 0.0],
-        "strength": ["5v5", "3v3", "PP"], "score_diff": [0, 1, -3],
-    })
+    df = pl.DataFrame(
+        {
+            "obs_kind": ["takeaway", "loose_opp_miss", "faceoff"],
+            "x": [80.0, -70.0, 0.0],
+            "y": [0.0, 10.0, 0.0],
+            "strength": ["5v5", "3v3", "PP"],
+            "score_diff": [0, 1, -3],
+        }
+    )
     out = add_state_columns(df, "zones")
     assert out["state_id"].to_list() == ["5v5|control|OZ_low_slot", "4v4_3v3|loose_opp_miss|DZ", "PP|faceoff|NZ_att_C"]
     out = add_state_columns(df, "zones", use_score=True)

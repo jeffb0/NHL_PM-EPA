@@ -41,7 +41,13 @@ def _game(args: tuple) -> tuple[list[dict], list[dict], dict]:
     gid, ev, sh, home_id = args
     # ---- on-ice per event
     e_per, e_t, e_fo = ev["period"], ev["t_period"], ev["type"] == "faceoff"
-    s_per, s_start, s_end, s_pid, s_home = sh["period"], sh["start"], sh["end"], sh["player_id"], sh["team_id"] == home_id
+    s_per, s_start, s_end, s_pid, s_home = (
+        sh["period"],
+        sh["start"],
+        sh["end"],
+        sh["player_id"],
+        sh["team_id"] == home_id,
+    )
     same = e_per[:, None] == s_per[None, :]
     t = e_t[:, None]
     covered = np.where(e_fo[:, None], (s_start <= t) & (t < s_end), (s_start < t) & (t <= s_end))
@@ -52,8 +58,15 @@ def _game(args: tuple) -> tuple[list[dict], list[dict], dict]:
         m = mask[i]
         h = np.sort(s_pid[m & s_home])
         a = np.sort(s_pid[m & ~s_home])
-        onice.append({"game_id": gid, "event_idx": int(ev["event_idx"][i]), "home_on": h.tolist(), "away_on": a.tolist()})
-        if ev["home_skaters"][i] == 5 and ev["away_skaters"][i] == 5 and ev["home_goalie"][i] == 1 and ev["away_goalie"][i] == 1:
+        onice.append(
+            {"game_id": gid, "event_idx": int(ev["event_idx"][i]), "home_on": h.tolist(), "away_on": a.tolist()}
+        )
+        if (
+            ev["home_skaters"][i] == 5
+            and ev["away_skaters"][i] == 5
+            and ev["home_goalie"][i] == 1
+            and ev["away_goalie"][i] == 1
+        ):
             n_55 += 1
             n_ok += int(len(h) == 5 and len(a) == 5)
     # ---- TOI by strength (1-second grid)
@@ -104,21 +117,28 @@ def run() -> None:
         if gid not in sh_groups:
             continue
         s = sh_groups[gid]
-        tasks.append((
-            gid,
-            {c: g[c].to_numpy() for c in ev_cols},
-            {c: s[c].to_numpy() for c in ["period", "start", "end", "player_id", "team_id"]},
-            int(g["home_id"][0]),
-        ))
+        tasks.append(
+            (
+                gid,
+                {c: g[c].to_numpy() for c in ev_cols},
+                {c: s[c].to_numpy() for c in ["period", "start", "end", "player_id", "team_id"]},
+                int(g["home_id"][0]),
+            )
+        )
     onice, toi, qual = [], [], []
     with ProcessPoolExecutor(4) as pool:
         for o, t, q in pool.map(_game, tasks, chunksize=32):
             onice.extend(o)
             toi.extend(t)
             qual.append(q)
-    oi = pl.DataFrame(onice, schema={"game_id": pl.Int64, "event_idx": pl.Int64, "home_on": pl.List(pl.Int64), "away_on": pl.List(pl.Int64)})
+    oi = pl.DataFrame(
+        onice,
+        schema={"game_id": pl.Int64, "event_idx": pl.Int64, "home_on": pl.List(pl.Int64), "away_on": pl.List(pl.Int64)},
+    )
     oi.write_parquet(proc / "onice.parquet")
-    toi_df = pl.DataFrame(toi).group_by("game_id", "player_id", "team_id").agg(pl.col(f"toi_{s}").sum() for s in STRENGTHS)
+    toi_df = (
+        pl.DataFrame(toi).group_by("game_id", "player_id", "team_id").agg(pl.col(f"toi_{s}").sum() for s in STRENGTHS)
+    )
     toi_df = toi_df.with_columns((pl.sum_horizontal([f"toi_{s}" for s in STRENGTHS])).alias("toi_all"))
     toi_df.write_parquet(proc / "toi_game.parquet")
     q = pl.DataFrame(qual)
@@ -126,7 +146,11 @@ def run() -> None:
     n_games = events["game_id"].n_unique()
     log.info(
         "on-ice: %d events; games with shifts %d/%d; median 5v5 match rate %.4f; games <90%% match: %d",
-        oi.height, q.height, n_games, q["onice_match_rate"].median(), q.filter(pl.col("onice_match_rate") < 0.9).height,
+        oi.height,
+        q.height,
+        n_games,
+        q["onice_match_rate"].median(),
+        q.filter(pl.col("onice_match_rate") < 0.9).height,
     )
 
 

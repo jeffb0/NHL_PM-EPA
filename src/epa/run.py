@@ -29,7 +29,9 @@ def value_obs(frame: pl.DataFrame, models: dict, key: str = "season") -> np.ndar
 DECISION_KINDS = ["shot", "giveaway", "lost_takeaway"]
 
 
-def prepare(cfg, models: dict, dec_models: dict | None = None, att_models: dict | None = None) -> tuple[pl.DataFrame, pl.DataFrame]:
+def prepare(
+    cfg, models: dict, dec_models: dict | None = None, att_models: dict | None = None
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Value every observation. Starts/mids use V_start (alive-state value); terminal decision
     points (shot / giveaway / lost puck) use V_dec, the average possession outcome given the
     terminal decision happens at that spot (methodology §4.2). ``dec_models=None`` values
@@ -53,10 +55,22 @@ def prepare(cfg, models: dict, dec_models: dict | None = None, att_models: dict 
     cf = counterfactual_frames(obs)
     gv = cf["gv_opp"].with_columns(pl.Series("v_cf", value_obs(cf["gv_opp"], models))).select("poss_id", "seq", "v_cf")
     # the takeaway victim was at a decision point (their lost-puck spot): value it with V_dec
-    tk = cf["tk_opp"].with_columns(pl.Series("v_cf", value_obs(cf["tk_opp"], dec_models))).select("poss_id", "seq", "v_cf")
+    tk = (
+        cf["tk_opp"]
+        .with_columns(pl.Series("v_cf", value_obs(cf["tk_opp"], dec_models)))
+        .select("poss_id", "seq", "v_cf")
+    )
     obs = obs.join(pl.concat([gv, tk]), on=["poss_id", "seq"], how="left")
-    unobs = obs.select("poss_id", "seq", "season", "x", "y", "score_diff", flip_strength(pl.col("strength")).alias("strength"),
-                       pl.lit("loose_unobserved").alias("obs_kind"))
+    unobs = obs.select(
+        "poss_id",
+        "seq",
+        "season",
+        "x",
+        "y",
+        "score_diff",
+        flip_strength(pl.col("strength")).alias("strength"),
+        pl.lit("loose_unobserved").alias("obs_kind"),
+    )
     obs = obs.with_columns(pl.Series("v_cf_unobs", value_obs(unobs, models)))
     # on-ice lists for the possessing team and its opponent
     obs = obs.join(games, on="game_id").join(onice, on=["game_id", "event_idx"], how="left")
@@ -69,14 +83,23 @@ def prepare(cfg, models: dict, dec_models: dict | None = None, att_models: dict 
     obs = obs.join(poss.select("poss_id", "start_link"), on="poss_id", how="left")
     end_oi = (
         poss.select("poss_id", "game_id", "team_id", pl.col("end_event_idx").alias("event_idx"))
-        .join(onice, on=["game_id", "event_idx"], how="left").join(games.select("game_id", "home_id"), on="game_id")
-        .select("poss_id", pl.when(pl.col("team_id") == pl.col("home_id")).then(pl.col("home_on")).otherwise(pl.col("away_on")).fill_null([]).alias("end_onice"))
+        .join(onice, on=["game_id", "event_idx"], how="left")
+        .join(games.select("game_id", "home_id"), on="game_id")
+        .select(
+            "poss_id",
+            pl.when(pl.col("team_id") == pl.col("home_id"))
+            .then(pl.col("home_on"))
+            .otherwise(pl.col("away_on"))
+            .fill_null([])
+            .alias("end_onice"),
+        )
     )
     obs = obs.join(end_oi, on="poss_id", how="left")
     # exclusions: empty-net (either goalie pulled) or unclassifiable strength anywhere in the possession
     bad = (
         obs.with_columns(pl.col("strength").replace_strict(STRENGTH_GROUP, default="other").alias("_sg"))
-        .group_by("poss_id").agg(pl.col("_sg").is_in(["EN", "other"]).any().alias("excluded"))
+        .group_by("poss_id")
+        .agg(pl.col("_sg").is_in(["EN", "other"]).any().alias("excluded"))
     )
     poss = poss.join(bad, on="poss_id", how="left").with_columns(pl.col("excluded").fill_null(False))
     if not cfg.epa.exclude_empty_net:
@@ -88,7 +111,9 @@ def prepare(cfg, models: dict, dec_models: dict | None = None, att_models: dict 
 def propagate_exclusion(poss: pl.DataFrame) -> pl.DataFrame:
     """A takeaway swing books credit on the taker's possession and debit on the loser's; keep or
     drop the pair together (else the loser's possession no longer reconciles to G_p)."""
-    links = poss.filter((pl.col("start_type") == "takeaway") & pl.col("start_link").is_not_null()).select("poss_id", "start_link")
+    links = poss.filter((pl.col("start_type") == "takeaway") & pl.col("start_link").is_not_null()).select(
+        "poss_id", "start_link"
+    )
     pairs = list(zip(links["poss_id"].to_list(), links["start_link"].to_list()))
     excluded = set(poss.filter(pl.col("excluded"))["poss_id"].to_list())
     changed = True
@@ -118,7 +143,9 @@ def run(lam: float | None = None, epa_overrides: dict | None = None, suffix: str
     if write:
         transitions.write_parquet(proc / f"transitions{suffix}.parquet")
         credits.write_parquet(proc / f"credits{suffix}.parquet")
-    log.info("transitions=%d credit rows=%d (lam=%.2f, overrides=%s)", transitions.height, credits.height, lam, epa_overrides)
+    log.info(
+        "transitions=%d credit rows=%d (lam=%.2f, overrides=%s)", transitions.height, credits.height, lam, epa_overrides
+    )
     return transitions, credits, poss
 
 
@@ -126,8 +153,11 @@ def identity_check() -> dict:
     """lam=0 accounting identity: per-possession components sum to terminal xG."""
     _, credits, poss = run(lam=0.0, suffix="_lam0", write=False)
     res = possession_identity_residual(credits, poss)
-    return {"n_possessions": res.height, "max_abs_residual": float(res["residual"].abs().max()),
-            "mean_abs_residual": float(res["residual"].abs().mean())}
+    return {
+        "n_possessions": res.height,
+        "max_abs_residual": float(res["residual"].abs().max()),
+        "mean_abs_residual": float(res["residual"].abs().mean()),
+    }
 
 
 if __name__ == "__main__":

@@ -101,7 +101,11 @@ def build_layout(df: pl.DataFrame, spec: Spec, prior: PriorSpec) -> Layout:
     players = sorted(df["shooter"].unique().to_list())
     Z, zn = prior.covariates(players)
     gcols = list(take("gamma", len(zn)))
-    gtab = pl.DataFrame({"shooter": pl.Series(players, dtype=pl.Int64), **{n: Z[:, j] for j, n in enumerate(zn)}}) if zn else None
+    gtab = (
+        pl.DataFrame({"shooter": pl.Series(players, dtype=pl.Int64), **{n: Z[:, j] for j, n in enumerate(zn)}})
+        if zn
+        else None
+    )
     shooter = dict(zip(players, take("u", len(players))))
     ssk = sorted(df["k_ss"].unique().to_list()) if spec.season_dev else []
     shooter_season = dict(zip(ssk, take("d", len(ssk)))) if spec.season_dev else {}
@@ -123,7 +127,23 @@ def build_layout(df: pl.DataFrame, spec: Spec, prior: PriorSpec) -> Layout:
     if spec.types:
         groups["w"] = np.array(list(wtype.values()), dtype=np.int64)
     groups = {g: idx for g, idx in groups.items() if len(idx)}
-    return Layout(spec, cells, fringe, zn, gcols, gtab, shooter, shooter_season, goalie, goalie_season, wtype, col, blocks, groups, pos)
+    return Layout(
+        spec,
+        cells,
+        fringe,
+        zn,
+        gcols,
+        gtab,
+        shooter,
+        shooter_season,
+        goalie,
+        goalie_season,
+        wtype,
+        col,
+        blocks,
+        groups,
+        pos,
+    )
 
 
 def design(df: pl.DataFrame, lay: Layout) -> sparse.csr_matrix:
@@ -178,11 +198,23 @@ class FinFit:
     def parts(self, df: pl.DataFrame) -> dict[str, np.ndarray]:
         """Linear-predictor contribution of each block, per row of ``df``."""
         X = design(df, self.layout)
-        return {b: np.asarray(X[:, lo:hi] @ self.beta[lo:hi]).ravel() for b, (lo, hi) in self.layout.blocks.items() if hi > lo}
+        return {
+            b: np.asarray(X[:, lo:hi] @ self.beta[lo:hi]).ravel()
+            for b, (lo, hi) in self.layout.blocks.items()
+            if hi > lo
+        }
 
 
-def fit_finishing(df: pl.DataFrame, spec: Spec, prior: PriorSpec | None = None, s2: dict[str, float] | None = None,
-                  em_iters: int = 0, em_tol_sd: float = 1e-4, beta0: np.ndarray | None = None, layout: Layout | None = None) -> FinFit:
+def fit_finishing(
+    df: pl.DataFrame,
+    spec: Spec,
+    prior: PriorSpec | None = None,
+    s2: dict[str, float] | None = None,
+    em_iters: int = 0,
+    em_tol_sd: float = 1e-4,
+    beta0: np.ndarray | None = None,
+    layout: Layout | None = None,
+) -> FinFit:
     """Fit at fixed variance components (``s2``) or estimate them by EM (``em_iters`` > 0)."""
     prior = prior or PriorSpec()
     lay = layout or build_layout(df, spec, prior)
@@ -197,12 +229,17 @@ def fit_finishing(df: pl.DataFrame, spec: Spec, prior: PriorSpec | None = None, 
     return FinFit(lay, mode, s2_0)
 
 
-def reference_shifts(T: np.ndarray, df: pl.DataFrame, fringe: np.ndarray) -> tuple[dict[int, float], dict[tuple[str, int], float]]:
+def reference_shifts(
+    T: np.ndarray, df: pl.DataFrame, fringe: np.ndarray
+) -> tuple[dict[int, float], dict[tuple[str, int], float]]:
     """Season league-average shift and per (position, season) fringe-pool shift, over 5v5 shots."""
     d = df.select("season", "pos_group", "strength_g").with_columns(pl.Series("T", T), pl.Series("fr", fringe))
     d5 = d.filter(pl.col("strength_g") == "5v5")
     avg = {s: float(v) for s, v in d5.group_by("season").agg(pl.col("T").mean()).iter_rows()}
-    rep = {(g, s): float(v) for g, s, v in d5.filter(pl.col("fr")).group_by("pos_group", "season").agg(pl.col("T").mean()).iter_rows()}
+    rep = {
+        (g, s): float(v)
+        for g, s, v in d5.filter(pl.col("fr")).group_by("pos_group", "season").agg(pl.col("T").mean()).iter_rows()
+    }
     return avg, rep
 
 
@@ -215,7 +252,7 @@ def player_effects(fit: FinFit, df: pl.DataFrame, draws: int, seed: int, cov: np
     offset + season/strength cell + goalie terms, and T_i the shooter's shift (+ fringe effect).
     """
     parts = fit.parts(df)
-    p = lambda k: parts.get(k, np.zeros(df.height))  # noqa: E731
+    p = lambda k: parts.get(k, np.zeros(df.height))
     l_i = df["offset"].to_numpy() + p("cell") + p("v") + p("e")
     fr_eff = p("fringe")
     shift = p("gamma") + p("u") + p("d") + p("w")
@@ -229,17 +266,33 @@ def player_effects(fit: FinFit, df: pl.DataFrame, draws: int, seed: int, cov: np
     base = expit(l_i)
     g_avg = expit(l_i + T) - expit(l_i + ref_avg)
     g_rep = expit(l_i + T) - expit(l_i + ref_rep)
-    is5 = (df["strength_g"].to_numpy() == "5v5")
+    is5 = df["strength_g"].to_numpy() == "5v5"
     tab = df.select("shooter", "season", "pos_group", "goal", "xg_f").with_columns(
-        pl.Series("g_avg", g_avg), pl.Series("g_rep", g_rep), pl.Series("T", T), pl.Series("is5", is5), pl.Series("p_l", base))
+        pl.Series("g_avg", g_avg),
+        pl.Series("g_rep", g_rep),
+        pl.Series("T", T),
+        pl.Series("is5", is5),
+        pl.Series("p_l", base),
+    )
     agg = []
     for tag, m in (("5v5", tab["is5"]), ("other", ~tab["is5"])):
-        a = tab.filter(m).group_by("shooter", "season", "pos_group").agg(
-            pl.len().alias(f"attempts_{tag}"), pl.col("goal").sum().alias(f"goals_{tag}"), pl.col("xg_f").sum().alias(f"xg_f_{tag}"),
-            pl.col("g_avg").sum().alias(f"fin_gaa_{tag}"), pl.col("g_rep").sum().alias(f"fin_gar_{tag}"), pl.col("T").mean().alias(f"shift_{tag}"))
+        a = (
+            tab.filter(m)
+            .group_by("shooter", "season", "pos_group")
+            .agg(
+                pl.len().alias(f"attempts_{tag}"),
+                pl.col("goal").sum().alias(f"goals_{tag}"),
+                pl.col("xg_f").sum().alias(f"xg_f_{tag}"),
+                pl.col("g_avg").sum().alias(f"fin_gaa_{tag}"),
+                pl.col("g_rep").sum().alias(f"fin_gar_{tag}"),
+                pl.col("T").mean().alias(f"shift_{tag}"),
+            )
+        )
         agg.append(a)
     out = agg[0].join(agg[1], on=["shooter", "season", "pos_group"], how="full", coalesce=True)
-    out = out.with_columns(*[pl.col(c).fill_null(0) for c in out.columns if c.startswith(("attempts", "goals", "xg_f", "fin_"))])
+    out = out.with_columns(
+        *[pl.col(c).fill_null(0) for c in out.columns if c.startswith(("attempts", "goals", "xg_f", "fin_"))]
+    )
     if draws > 0 and cov is not None:
         sd = _draw_sd(fit, df, l_i, fr_eff, p("gamma"), ref_avg, ref_rep, is5, draws, seed, cov)
         out = out.join(sd, on=["shooter", "season"], how="left")
@@ -255,7 +308,11 @@ def _draw_sd(fit: FinFit, df: pl.DataFrame, l_i, fr_eff, gam, ref_avg, ref_rep, 
     season = dk["season"].to_numpy()
     u_col = _map(dk["shooter"], lay.shooter)
     d_col = _map(dk["k_ss"], lay.shooter_season) if lay.spec.season_dev else np.full(df.height, -1)
-    w_col = np.where(dk["tcode"].to_numpy() > 0, _map(dk["k_w"], lay.wtype), -1) if lay.spec.types else np.full(df.height, -1)
+    w_col = (
+        np.where(dk["tcode"].to_numpy() > 0, _map(dk["k_w"], lay.wtype), -1)
+        if lay.spec.types
+        else np.full(df.height, -1)
+    )
     order = np.argsort(shooter, kind="stable")
     bounds = np.flatnonzero(np.r_[True, np.diff(shooter[order]) != 0, True])
     rows = []
@@ -282,8 +339,30 @@ def _draw_sd(fit: FinFit, df: pl.DataFrame, l_i, fr_eff, gam, ref_avg, ref_rep, 
         for s in np.unique(season[ix]):
             m = season[ix] == s
             ga, gr = g_avg[:, m].sum(1), g_rep[:, m].sum(1)
-            rows.append((int(shooter[ix[0]]), int(s), float(ga.std()), *np.quantile(ga, [0.025, 0.975]), float(gr.std()), *np.quantile(gr, [0.025, 0.975])))
-    return pl.DataFrame(rows, schema=["shooter", "season", "fin_gaa_sd", "fin_gaa_lo", "fin_gaa_hi", "fin_gar_sd", "fin_gar_lo", "fin_gar_hi"], orient="row")
+            rows.append(
+                (
+                    int(shooter[ix[0]]),
+                    int(s),
+                    float(ga.std()),
+                    *np.quantile(ga, [0.025, 0.975]),
+                    float(gr.std()),
+                    *np.quantile(gr, [0.025, 0.975]),
+                )
+            )
+    return pl.DataFrame(
+        rows,
+        schema=[
+            "shooter",
+            "season",
+            "fin_gaa_sd",
+            "fin_gaa_lo",
+            "fin_gaa_hi",
+            "fin_gar_sd",
+            "fin_gar_lo",
+            "fin_gar_hi",
+        ],
+        orient="row",
+    )
 
 
 def calibrate_cell_shift(eta: np.ndarray, y: np.ndarray, cell: np.ndarray) -> np.ndarray:

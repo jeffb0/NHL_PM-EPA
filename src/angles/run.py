@@ -30,8 +30,15 @@ def bh(p: dict[str, float], q: float = FDR) -> dict[str, bool]:
 def record(flag: np.ndarray, won: np.ndarray, p: np.ndarray) -> dict:
     """Win-loss record of the teams in a situation against the wins the baseline expected."""
     n, w, e = int(flag.sum()), float(won[flag].sum()), float(p[flag].sum())
-    return {"n": n, "wins": int(w), "losses": n - int(w), "expected_wins": e, "win_pct": w / n if n else None, "expected_pct": e / n if n else None,
-            "z": float((w - e) / np.sqrt((p[flag] * (1 - p[flag])).sum())) if n else None}
+    return {
+        "n": n,
+        "wins": int(w),
+        "losses": n - int(w),
+        "expected_wins": e,
+        "win_pct": w / n if n else None,
+        "expected_pct": e / n if n else None,
+        "z": float((w - e) / np.sqrt((p[flag] * (1 - p[flag])).sum())) if n else None,
+    }
 
 
 def run() -> dict:
@@ -41,33 +48,72 @@ def run() -> dict:
     games = gd_.load_games(proc)
     seasons = grun.TUNE + grun.TEST
     pri = gd_.build_priors(proc, cfg, seasons, games)
-    mu = np.concatenate([gm.run_player_season(games, pri, T, lam=hp["lam"], alpha=hp["alpha"], n0=hp["n0"]) for T in seasons])
-    # angles from the full schedule (every season, including games the model table drops), so "previous game" is the true previous game
-    sched = (pl.read_parquet(proc / "games.parquet").with_columns(pl.col("game_date").str.to_date("%Y-%m-%d").alias("date")).join(games.table.select("game_id", "xgd"), on="game_id", how="left"))
-    ab = dict(pl.concat([sched.select(pl.col("home_id").alias("i"), pl.col("home_abbrev").alias("t")), sched.select(pl.col("away_id").alias("i"), pl.col("away_abbrev").alias("t"))]).unique().iter_rows())
+    mu = np.concatenate(
+        [gm.run_player_season(games, pri, T, lam=hp["lam"], alpha=hp["alpha"], n0=hp["n0"]) for T in seasons]
+    )
+    # angles from the full schedule (every season, including games the model table drops), so "previous game" is the
+    # true previous game
+    sched = (
+        pl.read_parquet(proc / "games.parquet")
+        .with_columns(pl.col("game_date").str.to_date("%Y-%m-%d").alias("date"))
+        .join(games.table.select("game_id", "xgd"), on="game_id", how="left")
+    )
+    ab = dict(
+        pl.concat(
+            [
+                sched.select(pl.col("home_id").alias("i"), pl.col("home_abbrev").alias("t")),
+                sched.select(pl.col("away_id").alias("i"), pl.col("away_abbrev").alias("t")),
+            ]
+        )
+        .unique()
+        .iter_rows()
+    )
     season_of = dict(sched.select("game_id", "season").iter_rows())
     starters = {(gid, ab[tid]): (v[0][0], v[0][2]) for (gid, tid), v in games.goalies.items() if gid in season_of}
-    t = games.table.filter(pl.col("season") >= grun.TUNE[0]).with_columns(pl.Series("mu", mu)).join(af.game_angles(sched, starters), on="game_id", how="left")
+    t = (
+        games.table.filter(pl.col("season") >= grun.TUNE[0])
+        .with_columns(pl.Series("mu", mu))
+        .join(af.game_angles(sched, starters), on="game_id", how="left")
+    )
     assert t.select(pl.all_horizontal(pl.col(af.ANGLES).is_not_null()).all()).item()
     sd = {c: float(t[c].std()) for c in af.CONTINUOUS}
-    t = t.with_columns(*[(pl.col(c) / sd[c]).alias(c) for c in af.CONTINUOUS])                      # continuous angles per standard deviation of the home-minus-away value
+    # continuous angles per standard deviation of the home-minus-away value
+    t = t.with_columns(*[(pl.col(c) / sd[c]).alias(c) for c in af.CONTINUOUS])
     y, s, gd = t["home_win"].to_numpy(), t["season"].to_numpy(), t["gd"].to_numpy()
     te = np.isin(s, grun.TEST)
     dates = t["date"].to_numpy()[te]
-    X = lambda cols: t.select(["mu", *BASE, *cols]).to_numpy()            # noqa: E731
+    X = lambda cols: t.select(["mu", *BASE, *cols]).to_numpy()
 
     b0 = gm.logit_fit(X([]), y)
-    p0 = gm.logit_pred(b0, X([]))                                         # baseline probability of a home win, fitted on all games (three parameters)
+    # baseline probability of a home win, fitted on all games (three parameters)
+    p0 = gm.logit_pred(b0, X([]))
     _, l0 = logit_table(X([]), y, ["mu", *BASE])
     ll0 = gm.logloss(oos(X([]), y, s)[te], y[te])
-    res: dict = {"n_fit_games": int(len(y)), "n_test_games": int(te.sum()), "logloss_base": float(ll0.mean()), "sd_continuous": sd, "angles": {}}
+    res: dict = {
+        "n_fit_games": int(len(y)),
+        "n_test_games": int(te.sum()),
+        "logloss_base": float(ll0.mean()),
+        "sd_continuous": sd,
+        "angles": {},
+    }
     for a in af.ANGLES:
         tab, _ = logit_table(X([a]), y, ["mu", *BASE, a])
         c = tab[a]
         ll = gm.logloss(oos(X([a]), y, s)[te], y[te])
-        d = {"coef": c["coef"], "se": c["se"], "t": c["t"], "p": float(2 * norm.sf(abs(c["t"]))), "folk": af.FOLK[a], "agrees_with_folk": bool(np.sign(c["coef"]) == af.FOLK[a]),
-             "pts_win_prob": float(25 * c["coef"]), "goal_diff": ols_table(X([a]), gd, ["mu", *BASE, a])[a], "logloss": float(ll.mean()), "paired": grun.paired(ll, ll0, dates)}
-        if a not in af.CONTINUOUS:                                        # the record as the sayings quote it: teams in the situation, both sides pooled
+        d = {
+            "coef": c["coef"],
+            "se": c["se"],
+            "t": c["t"],
+            "p": float(2 * norm.sf(abs(c["t"]))),
+            "folk": af.FOLK[a],
+            "agrees_with_folk": bool(np.sign(c["coef"]) == af.FOLK[a]),
+            "pts_win_prob": float(25 * c["coef"]),
+            "goal_diff": ols_table(X([a]), gd, ["mu", *BASE, a])[a],
+            "logloss": float(ll.mean()),
+            "paired": grun.paired(ll, ll0, dates),
+        }
+        # the record as the sayings quote it: teams in the situation, both sides pooled
+        if a not in af.CONTINUOUS:
             fh = t[f"{a}_H"].to_numpy() == 1 if a not in af.AWAY_ONLY else np.zeros(len(y), bool)
             fa = t[f"{a}_A"].to_numpy() == 1 if a not in af.HOME_ONLY else np.zeros(len(y), bool)
             d["record"] = record(np.concatenate([fh, fa]), np.concatenate([y, 1 - y]), np.concatenate([p0, 1 - p0]))
@@ -76,17 +122,44 @@ def run() -> dict:
     rej = bh({a: v["p"] for a, v in res["angles"].items()})
     for a, v in res["angles"].items():
         v["bh_10pct"], v["oos_z_gt_2"] = rej[a], bool(v["paired"]["z"] > 2)
-        v["verdict"] = "adopt" if v["bh_10pct"] and v["oos_z_gt_2"] else "follow up" if v["bh_10pct"] or v["oos_z_gt_2"] else "not adopted"
+        v["verdict"] = (
+            "adopt"
+            if v["bh_10pct"] and v["oos_z_gt_2"]
+            else "follow up"
+            if v["bh_10pct"] or v["oos_z_gt_2"]
+            else "not adopted"
+        )
     _, lall = logit_table(X(af.ANGLES), y, ["mu", *BASE, *af.ANGLES])
     lla = gm.logloss(oos(X(af.ANGLES), y, s)[te], y[te])
-    res["joint"] = {"lr": float(2 * (lall - l0)), "df": len(af.ANGLES), "p": float(chi2.sf(2 * (lall - l0), len(af.ANGLES))), "logloss_all": float(lla.mean()), "paired_all_vs_base": grun.paired(lla, ll0, dates)}
+    res["joint"] = {
+        "lr": float(2 * (lall - l0)),
+        "df": len(af.ANGLES),
+        "p": float(chi2.sf(2 * (lall - l0), len(af.ANGLES))),
+        "logloss_all": float(lla.mean()),
+        "paired_all_vs_base": grun.paired(lla, ll0, dates),
+    }
     res["implement"] = [a for a, v in res["angles"].items() if v["verdict"] == "adopt"]
     res["follow_up"] = [a for a, v in res["angles"].items() if v["verdict"] == "follow up"]
     (met / "angles.json").write_text(json.dumps(res, indent=2, default=float), encoding="utf-8")
     for a, v in sorted(res["angles"].items(), key=lambda kv: kv[1]["p"]):
         r = v.get("record")
-        log.info("%-18s coef %+.3f t %+.2f p %.3f oos z %+.2f %s %s", a, v["coef"], v["t"], v["p"], v["paired"]["z"], f"{r['wins']}-{r['losses']} exp {r['expected_wins']:.0f} z {r['z']:+.2f}" if r else "", v["verdict"])
-    log.info("joint LR p %.3f; all-angles oos z %.2f; adopt %s; follow up %s", res["joint"]["p"], res["joint"]["paired_all_vs_base"]["z"], res["implement"], res["follow_up"])
+        log.info(
+            "%-18s coef %+.3f t %+.2f p %.3f oos z %+.2f %s %s",
+            a,
+            v["coef"],
+            v["t"],
+            v["p"],
+            v["paired"]["z"],
+            f"{r['wins']}-{r['losses']} exp {r['expected_wins']:.0f} z {r['z']:+.2f}" if r else "",
+            v["verdict"],
+        )
+    log.info(
+        "joint LR p %.3f; all-angles oos z %.2f; adopt %s; follow up %s",
+        res["joint"]["p"],
+        res["joint"]["paired_all_vs_base"]["z"],
+        res["implement"],
+        res["follow_up"],
+    )
     return res
 
 

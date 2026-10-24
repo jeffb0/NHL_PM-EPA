@@ -9,11 +9,52 @@ import requests
 from bs4 import BeautifulSoup
 
 log = logging.getLogger("live")
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"}
-SLUG = {"ANA": "ducks", "BOS": "bruins", "BUF": "sabres", "CAR": "hurricanes", "CBJ": "blue-jackets", "CGY": "flames", "CHI": "blackhawks", "COL": "avalanche", "DAL": "stars", "DET": "red-wings", "EDM": "oilers",
-        "FLA": "panthers", "LAK": "kings", "MIN": "wild", "MTL": "canadiens", "NJD": "devils", "NSH": "predators", "NYI": "islanders", "NYR": "rangers", "OTT": "senators", "PHI": "flyers", "PIT": "penguins",
-        "SEA": "kraken", "SJS": "sharks", "STL": "blues", "TBL": "lightning", "TOR": "maple-leafs", "UTA": "mammoth", "VAN": "canucks", "VGK": "golden-knights", "WPG": "jets", "WSH": "capitals"}
-BOOK = {"fanduel": "FanDuel", "draftkings": "DraftKings", "betmgm": "BetMGM", "bet365": "bet365", "caesars": "Caesars", "fanatics": "Fanatics", "riverscasino": "BetRivers"}
+UA = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+}
+SLUG = {
+    "ANA": "ducks",
+    "BOS": "bruins",
+    "BUF": "sabres",
+    "CAR": "hurricanes",
+    "CBJ": "blue-jackets",
+    "CGY": "flames",
+    "CHI": "blackhawks",
+    "COL": "avalanche",
+    "DAL": "stars",
+    "DET": "red-wings",
+    "EDM": "oilers",
+    "FLA": "panthers",
+    "LAK": "kings",
+    "MIN": "wild",
+    "MTL": "canadiens",
+    "NJD": "devils",
+    "NSH": "predators",
+    "NYI": "islanders",
+    "NYR": "rangers",
+    "OTT": "senators",
+    "PHI": "flyers",
+    "PIT": "penguins",
+    "SEA": "kraken",
+    "SJS": "sharks",
+    "STL": "blues",
+    "TBL": "lightning",
+    "TOR": "maple-leafs",
+    "UTA": "mammoth",
+    "VAN": "canucks",
+    "VGK": "golden-knights",
+    "WPG": "jets",
+    "WSH": "capitals",
+}
+BOOK = {
+    "fanduel": "FanDuel",
+    "draftkings": "DraftKings",
+    "betmgm": "BetMGM",
+    "bet365": "bet365",
+    "caesars": "Caesars",
+    "fanatics": "Fanatics",
+    "riverscasino": "BetRivers",
+}
 
 
 def american(text: str) -> int | None:
@@ -36,7 +77,8 @@ def devig(away: int, home: int) -> tuple[float, float]:
 
 
 def parse(html: str) -> list[dict]:
-    """Rows of {book, market, side, line, american} from a game page; side is 'away'/'home' for the moneyline and 'over'/'under' for the total."""
+    """Rows of {book, market, side, line, american} from a game page; side is 'away'/'home' for the moneyline and
+    'over'/'under' for the total."""
     t = BeautifulSoup(html, "html.parser").find("table", class_="odds-table")
     if t is None:
         return []
@@ -53,7 +95,11 @@ def parse(html: str) -> list[dict]:
             if len(cells) != len(books):
                 continue
             for b, td in zip(books, cells):
-                val, odds, ml = td.find(class_="data-value"), td.find(class_="data-odds"), td.find(class_="data-moneyline")
+                val, odds, ml = (
+                    td.find(class_="data-value"),
+                    td.find(class_="data-odds"),
+                    td.find(class_="data-moneyline"),
+                )
                 v, o = (val.get_text(strip=True) if val else ""), (odds.get_text(strip=True) if odds else "")
                 price = american(ml.get_text(strip=True)) if ml else american(o) if o else None
                 if price is None:
@@ -63,14 +109,16 @@ def parse(html: str) -> list[dict]:
     return out
 
 
-# books the comparison page does not carry, from Action Network's scoreboard feed (New Jersey lines; docs/market/methodology.md §8 item 13)
+# books the comparison page does not carry, from Action Network's scoreboard feed (New Jersey lines;
+# docs/market/methodology.md §8 item 13)
 AN_URL = "https://api.actionnetwork.com/web/v2/scoreboard/nhl"
 AN_BOOKS = {2724: "Hard Rock Bet", 4620: "theScore Bet"}
 AN_ABBR = {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
 
 
 def parse_an(d: dict) -> dict[tuple[str, str], list[dict]]:
-    """Moneyline and total prices per (away, home) from an Action Network scoreboard response, for the books in AN_BOOKS."""
+    """Moneyline and total prices per (away, home) from an Action Network scoreboard response, for the books in
+    AN_BOOKS."""
     out: dict = {}
     for g in d.get("games", []):
         ab = {t["id"]: AN_ABBR.get(t["abbr"], t["abbr"]) for t in g.get("teams", [])}
@@ -83,17 +131,34 @@ def parse_an(d: dict) -> dict[tuple[str, str], list[dict]]:
                 continue
             for o in ev.get("moneyline") or []:
                 if o.get("team_id") in side_of and isinstance(o.get("odds"), int) and not o.get("is_live"):
-                    rows.append({"book": book, "market": "moneyline", "side": side_of[o["team_id"]], "line": None, "american": o["odds"]})
+                    rows.append(
+                        {
+                            "book": book,
+                            "market": "moneyline",
+                            "side": side_of[o["team_id"]],
+                            "line": None,
+                            "american": o["odds"],
+                        }
+                    )
             for o in ev.get("total") or []:
                 if o.get("side") in ("over", "under") and isinstance(o.get("odds"), int) and not o.get("is_live"):
-                    rows.append({"book": book, "market": "total", "side": o["side"], "line": float(o["value"]) if o.get("value") is not None else None, "american": o["odds"]})
+                    rows.append(
+                        {
+                            "book": book,
+                            "market": "total",
+                            "side": o["side"],
+                            "line": float(o["value"]) if o.get("value") is not None else None,
+                            "american": o["odds"],
+                        }
+                    )
         if g.get("away_team_id") in ab and g.get("home_team_id") in ab:
             out[(ab[g["away_team_id"]], ab[g["home_team_id"]])] = rows
     return out
 
 
 def fetch_extra(day: str, timeout: int = 30) -> tuple[dict[tuple[str, str], list[dict]], str]:
-    """Hard Rock Bet and theScore Bet prices for every game on ``day`` (an Eastern date, YYYY-MM-DD), keyed by (away, home). Empty on failure: the other books are still logged."""
+    """Hard Rock Bet and theScore Bet prices for every game on ``day`` (an Eastern date, YYYY-MM-DD), keyed by (away,
+    home). Empty on failure: the other books are still logged."""
     url = f"{AN_URL}?bookIds={','.join(map(str, AN_BOOKS))}&periods=event&date={day.replace('-', '')}"
     try:
         r = requests.get(url, headers=UA, timeout=timeout)
@@ -105,7 +170,8 @@ def fetch_extra(day: str, timeout: int = 30) -> tuple[dict[tuple[str, str], list
 
 
 def fetch(away: str, home: str, timeout: int = 30) -> tuple[list[dict], str]:
-    """Prices for a matchup. The page is keyed by the two nicknames in alphabetical order and shows the teams' next meeting."""
+    """Prices for a matchup. The page is keyed by the two nicknames in alphabetical order and shows the teams' next
+    meeting."""
     a, h = sorted([SLUG[away], SLUG[home]])
     url = f"https://www.scoresandodds.com/nhl/{a}-vs-{h}"
     try:
@@ -118,6 +184,7 @@ def fetch(away: str, home: str, timeout: int = 30) -> tuple[list[dict], str]:
     title = head.get_text(" ", strip=True).lower() if head else ""
     want = f"{SLUG[away].replace('-', ' ')} @ {SLUG[home].replace('-', ' ')}"
     if want.split(" @ ")[0] not in title.split("@")[0] or want.split(" @ ")[1] not in title.split("@")[-1]:
-        log.warning("odds page for %s at %s shows a different game (%s)", away, home, title)        # e.g. the reverse fixture: prices would be attached to the wrong sides
+        # e.g. the reverse fixture: prices would be attached to the wrong sides
+        log.warning("odds page for %s at %s shows a different game (%s)", away, home, title)
         return [], url
     return parse(r.text), url

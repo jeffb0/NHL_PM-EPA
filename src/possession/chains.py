@@ -90,9 +90,19 @@ class ChainBuilder:
         self.observations: list[dict] = []
 
     # ------------------------------------------------------------------ helpers
-    def _obs(self, cur: _Open, ev: dict, kind: str, role: str, player: int | None,
-             x: float | None, y: float | None, t: float | None = None, event_idx: int | None = None,
-             view_team_event: dict | None = None) -> None:
+    def _obs(
+        self,
+        cur: _Open,
+        ev: dict,
+        kind: str,
+        role: str,
+        player: int | None,
+        x: float | None,
+        y: float | None,
+        t: float | None = None,
+        event_idx: int | None = None,
+        view_team_event: dict | None = None,
+    ) -> None:
         view = _team_view(view_team_event or ev, cur.team)
         cur.obs.append(
             {
@@ -153,7 +163,9 @@ class ChainBuilder:
             if typ in STOP_TYPES:
                 if cur is not None:
                     reason = ev.get("reason") if typ == "stoppage" else typ
-                    end = f"stoppage:{reason}" if typ == "stoppage" else ("penalty" if typ == "penalty" else "period_end")
+                    end = (
+                        f"stoppage:{reason}" if typ == "stoppage" else ("penalty" if typ == "penalty" else "period_end")
+                    )
                     self._close(cur, end, ev, ev["event_idx"])
                 cur, pending = None, None
                 continue
@@ -162,8 +174,12 @@ class ChainBuilder:
                 continue
             if typ == "hit":
                 hittee_team = ev["opp_team_id"]
-                if (self.p.hits_as_observations and cur is not None and cur.team == hittee_team
-                        and ev.get("x") is not None):
+                if (
+                    self.p.hits_as_observations
+                    and cur is not None
+                    and cur.team == hittee_team
+                    and ev.get("x") is not None
+                ):
                     v = _team_view(ev, hittee_team)
                     self._obs(cur, ev, "hit_mid", "mid", ev.get("player2"), v["x"], v["y"])
                 continue
@@ -195,21 +211,48 @@ class ChainBuilder:
                 if cur is not None:  # opponent lost it somewhere we did not observe
                     last = cur.obs[-1] if cur.obs else None
                     self._close(cur, "unobserved_loss", ev, None)
-                    pending = {"origin": "unobserved", "team": cur.team, "t": last["t"] if last else ev["t_game"],
-                               "event_idx": last["event_idx"] if last else ev["event_idx"], "x": None, "y": None,
-                               "poss_id": cur.poss_id, "event": None}
+                    pending = {
+                        "origin": "unobserved",
+                        "team": cur.team,
+                        "t": last["t"] if last else ev["t_game"],
+                        "event_idx": last["event_idx"] if last else ev["event_idx"],
+                        "x": None,
+                        "y": None,
+                        "poss_id": cur.poss_id,
+                        "event": None,
+                    }
                 cur = self._start_inferred(team, ev, pending)
             if typ == "giveaway":
                 self._obs(cur, ev, "giveaway", "end", ev.get("player1"), ev.get("x"), ev.get("y"))
                 self._close(cur, "giveaway", ev, ev["event_idx"])
-                pending = {"origin": "giveaway", "team": team, "t": ev["t_game"], "event_idx": ev["event_idx"],
-                           "x": ev.get("x"), "y": ev.get("y"), "poss_id": cur.poss_id, "event": ev}
+                pending = {
+                    "origin": "giveaway",
+                    "team": team,
+                    "t": ev["t_game"],
+                    "event_idx": ev["event_idx"],
+                    "x": ev.get("x"),
+                    "y": ev.get("y"),
+                    "poss_id": cur.poss_id,
+                    "event": ev,
+                }
             else:
                 self._obs(cur, ev, "shot", "end", ev.get("player1"), ev.get("x"), ev.get("y"))
                 self._close(cur, SHOT_END[typ], ev, ev["event_idx"])
                 # a goal is always followed by a faceoff: it never seeds a loose-puck start
-                pending = None if typ == "goal" else {"origin": SHOT_ORIGIN[typ], "team": team, "t": ev["t_game"], "event_idx": ev["event_idx"],
-                           "x": ev.get("x"), "y": ev.get("y"), "poss_id": cur.poss_id, "event": ev}
+                pending = (
+                    None
+                    if typ == "goal"
+                    else {
+                        "origin": SHOT_ORIGIN[typ],
+                        "team": team,
+                        "t": ev["t_game"],
+                        "event_idx": ev["event_idx"],
+                        "x": ev.get("x"),
+                        "y": ev.get("y"),
+                        "poss_id": cur.poss_id,
+                        "event": ev,
+                    }
+                )
             cur = None
         if cur is not None:
             self._close(cur, "period_end", None, None)
@@ -221,8 +264,7 @@ class ChainBuilder:
             return self._open(team, ev["period"], "unobserved", None)
         own = pending["team"] == team
         origin = pending["origin"]
-        if origin in ("sog", "miss", "block") and own and gap <= self.p.rebound_window_s \
-                and ev["type"] in SHOT_END:
+        if origin in ("sog", "miss", "block") and own and gap <= self.p.rebound_window_s and ev["type"] in SHOT_END:
             kind = "rebound"
         elif origin == "unobserved":
             kind = "loose_unobserved"
@@ -234,8 +276,18 @@ class ChainBuilder:
             x, y = (pending["x"], pending["y"]) if own else (-pending["x"], -pending["y"])
         else:
             x = y = None
-        self._obs(cur, ev, kind, "start", None, x, y, t=pending["t"], event_idx=pending["event_idx"],
-                  view_team_event=src or ev)
+        self._obs(
+            cur,
+            ev,
+            kind,
+            "start",
+            None,
+            x,
+            y,
+            t=pending["t"],
+            event_idx=pending["event_idx"],
+            view_team_event=src or ev,
+        )
         return cur
 
 

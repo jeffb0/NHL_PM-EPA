@@ -22,7 +22,10 @@ VARIANTS = {
     "without faceoffs": pl.col("total_gar") - pl.col("fo_gar"),
     "without penalties": pl.col("total_gar") - pl.col("pen_gar"),
     "without turnover and penalties": pl.col("total_gar") - pl.col("to_gar") - pl.col("pen_gar"),
-    "without turnover, faceoffs, penalties": pl.col("total_gar") - pl.col("to_gar") - pl.col("fo_gar") - pl.col("pen_gar"),
+    "without turnover, faceoffs, penalties": pl.col("total_gar")
+    - pl.col("to_gar")
+    - pl.col("fo_gar")
+    - pl.col("pen_gar"),
 }
 
 
@@ -32,12 +35,17 @@ def run() -> dict:
     t = pl.read_parquet(proc / "player_value_calibrated.parquet")
     out = {}
     for name, expr in VARIANTS.items():
-        alt = t.with_columns(expr.alias("total_gar_ridge"))  # the 'calibrated' slot of the forward check carries the variant
+        # the 'calibrated' slot of the forward check carries the variant
+        alt = t.with_columns(expr.alias("total_gar_ridge"))
         r = P.rate_table(alt, tm.COMPS)
         d = P.dataset(alt, P.onice_forward(proc, r), r, tm.COMPS, 200.0)
         res = P.evaluate(d, tm.COMPS)
-        out[name] = {"own_slope_goals": res["y_gd"]["calibrated"]["own_slope"], "own_se": res["y_gd"]["calibrated"]["own_se"],
-                     "paired_z_goals": res["y_gd"]["paired_z_calibrated_better"], "paired_z_xg": res["y_xgd"]["paired_z_calibrated_better"]}
+        out[name] = {
+            "own_slope_goals": res["y_gd"]["calibrated"]["own_slope"],
+            "own_se": res["y_gd"]["calibrated"]["own_se"],
+            "paired_z_goals": res["y_gd"]["paired_z_calibrated_better"],
+            "paired_z_xg": res["y_xgd"]["paired_z_calibrated_better"],
+        }
     met = cfg.path(cfg.data.metrics_dir)
     (met / "cal_variants.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
     return out
@@ -45,4 +53,6 @@ def run() -> dict:
 
 if __name__ == "__main__":
     for k, v in run().items():
-        print(f"{k:42s} slope {v['own_slope_goals']:.2f} ± {v['own_se']:.2f}  z goals {v['paired_z_goals']:6.2f}  z xG {v['paired_z_xg']:6.2f}")
+        print(
+            f"{k:42s} slope {v['own_slope_goals']:.2f} ± {v['own_se']:.2f}  z goals {v['paired_z_goals']:6.2f}  z xG {v['paired_z_xg']:6.2f}"
+        )

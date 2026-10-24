@@ -198,16 +198,16 @@ skill, so the adjustment also removes some genuine skill; TO-RA is a like-for-li
    between consecutive seasons), which is why they inflate the stability of players who stay on one team. The
    adopted adjustment already captures this; the puck-dominance bias in allocation is a different problem that
    arena normalization does not address.
-8. **Role-adjusted turnover variant added at the model owner's request (2026-09-29, §8b).** Design and gates were written
+8. **Role-adjusted turnover variant added at the author's request (2026-09-29, §8b).** Design and gates were written
    before it was fitted. All three gates pass (RA-1 |r| 0.02 F / 0.01 D; RA-2 YOY 0.55 F / 0.45 D; RA-3 z = 15.7).
    Involvement explains 11% (F) and 6% (D) of the variance in the charge, so the effect is modest (rank correlation with
    TO 0.93 / 0.96; totals correlate 0.999; the mean change in total ranges from -0.06 goals for the least-involved quintile
    to +0.24 for the most-involved). With TO-RA substituted in the team-level regression R² is 0.473 (0.464 with TO) and
    the TO-RA slope is 2.19 ± 0.68. *(Superseded by deviation 9.)*
-9. **TO-RA became the default turnover component (model owner's decision, 2026-09-29).** The joint calibration
+9. **TO-RA became the default turnover component (author's decision, 2026-09-29).** The joint calibration
    (docs/calibration) found that a total with TO-RA predicts next-season within-team results much better than one with the
    original charge (paired z +8.9 goals). In the valuation layer `to_gar` is now TO-RA; the original charge is `to_gar_orig`
    and the total with it is `total_gar_to_orig`. TO-RA remains not accounting-consistent (§8b caveat). The turnover
-   component's forward slope is still negative, and the model owner plans to revisit turnover in the whole-model validation.
+   component's forward slope is still negative, and the author plans to revisit turnover in the whole-model validation.
 6. **Sensitivity analysis scope.** The regular/fringe cutoff sensitivity covers the possession, defense and
    finishing components; the turnover, faceoff and penalty replacement stays at the default cutoff.

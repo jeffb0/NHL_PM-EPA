@@ -32,8 +32,20 @@ from src.ingestion.nhl_api import read_gz
 log = logging.getLogger(__name__)
 
 KEEP_TYPES = {
-    "faceoff", "hit", "giveaway", "takeaway", "shot-on-goal", "missed-shot", "blocked-shot",
-    "goal", "penalty", "delayed-penalty", "stoppage", "period-start", "period-end", "game-end",
+    "faceoff",
+    "hit",
+    "giveaway",
+    "takeaway",
+    "shot-on-goal",
+    "missed-shot",
+    "blocked-shot",
+    "goal",
+    "penalty",
+    "delayed-penalty",
+    "stoppage",
+    "period-start",
+    "period-end",
+    "game-end",
 }
 SHOT_TYPES = {"shot-on-goal", "missed-shot", "blocked-shot", "goal"}
 UNBLOCKED = {"shot-on-goal", "missed-shot", "goal"}
@@ -59,13 +71,20 @@ def strength_expr() -> pl.Expr:
     """Vectorized ``strength_label`` over own/opp skater + goalie columns."""
     own, opp = pl.col("own_skaters"), pl.col("opp_skaters")
     return (
-        pl.when(own.is_null()).then(None)
-        .when((pl.col("own_goalie") == 0) | (pl.col("opp_goalie") == 0)).then(pl.lit("EN"))
-        .when((own == opp) & (own == 5)).then(pl.lit("5v5"))
-        .when((own == opp) & (own == 4)).then(pl.lit("4v4"))
-        .when((own == opp) & (own == 3)).then(pl.lit("3v3"))
-        .when(own == opp).then(pl.lit("other"))
-        .when(own > opp).then(pl.lit("PP"))
+        pl.when(own.is_null())
+        .then(None)
+        .when((pl.col("own_goalie") == 0) | (pl.col("opp_goalie") == 0))
+        .then(pl.lit("EN"))
+        .when((own == opp) & (own == 5))
+        .then(pl.lit("5v5"))
+        .when((own == opp) & (own == 4))
+        .then(pl.lit("4v4"))
+        .when((own == opp) & (own == 3))
+        .then(pl.lit("3v3"))
+        .when(own == opp)
+        .then(pl.lit("other"))
+        .when(own > opp)
+        .then(pl.lit("PP"))
         .otherwise(pl.lit("PK"))
     )
 
@@ -252,12 +271,11 @@ def infer_direction(ev: pl.DataFrame, games: pl.DataFrame) -> pl.DataFrame:
         g.filter(pl.col("home_defending_side").is_not_null())
         .group_by("game_id", "period")
         .agg(pl.col("home_defending_side").mode().first())
-        .with_columns(
-            pl.when(pl.col("home_defending_side") == "left").then(1).otherwise(-1).alias("side_sign")
-        )
+        .with_columns(pl.when(pl.col("home_defending_side") == "left").then(1).otherwise(-1).alias("side_sign"))
     )
     out = (
-        g.select("game_id", "period").unique()
+        g.select("game_id", "period")
+        .unique()
         .join(votes, on=["game_id", "period"], how="left")
         .join(side.select("game_id", "period", "side_sign"), on=["game_id", "period"], how="left")
         .with_columns(
@@ -292,10 +310,10 @@ def run(seasons: list[int] | None = None) -> None:
     ev = ev.join(games_df.select("game_id", "season", "home_id", "away_id"), on="game_id")
 
     direction = infer_direction(ev, games_df)
-    ev = ev.join(direction.select("game_id", "period", "home_attack_sign", "side_sign"), on=["game_id", "period"], how="left")
-    team_sign = (
-        pl.when(pl.col("is_home")).then(pl.col("home_attack_sign")).otherwise(-pl.col("home_attack_sign"))
+    ev = ev.join(
+        direction.select("game_id", "period", "home_attack_sign", "side_sign"), on=["game_id", "period"], how="left"
     )
+    team_sign = pl.when(pl.col("is_home")).then(pl.col("home_attack_sign")).otherwise(-pl.col("home_attack_sign"))
     own_sk = pl.when(pl.col("is_home")).then(pl.col("home_skaters")).otherwise(pl.col("away_skaters"))
     opp_sk = pl.when(pl.col("is_home")).then(pl.col("away_skaters")).otherwise(pl.col("home_skaters"))
     own_g = pl.when(pl.col("is_home")).then(pl.col("home_goalie")).otherwise(pl.col("away_goalie"))
@@ -327,7 +345,13 @@ def run(seasons: list[int] | None = None) -> None:
             js = read_gz(f)
             for grp in ("forwards", "defensemen", "goalies"):
                 for r in js.get(grp, []):
-                    hand.append({"player_id": r["id"], "shoots": r.get("shootsCatches"), "roster_position": r.get("positionCode")})
+                    hand.append(
+                        {
+                            "player_id": r["id"],
+                            "shoots": r.get("shootsCatches"),
+                            "roster_position": r.get("positionCode"),
+                        }
+                    )
     if hand:
         hdf = pl.DataFrame(hand).unique(subset=["player_id"], keep="last")
         pdf = pdf.join(hdf, on="player_id", how="left")
@@ -335,7 +359,9 @@ def run(seasons: list[int] | None = None) -> None:
     _quality_report(ev, direction, games_df, len(shifts), out_dir)
 
 
-def _quality_report(ev: pl.DataFrame, direction: pl.DataFrame, games: pl.DataFrame, n_shifts: int, out_dir: Path) -> None:
+def _quality_report(
+    ev: pl.DataFrame, direction: pl.DataFrame, games: pl.DataFrame, n_shifts: int, out_dir: Path
+) -> None:
     unb = ev.filter(pl.col("type").is_in(list(UNBLOCKED)) & pl.col("x").is_not_null())
     by_season = (
         ev.group_by("season")
@@ -346,7 +372,12 @@ def _quality_report(ev: pl.DataFrame, direction: pl.DataFrame, games: pl.DataFra
             (pl.col("type") == "takeaway").sum().alias("takeaways"),
             pl.col("type").is_in(list(SHOT_TYPES)).sum().alias("shot_attempts"),
             (pl.col("type") == "goal").sum().alias("goals"),
-            (pl.col("x_raw").is_null() & pl.col("type").is_in(list(SHOT_TYPES) + ["giveaway", "takeaway", "faceoff", "hit"])).mean().alias("pct_missing_coords"),
+            (
+                pl.col("x_raw").is_null()
+                & pl.col("type").is_in(list(SHOT_TYPES) + ["giveaway", "takeaway", "faceoff", "hit"])
+            )
+            .mean()
+            .alias("pct_missing_coords"),
         )
         .join(
             unb.group_by("season").agg((pl.col("x") > 0).mean().alias("pct_unblocked_in_attacking_half")),
@@ -354,7 +385,9 @@ def _quality_report(ev: pl.DataFrame, direction: pl.DataFrame, games: pl.DataFra
         )
         .sort("season")
     )
-    d = direction.filter(pl.col("side_sign").is_not_null() & pl.col("vote_sum").is_not_null() & (pl.col("vote_sum") != 0))
+    d = direction.filter(
+        pl.col("side_sign").is_not_null() & pl.col("vote_sum").is_not_null() & (pl.col("vote_sum") != 0)
+    )
     agree = (d["vote_sum"].sign() == d["side_sign"]).mean() if d.height else float("nan")
     lines = [
         "# Data quality report (auto-generated by src/ingestion/parse.py)",

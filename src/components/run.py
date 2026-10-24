@@ -1,6 +1,7 @@
 """Turnover, faceoff and penalty components:  python -m src.components.run [--only STEP ...]
 
-Steps: turnover -> turnover_ra -> faceoff -> penalty -> report. The integrated table is produced by ``python -m src.valuation.run``.
+Steps: turnover -> turnover_ra -> faceoff -> penalty -> report. The integrated table is produced by ``python -m
+src.valuation.run``.
 """
 
 from __future__ import annotations

@@ -17,18 +17,54 @@ POSS = SimpleNamespace(max_segment_gap_s=45, carry_max_gap_s=12)
 HOME_ON, AWAY_ON = [1, 2, 3, 4, 5], [21, 22, 23, 24, 25]
 
 
-def o(poss, seq, role, kind, player, t, v, x=0.0, y=0.0, v_cf=None, v_cf_unobs=0.0, team=10, start_link=None, ev=None, v_att=None):
+def o(
+    poss,
+    seq,
+    role,
+    kind,
+    player,
+    t,
+    v,
+    x=0.0,
+    y=0.0,
+    v_cf=None,
+    v_cf_unobs=0.0,
+    team=10,
+    start_link=None,
+    ev=None,
+    v_att=None,
+):
     return {
-        "poss_id": poss, "game_id": 1, "season": 2024, "team_id": team, "opp_team_id": 20 if team == 10 else 10,
-        "seq": seq, "role": role, "obs_kind": kind, "player_id": player, "t": float(t), "x": x, "y": y,
-        "strength": "5v5", "score_diff": 0, "event_idx": ev if ev is not None else poss * 10 + seq, "v": v,
-        "v_cf": v_cf, "v_cf_unobs": v_cf_unobs, "start_link": start_link, "v_att": v_att,
-        "onice": HOME_ON if team == 10 else AWAY_ON, "opp_onice": AWAY_ON if team == 10 else HOME_ON,
+        "poss_id": poss,
+        "game_id": 1,
+        "season": 2024,
+        "team_id": team,
+        "opp_team_id": 20 if team == 10 else 10,
+        "seq": seq,
+        "role": role,
+        "obs_kind": kind,
+        "player_id": player,
+        "t": float(t),
+        "x": x,
+        "y": y,
+        "strength": "5v5",
+        "score_diff": 0,
+        "event_idx": ev if ev is not None else poss * 10 + seq,
+        "v": v,
+        "v_cf": v_cf,
+        "v_cf_unobs": v_cf_unobs,
+        "start_link": start_link,
+        "v_att": v_att,
+        "onice": HOME_ON if team == 10 else AWAY_ON,
+        "opp_onice": AWAY_ON if team == 10 else HOME_ON,
     }
 
 
 def run(obs_rows, poss_rows, lam=1.0):
-    obs = pl.DataFrame(obs_rows, schema_overrides={"v_cf": pl.Float64, "start_link": pl.Int64, "player_id": pl.Int64, "v_att": pl.Float64})
+    obs = pl.DataFrame(
+        obs_rows,
+        schema_overrides={"v_cf": pl.Float64, "start_link": pl.Int64, "player_id": pl.Int64, "v_att": pl.Float64},
+    )
     poss = pl.DataFrame(poss_rows).with_columns(pl.lit(False).alias("excluded"))
     tr, cr = attribute(obs, poss, EPA, POSS, lam)
     return tr, cr, poss
@@ -50,7 +86,9 @@ def test_example1_steal_and_solo_carry_to_shot():
     assert total(cr, 1, "carry") == pytest.approx(0.040)
     assert total(cr, 1, "shot_attempt") == pytest.approx(0.015)
     assert total(cr, 1, "shot_quality") == pytest.approx(0.005)
-    pm = cr.filter((pl.col("player_id") == 1) & pl.col("component").is_in(["takeaway", "carry", "shot_attempt"]))["value"].sum()
+    pm = cr.filter((pl.col("player_id") == 1) & pl.col("component").is_in(["takeaway", "carry", "shot_attempt"]))[
+        "value"
+    ].sum()
     assert pm == pytest.approx(0.087)
     assert total(cr, 21, "takeaway_against") == pytest.approx(-0.032 / 5)
     assert total(cr, component="takeaway_against") == pytest.approx(-0.032)
@@ -79,7 +117,10 @@ def test_example3_faceoff_winner_gets_no_start_share():
 
 
 def test_example4_takeaway_then_own_zone_giveaway():
-    rows = [o(4, 0, "start", "takeaway", 1, 400, 0.010, v_cf=0.035), o(4, 1, "end", "giveaway", 1, 403, 0.008, v_cf=0.110)]
+    rows = [
+        o(4, 0, "start", "takeaway", 1, 400, 0.010, v_cf=0.035),
+        o(4, 1, "end", "giveaway", 1, 403, 0.008, v_cf=0.110),
+    ]
     _, cr, _ = run(rows, [{"poss_id": 4, "end_type": "giveaway", "G": 0.0}])
     assert total(cr, 1, "takeaway") == pytest.approx(0.045)
     assert total(cr, 1, "carry") == pytest.approx(-0.002)
@@ -135,15 +176,22 @@ def test_missing_shift_data_sends_pool_share_to_unattributed():
 
 def test_identity_components_sum_to_terminal_xg_when_lambda_zero():
     rows = [
-        o(1, 0, "start", "takeaway", 1, 100, 0.020, v_cf=0.012), o(1, 1, "end", "shot", 1, 106, 0.060, v_att=0.075),
-        o(2, 0, "start", "loose_opp_miss", None, 200, 0.015), o(2, 1, "end", "shot", 2, 214, 0.090, v_att=0.110),
-        o(4, 0, "start", "takeaway", 1, 400, 0.010, v_cf=0.035), o(4, 1, "end", "giveaway", 1, 403, 0.008, v_cf=0.110),
+        o(1, 0, "start", "takeaway", 1, 100, 0.020, v_cf=0.012),
+        o(1, 1, "end", "shot", 1, 106, 0.060, v_att=0.075),
+        o(2, 0, "start", "loose_opp_miss", None, 200, 0.015),
+        o(2, 1, "end", "shot", 2, 214, 0.090, v_att=0.110),
+        o(4, 0, "start", "takeaway", 1, 400, 0.010, v_cf=0.035),
+        o(4, 1, "end", "giveaway", 1, 403, 0.008, v_cf=0.110),
         o(6, 0, "start", "faceoff", 3, 600, 0.010),
         o(11, 0, "end", "shot", 4, 1100, 0.05),  # unobserved start
     ]
-    poss = [{"poss_id": 1, "end_type": "shot_sog", "G": 0.08}, {"poss_id": 2, "end_type": "shot_sog", "G": 0.12},
-            {"poss_id": 4, "end_type": "giveaway", "G": 0.0}, {"poss_id": 6, "end_type": "stoppage:icing", "G": 0.0},
-            {"poss_id": 11, "end_type": "shot_miss", "G": 0.07}]
+    poss = [
+        {"poss_id": 1, "end_type": "shot_sog", "G": 0.08},
+        {"poss_id": 2, "end_type": "shot_sog", "G": 0.12},
+        {"poss_id": 4, "end_type": "giveaway", "G": 0.0},
+        {"poss_id": 6, "end_type": "stoppage:icing", "G": 0.0},
+        {"poss_id": 11, "end_type": "shot_miss", "G": 0.07},
+    ]
     _, cr, p = run(rows, poss, lam=0.0)
     res = possession_identity_residual(cr, p)
     assert res["residual"].abs().max() < 1e-12
@@ -151,21 +199,33 @@ def test_identity_components_sum_to_terminal_xg_when_lambda_zero():
 
 def test_phase_tags_split_each_possession_into_start_move_terminal():
     rows = [
-        o(1, 0, "start", "takeaway", 1, 100, 0.020, v_cf=0.012), o(1, 1, "end", "shot", 1, 106, 0.060, v_att=0.075),
-        o(5, 0, "start", "rebound", None, 500, 0.20), o(5, 1, "end", "shot", 3, 502, 0.09, v_att=0.10),
+        o(1, 0, "start", "takeaway", 1, 100, 0.020, v_cf=0.012),
+        o(1, 1, "end", "shot", 1, 106, 0.060, v_att=0.075),
+        o(5, 0, "start", "rebound", None, 500, 0.20),
+        o(5, 1, "end", "shot", 3, 502, 0.09, v_att=0.10),
         o(11, 0, "end", "shot", 4, 1100, 0.05),  # unobserved start
-        o(20, 0, "start", "faceoff", 21, 0, 0.03, team=20), o(20, 1, "end", "lost_takeaway", None, 5, 0.012, team=20),
+        o(20, 0, "start", "faceoff", 21, 0, 0.03, team=20),
+        o(20, 1, "end", "lost_takeaway", None, 5, 0.012, team=20),
         o(21, 0, "start", "takeaway", 1, 5, 0.020, v_cf=0.012, start_link=20),
     ]
-    poss = [{"poss_id": 1, "end_type": "shot_sog", "G": 0.08}, {"poss_id": 5, "end_type": "goal", "G": 0.25},
-            {"poss_id": 11, "end_type": "shot_miss", "G": 0.07}, {"poss_id": 20, "end_type": "takeaway_against", "G": 0.0},
-            {"poss_id": 21, "end_type": "period_end", "G": 0.0}]
+    poss = [
+        {"poss_id": 1, "end_type": "shot_sog", "G": 0.08},
+        {"poss_id": 5, "end_type": "goal", "G": 0.25},
+        {"poss_id": 11, "end_type": "shot_miss", "G": 0.07},
+        {"poss_id": 20, "end_type": "takeaway_against", "G": 0.0},
+        {"poss_id": 21, "end_type": "period_end", "G": 0.0},
+    ]
     _, cr, _ = run(rows, poss, lam=0.0)
     ph = cr.group_by("poss_id", "phase").agg(pl.col("value").sum())
-    get = lambda p, f: ph.filter((pl.col("poss_id") == p) & (pl.col("phase") == f))["value"].sum()  # noqa: E731
+    get = lambda p, f: ph.filter((pl.col("poss_id") == p) & (pl.col("phase") == f))["value"].sum()
     assert set(cr["phase"].unique()) == {"start", "move", "terminal"}
-    assert get(1, "start") == pytest.approx(0.020) and get(1, "move") == pytest.approx(0.040) and get(1, "terminal") == pytest.approx(0.020)
-    assert get(5, "start") == pytest.approx(0.20) and get(5, "move") == pytest.approx(-0.11)  # rebound segment is movement
+    assert (
+        get(1, "start") == pytest.approx(0.020)
+        and get(1, "move") == pytest.approx(0.040)
+        and get(1, "terminal") == pytest.approx(0.020)
+    )
+    # rebound segment is movement
+    assert get(5, "start") == pytest.approx(0.20) and get(5, "move") == pytest.approx(-0.11)
     assert get(11, "start") == pytest.approx(0.05)  # unobserved start: value at first observation
     assert get(20, "terminal") == pytest.approx(-0.012)  # takeaway debit ends the loser's possession
 
@@ -176,7 +236,10 @@ def test_takeaway_swing_is_zero_sum_when_lambda_one():
         o(20, 1, "end", "lost_takeaway", None, 5, 0.012, team=20),
         o(21, 0, "start", "takeaway", 1, 5, 0.020, v_cf=0.012, start_link=20),
     ]
-    poss = [{"poss_id": 20, "end_type": "takeaway_against", "G": 0.0}, {"poss_id": 21, "end_type": "period_end", "G": 0.0}]
+    poss = [
+        {"poss_id": 20, "end_type": "takeaway_against", "G": 0.0},
+        {"poss_id": 21, "end_type": "period_end", "G": 0.0},
+    ]
     _, cr, _ = run(rows, poss)
     assert total(cr, component="takeaway") + total(cr, component="takeaway_against") == pytest.approx(0.0)
     # loser's debit is booked to the losing possession
@@ -186,10 +249,15 @@ def test_takeaway_swing_is_zero_sum_when_lambda_one():
 def test_exclusion_propagates_across_takeaway_links():
     from src.epa.run import propagate_exclusion
 
-    poss = pl.DataFrame({
-        "poss_id": [1, 2, 3, 4], "start_type": ["faceoff", "takeaway", "takeaway", "faceoff"],
-        "start_link": [None, 1, 2, None], "excluded": [False, False, True, False],
-    }, schema_overrides={"start_link": pl.Int64})
+    poss = pl.DataFrame(
+        {
+            "poss_id": [1, 2, 3, 4],
+            "start_type": ["faceoff", "takeaway", "takeaway", "faceoff"],
+            "start_link": [None, 1, 2, None],
+            "excluded": [False, False, True, False],
+        },
+        schema_overrides={"start_link": pl.Int64},
+    )
     out = propagate_exclusion(poss)
     assert out["excluded"].to_list() == [True, True, True, False]  # 3 excluded -> 2 -> 1 (chain)
 
@@ -200,6 +268,12 @@ def test_decision_terms_are_mean_zero_at_a_location():
     rows, poss = [], []
     for i, kind in enumerate(["shot", "shot", "giveaway", "giveaway"]):
         rows.append(o(30 + i, 0, "end", kind, 7, 10 * i, 0.05, v_att=0.10 if kind == "shot" else None, v_cf=0.0))
-        poss.append({"poss_id": 30 + i, "end_type": "shot_sog" if kind == "shot" else "giveaway", "G": 0.10 if kind == "shot" else 0.0})
+        poss.append(
+            {
+                "poss_id": 30 + i,
+                "end_type": "shot_sog" if kind == "shot" else "giveaway",
+                "G": 0.10 if kind == "shot" else 0.0,
+            }
+        )
     _, cr, _ = run(rows, poss, lam=0.0)
     assert total(cr, 7, "shot_attempt") + total(cr, 7, "giveaway") == pytest.approx(0.0)

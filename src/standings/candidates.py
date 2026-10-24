@@ -1,6 +1,8 @@
-"""Candidate improvements to the player-to-team forecast:  python -m src.standings.candidates   (docs/standings/improvements.md).
+"""Candidate improvements to the player-to-team forecast:  python -m src.standings.candidates
+(docs/standings/improvements.md).
 
-C1 portable team residual, C2 aggregation-consistent fine-tuning, C3 deployment-aware minutes; scored on the standings backtest against M1."""
+C1 portable team residual, C2 aggregation-consistent fine-tuning, C3 deployment-aware minutes; scored on the standings
+backtest against M1."""
 
 from __future__ import annotations
 
@@ -27,30 +29,59 @@ AGG_COLS = [f"{g}_{f}" for g in ("F", "D") for f in AGG]
 
 # ---------------------------------------------------------------- C1: portable team residual
 def team_residual(proc, p: pl.DataFrame, res: pl.DataFrame) -> pl.DataFrame:
-    """Per (season, team): R = actual goal differential minus the season's own skater value and realised goals saved above expected (demeaned within season);
+    """Per (season, team): R = actual goal differential minus the season's own skater value and realised goals saved
+    above expected (demeaned within season);
     rho = R per skater-minute. Uses only that season's data."""
-    sk = p.group_by("season", "team").agg((pl.col("r_total") * pl.col("m") / 60).sum().alias("Sc"), pl.col("m").sum().alias("M"))
-    gs = pl.read_parquet(proc / "gk_shots.parquet", columns=["season", "team_id", "goal", "xg_f"]).group_by("season", "team_id").agg((pl.col("xg_f") - pl.col("goal")).sum().alias("Gc"))
-    r = (res.select("season", "team_id", "team", "gd").join(sk, on=["season", "team"], how="left").join(gs.with_columns(pl.col("team_id").cast(res["team_id"].dtype)), on=["season", "team_id"], how="left")
-         .with_columns(pl.col("Gc").fill_null(0.0), pl.col("Sc").fill_null(0.0)))
-    r = r.with_columns((pl.col("Sc") + pl.col("Gc")).alias("SGc")).with_columns((pl.col("gd") - (pl.col("SGc") - pl.col("SGc").mean().over("season"))).alias("R"))
+    sk = p.group_by("season", "team").agg(
+        (pl.col("r_total") * pl.col("m") / 60).sum().alias("Sc"), pl.col("m").sum().alias("M")
+    )
+    gs = (
+        pl.read_parquet(proc / "gk_shots.parquet", columns=["season", "team_id", "goal", "xg_f"])
+        .group_by("season", "team_id")
+        .agg((pl.col("xg_f") - pl.col("goal")).sum().alias("Gc"))
+    )
+    r = (
+        res.select("season", "team_id", "team", "gd")
+        .join(sk, on=["season", "team"], how="left")
+        .join(gs.with_columns(pl.col("team_id").cast(res["team_id"].dtype)), on=["season", "team_id"], how="left")
+        .with_columns(pl.col("Gc").fill_null(0.0), pl.col("Sc").fill_null(0.0))
+    )
+    r = r.with_columns((pl.col("Sc") + pl.col("Gc")).alias("SGc")).with_columns(
+        (pl.col("gd") - (pl.col("SGc") - pl.col("SGc").mean().over("season"))).alias("R")
+    )
     return r.select("season", "team", "R", "M", (pl.col("R") / pl.col("M")).alias("rho"))
 
 
 def carried_residual(alloc: pl.DataFrame, p: pl.DataFrame, resid: pl.DataFrame, T: int) -> pl.DataFrame:
-    """Per team: sum over the roster of (last season's team residual per skater-minute of the player's team) x projected minutes."""
-    prev = p.filter(pl.col("season") == T - 1).select("player_id", "team").join(resid.filter(pl.col("season") == T - 1).select("team", "rho"), on="team", how="left")
-    a = alloc.join(prev.select("player_id", "rho"), on="player_id", how="left").with_columns(pl.col("rho").fill_null(0.0))
+    """Per team: sum over the roster of (last season's team residual per skater-minute of the player's team) x projected
+    minutes."""
+    prev = (
+        p.filter(pl.col("season") == T - 1)
+        .select("player_id", "team")
+        .join(resid.filter(pl.col("season") == T - 1).select("team", "rho"), on="team", how="left")
+    )
+    a = alloc.join(prev.select("player_id", "rho"), on="player_id", how="left").with_columns(
+        pl.col("rho").fill_null(0.0)
+    )
     return a.group_by("team_id").agg((pl.col("rho") * pl.col("mins")).sum().alias("Rc"))
 
 
 # ---------------------------------------------------------------- C2: aggregated features
 def aggregate(alloc: pl.DataFrame) -> pl.DataFrame:
     ab = pm.age_basis(alloc["age"].to_numpy())
-    a = alloc.with_columns(*[pl.Series(n, ab[:, i]) for i, n in enumerate(("age_lin", "age_h24", "age_h28", "age_h32"))])
+    a = alloc.with_columns(
+        *[pl.Series(n, ab[:, i]) for i, n in enumerate(("age_lin", "age_h24", "age_h28", "age_h32"))]
+    )
     long = a.group_by("team_id", "pos_group").agg(*[(pl.col(f) * pl.col("mins") / 60).sum().alias(f) for f in AGG])
-    parts = [long.filter(pl.col("pos_group") == g).select("team_id", *[pl.col(f).alias(f"{g}_{f}") for f in AGG]) for g in ("F", "D")]
-    return parts[0].join(parts[1], on="team_id", how="full", coalesce=True).with_columns([pl.col(c).fill_null(0.0) for c in AGG_COLS])
+    parts = [
+        long.filter(pl.col("pos_group") == g).select("team_id", *[pl.col(f).alias(f"{g}_{f}") for f in AGG])
+        for g in ("F", "D")
+    ]
+    return (
+        parts[0]
+        .join(parts[1], on="team_id", how="full", coalesce=True)
+        .with_columns([pl.col(c).fill_null(0.0) for c in AGG_COLS])
+    )
 
 
 # ---------------------------------------------------------------- C3: deployment-aware minutes
@@ -59,7 +90,9 @@ def _mx3(d: pl.DataFrame) -> np.ndarray:
 
 
 def minutes_fit_c3(tr: pl.DataFrame) -> dict:
-    tr = tr.with_columns((pl.col("rt_total") - pl.col("rt_total").mean().over("season", "team", "pos_group")).alias("rt_dev"))
+    tr = tr.with_columns(
+        (pl.col("rt_total") - pl.col("rt_total").mean().over("season", "team", "pos_group")).alias("rt_dev")
+    )
     out = {}
     for g in ("F", "D"):
         d = tr.filter(pl.col("pos_group") == g)
@@ -79,15 +112,30 @@ def minutes_pred_c3(models: dict, d: pl.DataFrame) -> np.ndarray:
 
 
 def share_error(alloc: pl.DataFrame, p: pl.DataFrame, T: int, ab: pl.DataFrame) -> float:
-    """Mean absolute error of each kept player's projected share of his team-position minutes against his actual share (0 if he did not play for that team)."""
+    """Mean absolute error of each kept player's projected share of his team-position minutes against his actual share
+    (0 if he did not play for that team)."""
     act = p.filter(pl.col("season") == T).select("player_id", "team", pl.col("m").alias("m_act"))
-    a = alloc.join(ab, on="team_id").join(act, on=["player_id", "team"], how="left").with_columns(pl.col("m_act").fill_null(0.0))
-    a = a.with_columns((pl.col("mins") / pl.col("mins").sum().over("team_id", "pos_group")).alias("s_hat"), (pl.col("m_act") / pl.col("m_act").sum().over("team_id", "pos_group")).alias("s_act"))
+    a = (
+        alloc.join(ab, on="team_id")
+        .join(act, on=["player_id", "team"], how="left")
+        .with_columns(pl.col("m_act").fill_null(0.0))
+    )
+    a = a.with_columns(
+        (pl.col("mins") / pl.col("mins").sum().over("team_id", "pos_group")).alias("s_hat"),
+        (pl.col("m_act") / pl.col("m_act").sum().over("team_id", "pos_group")).alias("s_act"),
+    )
     return float((a["s_hat"] - a["s_act"]).abs().mean())
 
 
 # ---------------------------------------------------------------- build and evaluate
-def build(proc, cfg, seasons: list[int], yp: pl.DataFrame | None = None, kappa: dict | None = None, resid: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
+def build(
+    proc,
+    cfg,
+    seasons: list[int],
+    yp: pl.DataFrame | None = None,
+    kappa: dict | None = None,
+    resid: pl.DataFrame | None = None,
+) -> tuple[pl.DataFrame, dict]:
     roll = pl.read_parquet(proc / "wm_rolling_values.parquet")
     p = rescale(pd_.panel(proc, roll), kappa)
     bio = pd_.player_bio(proc, cfg.path(cfg.data.raw_dir))
@@ -139,23 +187,36 @@ def evaluate(df: pl.DataFrame) -> tuple[pl.DataFrame, dict]:
         tr_f = act.filter((pl.col("season") < T) & pl.col("SG_dm").is_not_null())
         te = act.filter(pl.col("season") == T)
         a, b = sr.ols(tr_all["gd82"].to_numpy()[:, None], tr_all["pts82"].to_numpy())
-        pts = lambda gd, a=a, b=b: a + b * gd                                           # noqa: E731
+        pts = lambda gd, a=a, b=b: a + b * gd
         out = te.select("season", "team_id", "team", "pts82")
-        # C1: one coefficient on the carried residual, fitted on the residual of M1 (in goals) in earlier forecast seasons
+
+        # C1: one coefficient on the carried residual, fitted on the residual of M1 (in goals) in earlier forecast
+        # seasons
         def c_fit(base: str, rc: str, tr=tr_f, a=a, b=b) -> float:
             y = (tr["pts82"].to_numpy() - (a + b * tr[base].to_numpy())) / b
             x = tr[rc].to_numpy()
             return float((x * y).sum() / (x * x).sum())
+
         c1 = c_fit("SG_dm", "Rc_dm")
         c13 = c_fit("SG3_dm", "Rc3_dm")
         fitted["c1"][T], fitted["c13"][T] = c1, c13
         # C2: ridge on aggregated player features toward the player model (target: goal differential residual per 82)
-        Xtr, Xte = tr_f.select([f"{c}_dm" for c in AGG_COLS]).to_numpy(), te.select([f"{c}_dm" for c in AGG_COLS]).to_numpy()
+        Xtr, Xte = (
+            tr_f.select([f"{c}_dm" for c in AGG_COLS]).to_numpy(),
+            te.select([f"{c}_dm" for c in AGG_COLS]).to_numpy(),
+        )
         rg = _ridge_cv(Xtr, tr_f["gd82"].to_numpy() - tr_f["SG_dm"].to_numpy(), tr_f["season"].to_numpy())
         fitted["c2_lambda"][T] = rg.lam
-        corr = rg.predict(Xte) - rg.ybar                                                  # the correction is centred: the season's mean correction is zero
-        preds = {"M1": pts(te["SG_dm"].to_numpy()), "C1": pts(te["SG_dm"].to_numpy() + c1 * te["Rc_dm"].to_numpy()), "C2": pts(te["SG_dm"].to_numpy() + corr),
-                 "C3": pts(te["SG3_dm"].to_numpy()), "C1_C3": pts(te["SG3_dm"].to_numpy() + c13 * te["Rc3_dm"].to_numpy()), "C1_fixed1": pts(te["SG_dm"].to_numpy() + te["Rc_dm"].to_numpy())}
+        # the correction is centred: the season's mean correction is zero
+        corr = rg.predict(Xte) - rg.ybar
+        preds = {
+            "M1": pts(te["SG_dm"].to_numpy()),
+            "C1": pts(te["SG_dm"].to_numpy() + c1 * te["Rc_dm"].to_numpy()),
+            "C2": pts(te["SG_dm"].to_numpy() + corr),
+            "C3": pts(te["SG3_dm"].to_numpy()),
+            "C1_C3": pts(te["SG3_dm"].to_numpy() + c13 * te["Rc3_dm"].to_numpy()),
+            "C1_fixed1": pts(te["SG_dm"].to_numpy() + te["Rc_dm"].to_numpy()),
+        }
         rows.append(out.with_columns(*[pl.Series(k, v) for k, v in preds.items()]))
     return pl.concat(rows), fitted
 
@@ -170,8 +231,14 @@ def score(e: pl.DataFrame) -> dict:
     out["z_vs_B2"] = {k: sr._z(err[k], err["B2"]) for k in names if k != "B2"}
     out["z_vs_M3"] = {k: sr._z(err[k], err["M3"]) for k in names if k != "M3"}
     seas = e["season"].to_numpy()
-    out["rmse_by_season"] = {str(T): {k: float(np.sqrt((err[k][seas == T] ** 2).mean())) for k in names} for T in sr.TEST_SEASONS}
-    out["seasons_beating_M1"] = {k: int(sum(out["rmse_by_season"][str(T)][k] < out["rmse_by_season"][str(T)]["M1"] for T in sr.TEST_SEASONS)) for k in names if k != "M1"}
+    out["rmse_by_season"] = {
+        str(T): {k: float(np.sqrt((err[k][seas == T] ** 2).mean())) for k in names} for T in sr.TEST_SEASONS
+    }
+    out["seasons_beating_M1"] = {
+        k: int(sum(out["rmse_by_season"][str(T)][k] < out["rmse_by_season"][str(T)]["M1"] for T in sr.TEST_SEASONS))
+        for k in names
+        if k != "M1"
+    }
     cal = {}
     for k in names:
         x = e[k].to_numpy()
@@ -193,15 +260,25 @@ def decide(z: float, sound: bool) -> bool:
     return False
 
 
-def assemble(proc, cfg, yp: pl.DataFrame | None = None, kappa: dict | None = None, resid: pl.DataFrame | None = None) -> tuple[pl.DataFrame, dict]:
-    """Team-season table with every candidate's inputs. With ``yp`` (docs/prospects) or ``kappa`` (docs/possession) the skater sums use the modified rate model, and M1's sum is rebuilt from them."""
+def assemble(
+    proc, cfg, yp: pl.DataFrame | None = None, kappa: dict | None = None, resid: pl.DataFrame | None = None
+) -> tuple[pl.DataFrame, dict]:
+    """Team-season table with every candidate's inputs. With ``yp`` (docs/prospects) or ``kappa`` (docs/possession) the
+    skater sums use the modified rate model, and M1's sum is rebuilt from them."""
     tab = pl.read_parquet(proc / "standings_table.parquet")
     cand, diag = build(proc, cfg, sr.FORECAST_SEASONS, yp, kappa, resid)
-    df = tab.select("season", "team_id", "team", "gp", "pts82", "gd82", "S", "G", "SG_dm").join(cand.drop("team"), on=["season", "team_id"], how="left", suffix="_c")
+    df = tab.select("season", "team_id", "team", "gp", "pts82", "gd82", "S", "G", "SG_dm").join(
+        cand.drop("team"), on=["season", "team_id"], how="left", suffix="_c"
+    )
     chk = df.filter(pl.col("S").is_not_null())
-    diag["max_abs_S_diff_vs_backtest"] = float((chk["S"] - chk["S_c"]).abs().max())          # zero without yp: the reference M1 is reproduced exactly
+    # zero without yp: the reference M1 is reproduced exactly
+    diag["max_abs_S_diff_vs_backtest"] = float((chk["S"] - chk["S_c"]).abs().max())
     if yp is not None or kappa:
-        df = df.with_columns((pl.col("S_c") + pl.col("G")).alias("_sg")).with_columns((pl.col("_sg") - pl.col("_sg").mean().over("season")).alias("SG_dm")).drop("_sg")
+        df = (
+            df.with_columns((pl.col("S_c") + pl.col("G")).alias("_sg"))
+            .with_columns((pl.col("_sg") - pl.col("_sg").mean().over("season")).alias("SG_dm"))
+            .drop("_sg")
+        )
     df = df.with_columns((pl.col("S_c3") + pl.col("G")).alias("SG3"))
     for c in ["SG3", "Rc", "Rc3", *AGG_COLS]:
         df = df.with_columns((pl.col(c) - pl.col(c).mean().over("season")).alias(f"{c}_dm"))
@@ -214,14 +291,20 @@ def run() -> dict:
     met = cfg.path(cfg.data.metrics_dir)
     outdir = cfg.path(cfg.data.output_dir)
     df, diag = assemble(proc, cfg)
-    df.write_parquet(proc / "standings_candidates_table.parquet")                 # the 2026 forecast fits C1's coefficient on it
+    # the 2026 forecast fits C1's coefficient on it
+    df.write_parquet(proc / "standings_candidates_table.parquet")
     e, fitted = evaluate(df)
-    base = pl.read_csv(outdir / "standings_backtest.csv").select("season", "team_id", "B2", "M3", pl.col("M1").alias("M1_ref"))
+    base = pl.read_csv(outdir / "standings_backtest.csv").select(
+        "season", "team_id", "B2", "M3", pl.col("M1").alias("M1_ref")
+    )
     e = e.join(base, on=["season", "team_id"])
     diag["max_abs_M1_diff_vs_backtest"] = float((e["M1"] - e["M1_ref"]).abs().max())
     s = score(e)
     s["fitted"], s["diagnostics"] = fitted, diag
-    s["decision"] = {k: {"z_vs_M1": s["z_vs_M1"][k], "sound_a_priori": SOUND[k], "implement": decide(s["z_vs_M1"][k], SOUND[k])} for k in ("C1", "C2", "C3")}
+    s["decision"] = {
+        k: {"z_vs_M1": s["z_vs_M1"][k], "sound_a_priori": SOUND[k], "implement": decide(s["z_vs_M1"][k], SOUND[k])}
+        for k in ("C1", "C2", "C3")
+    }
     e.drop("M1_ref").write_csv(outdir / "standings_candidates_backtest.csv")
     (met / "standings_candidates.json").write_text(json.dumps(s, indent=2, default=float), encoding="utf-8")
     log.info("RMSE %s", {k: round(v, 2) for k, v in s["rmse"].items()})

@@ -1,12 +1,20 @@
-# PM-EPA — Puck-Movement Expected Goals Added
+# PM-EPA: Puck-Movement Expected Goals Added
 
-**PM-EPA** measures how many expected goals a skater adds by changing the state of the puck while his team has it (moving it, winning it, or losing it), against the value of the state his team had before. It is the hockey analogue of NFL EPA (Expected Points Added), built end-to-end from public NHL play-by-play for the 2017-18 → 2025-26 regular seasons (11,052 games).
+An NHL player-valuation and forecasting model built end-to-end from public play-by-play (2017-18 to 2025-26 regular seasons, 11,052 games), plus the tools that run it on the current season.
+
+At its core, **PM-EPA** measures how many expected goals a skater adds by changing the state of the puck while his team has it (moving it, winning it or losing it), against the value of the state his team had before. It is the hockey analogue of NFL EPA:
 
 ```
 PM-EPA(action) = V(state after) − V(state before)        V = expected goals the possession will produce
 ```
 
-> **Read this first.** Public NHL play-by-play records faceoffs, hits, takeaways, giveaways, shots and stoppages, but **no passes, carries or zone entries.** PM-EPA therefore observes puck movement only *between* recorded events. It credits visible endpoints (the player who takes the puck away, carries it himself, shoots, or gives it away) and splits unobserved movement between those players and the teammates on the ice. The engine is ready for tracking-grade event data. Until then, treat PM-EPA as a **transition and possession-value metric with partially pooled credit**, not a pass-by-pass ledger. Details: [limitations](docs/pm_epa/limitations.md).
+Around it sit further components (defense, finishing, turnovers, faceoffs, penalties, special teams, goaltending) on one goals-above-replacement scale, a projection and aging layer, team and game forecasts, and a daily pipeline for the live season.
+
+> **Read this first.** Public NHL play-by-play records faceoffs, hits, takeaways, giveaways, shots and stoppages, but **no passes, carries or zone entries.** PM-EPA therefore observes puck movement only *between* recorded events. It credits visible endpoints (the player who takes the puck away, carries it himself, shoots or gives it away) and splits unobserved movement between those players and the teammates on the ice. Treat it as a **transition and possession-value metric with partially pooled credit**, not a pass-by-pass ledger. Details: [limitations](docs/pm_epa/limitations.md).
+
+## How the work is done
+
+Every model change follows the same discipline: the hypothesis, test and adoption rule are written down *before* the result is seen (each `docs/<topic>/methodology.md` is a pre-registration), gates are reported rather than tuned, and any change after the fact is logged as a deviation. Many of the ideas tested here did not survive; those results are kept and summarised below alongside the ones that did.
 
 ## Headline results
 
@@ -28,33 +36,24 @@ PM-EPA(action) = V(state after) − V(state before)        V = expected goals th
 * **Forwards:** elite play-drivers (Matthews, McDavid, Jack Hughes, Crosby, Point, Hischier) sit alongside high-motor retrieval and net-front forwards (Hyman, Hagel, Brady Tkachuk). This is a *transition/possession* metric, so pass-first playmakers rank lower than in points-based stats.
 <!-- END HEADLINE -->
 
-Full evidence: [`reports/validation_report.md`](reports/validation_report.md) · model card: [`reports/model_card.md`](reports/model_card.md).
+Full evidence: [validation report](reports/validation_report.md) · [model card](reports/model_card.md).
 
-## How it works (one screen)
+## How PM-EPA works
 
-1. **Possessions.** Each game's event stream becomes 1.93M possessions. A possession starts with a faceoff win, a takeaway, or an inferred loose-puck recovery, and ends with a shot, giveaway, loss or stoppage. ([definitions §3](docs/pm_epa/definitions.md))
-2. **Shot xG.** A gradient-boosted shot model (distance, angle, type, rebound, rush, prior event, strength, off-wing…) is cross-fitted by season; AUC 0.77, calibration 1.01.
-3. **Two value functions**, both in expected goals and never in goals:
-   * **V_start(s):** what a possession is worth once the team *gains* the puck in state s. State = location × how it was gained × strength × score.
-   * **V_dec(s):** the average outcome of possessions whose *terminal decision* (shoot, or lose the puck) happens at s. This is the analogue of NFL EP at the snap.
+1. **Possessions.** Each game's event stream becomes possessions (1.93M in all). A possession starts with a faceoff win, a takeaway or an inferred loose-puck recovery, and ends with a shot, giveaway, loss or stoppage ([definitions §3](docs/pm_epa/definitions.md)).
+2. **Shot xG.** A gradient-boosted shot model (distance, angle, type, rebound, rush, prior event, strength, off-wing and more), cross-fitted by season.
+3. **Two value functions**, both in expected goals, never in goals:
+   * **V_start(s):** what a possession is worth once the team *gains* the puck in state s (location × how it was gained × strength × score).
+   * **V_dec(s):** the average outcome of possessions whose *terminal decision* (shoot, or lose the puck) happens at s; the analogue of NFL expected points at the snap.
 4. **Credit.**
-   * Movement Δ = V_dec(where the possession got to) − V_start(where it began).
-     * Same player at both ends → 100% to him (observed carry).
-     * Otherwise 35% to the start player, 35% to the end player, 30% to the on-ice skaters.
-   * Takeaways earn the value of the state they create.
-   * Giveaways cost the value of the decision point they wasted.
-   * A shot earns only its *attempt* value, V_att − V_dec: getting a shot off rather than losing the puck. The *quality* of the release (xG − V_att) is excluded, and goals never count.
-5. **Validation as a gate.**
-   * Calibration and year-over-year stability, including a team-changer subset.
-   * Split-half reliability; convergent and discriminant correlations.
-   * RAPM alignment; team-level sums; ablations.
-   * An exact accounting identity: each possession's components sum to its xG.
+   * Movement Δ = V_dec(where the possession got to) − V_start(where it began). Same player at both ends: 100% to him (an observed carry). Otherwise 35% to the start player, 35% to the end player, 30% to the on-ice skaters.
+   * Takeaways earn the value of the state they create; giveaways cost the value of the decision point they wasted.
+   * A shot earns only its *attempt* value, V_att − V_dec. The quality of the release (xG − V_att) is excluded, and goals never count.
+5. **Validation as a gate:** calibration, year-over-year stability (including players who changed teams), split-half reliability, convergent and discriminant correlations, RAPM alignment, team-level sums, ablations, and an exact accounting identity.
 
-Every design choice (grid, shrinkage, λ, credit shares) was set by a protocol written *before* seeing its result. The first build failed face validity, with stars at the bottom. It was diagnosed and fixed in the open: see the [Phase 6 summary](docs/pm_epa/phase_summaries/phase_6_summary.md).
+The first build failed face validity (stars at the bottom); the diagnosis and fix are in the [Phase 6 summary](docs/pm_epa/phase_summaries/phase_6_summary.md).
 
-## Worked example (production settings, λ = 0)
-
-A forward steals the puck in the neutral zone. V_start = 0.020. Six seconds later he shoots from the high slot himself: V_dec there = 0.060, a typical attempt from there V_att = 0.075, and this shot's xG = 0.080.
+**Worked example (production settings, λ = 0).** A forward steals the puck in the neutral zone (V_start = 0.020). Six seconds later he shoots from the high slot himself: V_dec there = 0.060, a typical attempt from there V_att = 0.075, and this shot's xG = 0.080.
 
 | component | value (xG) |
 |---|---|
@@ -64,302 +63,140 @@ A forward steals the puck in the neutral zone. V_start = 0.020. Six seconds late
 | **PM-EPA** | **+0.075** |
 | *shot quality 0.080 − 0.075 (excluded)* | *(+0.005)* |
 
-More examples, including real 2025-26 possessions: [`docs/pm_epa/attribution_examples.md`](docs/pm_epa/attribution_examples.md).
+More examples, including real 2025-26 possessions: [attribution examples](docs/pm_epa/attribution_examples.md).
 
 ## Quickstart
 
-Requires Python 3.11 (installed automatically by [`uv`](https://github.com/astral-sh/uv)) and ~1 GB of disk. No API keys are needed.
+Requires Python 3.11 (installed by [`uv`](https://github.com/astral-sh/uv)) and about 1 GB of disk. No API keys are needed.
 
 ```bash
-make install
+make install    # create .venv and install the pinned requirements
+make smoke      # full pipeline on 50 games in about a minute, in isolated output directories
+make all        # ingest 9 seasons (about 15 min, cached afterwards), then the pipeline, tests and notebooks
+make test       # unit tests
 ```
+
+Individual steps: `python -m src.pipeline --only xg value epa metrics`, or `--from value`. All tunables live in [`config.yaml`](config.yaml) (validated by `src/config.py`).
+
+## The player valuation
+
+Each component is a separate, separately validated model, and all of them sit on one goals-above-replacement scale (5.90 goals per win, estimated from the data).
+
+| Component | What it measures | Key validation | Docs |
+|---|---|---|---|
+| **PM-EPA** (possession) | value added by moving, winning and losing the puck | see headline results | [methodology](docs/pm_epa/methodology.md) |
+| **DPM** (defense) | 5v5 xG against prevented per 60: prior-chained stint RAPM, with an exact breakdown of *how* from the possession ledger | next-season xGA ΔMSE −0.048 (≈ 6.8 SE); YOY F 0.41, D 0.38 | [methodology](docs/defense/methodology.md) · [report](reports/defense/validation_report.md) |
+| **FIN** (finishing) | goals above a finishing-only xG, from a hierarchical shooter/goalie model checked against full-Bayes NUTS | next-season log loss z = +7.2 (raw G/xG is *worse* than no player information) | [methodology](docs/finishing/methodology.md) · [report](reports/finishing/validation_report.md) |
+| **Turnovers** | the opponent's possession value after a player's turnovers, role-adjusted (TO-RA) | adds to team goal differential (PM-EPA slope 1.68 → 1.05) | [methodology](docs/components/methodology.md) · [report](reports/components/validation_report.md) |
+| **Faceoffs** | taker skill, valued by the ledger's start values | z = 24.5 vs no taker; a win is worth 0.0245 xG | same |
+| **Penalties** | drawing and taking, by the net xG of the man advantage | 0.175 xG per 5v5 minor; both repeatable (YOY 0.48, 0.52) | same |
+| **Special teams** | PP, PK, 4v4 and 3v3: strength-specific RAPM plus finishing in that state | beats the baseline out of sample (PP/PK z = 6.6); PP fails YOY for defensemen (0.18) | [methodology](docs/specialteams/methodology.md) · [report](reports/specialteams/validation_report.md) |
+| **Goaltending** | goals above replacement from a logistic mixed model on unblocked shots | beats the goalie-free baseline (z = 2.75); single-season YOY 0.13 (gate 0.15) | [methodology](docs/goaltending/methodology.md) · [report](reports/goaltending/validation_report.md) |
+
+**Combining them.** A joint calibration asked whether every component is worth one goal per goal. Team-level slopes on shrunk components mostly reflect shrinkage compression, not scale error, and with goaltending included the pre-registered adoption test fails (z = 1.58), so **all weights stay at 1** ([report](reports/calibration/validation_report_all_gk.md)). Position-specific weights are published as a variant. The preferred skater total, `total_gar_all_tr`, adds an on-ice transition term by an explicit judgment call that overrides its failed gates ([decision log](docs/transition/methodology.md)). `data/outputs/player_value_all_in.csv` stacks skaters and goalies in one table.
+
+**Does it explain teams?** The total predicts next-season team goal differential well against a goalie-only baseline (out-of-sample R² 0.33, z = 4.6, better in all six test seasons) but is **no better than a team's own prior goal differential** (RMSE 39.9 vs 39.4) and is leakage-sensitive; read it as a decomposition of team results into player credit, not a forecast that beats recent results ([report](reports/wholemodel/validation_report.md)).
+
+## Forecasting
+
+| Model | What it does | Result | Docs |
+|---|---|---|---|
+| **Projection and aging** | each skater's rate one to three seasons ahead with 80% intervals; position-specific aging curves | beats Marcel (z = 5.2) and age terms help (z = 4.7); **fails at team level** against last season's rates (z = −2.75) | [methodology](docs/projection/methodology.md) · [report](reports/projection/validation_report.md) |
+| **Standings** | bottom-up points per 82 from opening-night rosters: projected rates × projected minutes, plus a portable team residual and deployment-aware minutes | RMSE 13.96 points over 2021–2025, against 13.70 for last season's goal differential: parity, not an improvement | [methodology](docs/standings/methodology.md) · [results](reports/standings/candidates_narrative.md) · [2026-27 forecast](reports/standings/forecast_2026.md) |
+| **Game model** | every skater's rating starts at his projection and is updated after each game from the expected-goal surprise, by ice time; goalies update by shots | log loss 0.6585 on 6,502 games vs 0.6613 for a tuned team rating (z = 1.99); in-season updating z = 5.7; player attribution z = 2.4 | [methodology](docs/gamemodel/methodology.md) · [report](reports/gamemodel/validation_report.md) |
+
+## Experiments
+
+Every study below was pre-registered with its adoption rule. "Adopted" means it is used by the published model.
+
+| Study | Question | Result | Status |
+|---|---|---|---|
+| [Pre-NHL priors](reports/prospects/narrative.md) | Do league-translated junior/college/European numbers and draft slot help young players' projections? | players z = 2.62; no team-level gain | adopted |
+| [Elite-prospect priors](reports/prospects/elite_narrative.md) | Do top picks debuting at 18 deserve a large premium? | no: they averaged about a generic rookie; no forecast gain | adopted (no harm) |
+| [Early-sample updating](reports/prospects/hybrid_narrative.md) | How fast should a young player's own games move his rating? | reliable from 5 games (z = 2.25), 40 games z = 4.57 | adopted |
+| [Score effects](reports/scoreeffects/narrative.md) | Should chances be re-weighted by score state? | small at 5v5 except teams trailing in the third; team-rating gain z = 2.84 | adopted |
+| [Chemistry](reports/chemistry/narrative.md) | Do players have pairwise synergy beyond their individual value? | no (z = −2.66; synergies uncorrelated across windows) | not adopted |
+| [Possession scale](reports/possession/narrative.md) | Is the possession component under-scaled? | tuning chose no rescaling | not adopted |
+| [Team residual](reports/residual/narrative.md) | What is the part of team results the components miss? | 45% is 5v5 play that is ranked right but under-scaled | descriptive |
+| [5v5 de-shrinkage](reports/deshrink/narrative.md) | Does scaling the 5v5 block fix that? | no: every comparison slightly worse | not adopted |
+| [Team context](reports/teamcontext/validation_report.md) | How much of a player's value travels to a new team? | 74% with chain-free components; destination context helps movers' projections (z = 5.1) | adopted in the projection |
+| [Chain-free components](reports/chainfree/validation_report.md) | Is persistence an artefact of chained priors? | partly (defense YOY 0.78 → 0.30) but it does not fix team-level forecasts | variant published |
+| [NHL EDGE tracking](reports/edge/validation_report.md) | Do skating-speed and distance data improve projections? | no (z = −0.63); physical decline is already in the value history | not adopted |
+| [Rest and travel](reports/schedule/narrative.md) | Do rest days, travel, time zones or road trips matter beyond back-to-backs? | no (z −1.6 to +0.2) | not adopted |
+| [Situational "angles"](reports/angles/narrative.md) | Do 19 broadcaster and betting-trend situations (revenge, letdown, streaks…) predict anything? | no (joint p = 0.94) | not adopted |
+| [Model structure](reports/structure/narrative.md) | Team layer, shot volume, tired or rusty goalies, home ice by team, star power? | none improves forecasts out of sample | not adopted |
+| [Day-of information](reports/infoquality/narrative.md) | How much are confirmed lineups and starters worth to the model? | almost nothing (goalie term worth 0.0005 log loss) | descriptive |
+
+## The live season
+
+The trained models are applied to the current season without refitting anything.
 
 ```bash
-make smoke
+python -m src.live.update 2026                 # fetch completed games and run them through the trained models into data/live/
+python -m src.live.game_report <game_id>       # one-game report: game flow, skater impact by situation, takeaways
+python -m src.live.daily                       # forecasts for today and tomorrow, prices, picks, morning summary
+python -m src.live.afternoon                   # re-forecast games whose starting goalie was not confirmed in the morning
+python -m src.live.weekly                      # season xG standings, top skaters, team percentiles
+python -m src.live.predict WPG DET 2026-10-04  # one game
 ```
 
-`make smoke` runs the full pipeline on 50 games in about a minute, using isolated output directories.
+* **Forecasts** use the frozen game model with in-season updating. Each morning run snapshots the published rosters and reads projected lineups, starting goalies and injury lists; an afternoon run re-forecasts games whose starter was unconfirmed. On the second night of a back-to-back the rested goalie is assumed unless a starter is confirmed.
+* **Prospective market test** ([protocol](docs/market/methodology.md)): every forecast is logged before puck drop and scored against the margin-free consensus of three sportsbooks. Nothing is claimed before 300 scored games. Running totals: [market summary](reports/live/market_summary.md).
+* **Picks ledger** ([rules](docs/market/picks.md), [ledger](reports/live/picks.md), [record](data/live/public/picks_record.csv)): moneyline picks where the model is at least 3 points above break-even, sized at 1–3 units, settled daily. It is bookkeeping, not advice; the model has no demonstrated edge.
+* **Public and private files.** The forecast, odds and scoring logs contain third-party data (sportsbook prices, lineup feeds), so they live in a separate private repository under `data/private/`. Each run publishes a SHA-256 fingerprint of every private log ([fingerprints](data/live/public/fingerprints.csv)), so the private record can be checked against what existed at the time.
 
-```bash
-make all
-```
+Game reports are single-game descriptions, not ratings.
 
-`make all` reproduces everything: ingest 9 seasons (~15 min, cached thereafter), then run the pipeline, tests and notebooks.
+## Using PM-EPA responsibly
 
-Individual steps: `python -m src.pipeline --only xg value epa metrics`, or `--from value`. All tunables live in [`config.yaml`](config.yaml).
+* **EV = 5v5.** Qualify at ≥ 500 5v5 minutes and **read the 95% CI before the rank**.
+* **`pm_direct_per60_ev` / `pm_pooled_per60_ev`** show how much of a number is individually observed and how much is shared with linemates.
+* **Own-zone giveaways are nearly free in the headline number (λ = 0).** `pm_epa_per60_ev_lam1` also charges the opponent's gain from a turnover; read both when turnover risk matters.
+* **2024-25 onward is a different scorekeeping regime:** recorded giveaways doubled. Compare players within regime.
+* **PM-EPA is offense and transition value.** It does not measure defensive positioning, and on its own it is not WAR; the combined table is the all-in view.
 
 ## Outputs
 
 | File | Contents |
 |---|---|
-| `data/outputs/pm_epa_player_leaderboards.csv` | player-season: TOI splits, PM-EPA totals and per-60 (EV/PP/PK/total), per-100 possessions, play counts, mean/SD per play, position percentile, 95% bootstrap CI, direct vs pooled split |
+| `data/outputs/pm_epa_player_leaderboards.csv` | player-season PM-EPA: totals and per-60 by strength, per-100 possessions, position percentile, 95% bootstrap CI, direct vs pooled split |
+| `data/outputs/player_value_all_in.csv` | every component on one goals-above-replacement scale, skaters and goalies |
+| `data/outputs/player_projection.csv` | one- to three-season projections with intervals |
 | `data/outputs/pm_epa_team_season.csv`, `pm_epa_team_game.csv`, `pm_epa_player_game.csv` | team and game aggregates |
-| `data/value_surfaces/v_state_{5v5,pp,pk,4v4_3v3}.parquet` | tabular value tables (+ `v_state_metadata.json`: N, metrics, sha256) |
-| `data/value_surfaces/v_models.joblib` | cross-fitted V_start / V_dec / V_att models |
-| `data/processed/transitions.parquet`, `credits.parquet` | every movement segment and every credit row (conserves value) |
-| `reports/figures/` | rink value surfaces, calibration, YOY scatter, distributions, components, example plays (PNG + SVG) |
-
-## Defensive component: DPM (v1.0)
-
-The second component of the planned all-in valuation. **Defensive PM-EPA** estimates the 5v5 xG against a skater prevents per 60 minutes. It uses a ridge regression on stints (RAPM) that adjusts for teammates, opponents, zone starts, score and venue, and chains each season's prior to the one before. The PM-EPA ledger splits every opponent possession's xG exactly into components, so each player's number comes with an additive breakdown of *how*: recoveries, movement allowed, forced losses, shot quality, and turnover- or faceoff-born chances.
-
-| Check | Result |
-|---|---|
-| Held-out next-season xGA prediction vs league average | ΔMSE −0.048 (≈ 6.8 SE) |
-| Season-centred YOY r (≥ 500 min) | F 0.41 · D 0.38 (team changers 0.32 · 0.31) |
-| r with PM-EPA/60 | 0.06 (F) · 0.14 (D), little overlap, so it adds a new axis |
-
-The pre-registered hypothesis, that the denser ledger components would beat total xGA as a signal, was tested and **rejected**. The headline is therefore prior-informed xGA RAPM, with the ledger as its exact breakdown. `python -m src.defense.run` (or `make defense`) writes `data/outputs/dpm_player_season.csv` and `dpm_player_window.csv`. Docs: [methodology & pre-registration](docs/defense/methodology.md) · [validation report](reports/defense/validation_report.md) · [model card](reports/defense/model_card.md).
-
-## Finishing component: FIN (v1.0) and value integration
-
-The third component. **Finishing talent** is the shooter's effect on goals *above a finishing-only xG offset*, from a hierarchical logistic model (shooter and goalie effects, season × strength intercepts) fitted as a penalized mixed model and checked against full-Bayes NUTS. It is defined as the residual `goal − xG_f`, the one term that PM-EPA and DPM both exclude, so it does not double count. The `src/valuation/` layer then puts all three components on one goals-and-wins-above-replacement scale.
-
-| Check | Result |
-|---|---|
-| xG_f vs the shared xG's features (held-out, paired) | z = 4.7 (validation), 9.9 (test); the gain is small in absolute terms |
-| Shrunk finishing vs no player information, next-season log-loss | z = +7.2; raw G/xG is *worse* than no player information (z = −2.1) |
-| Calibration slope of next-season excess goals on the prediction | 0.93 (raw estimates: 0.54) |
-| Attempts to reach reliability 0.5 | about 570–650 analytic, 754 empirical (3–5 seasons for a regular) |
-| Goals per win, derived from the data | 5.90 (95% CI 5.66–6.13) |
-
-Finishing is real but small (one SD of talent is about 15% higher scoring odds) and needs pooling across seasons. **Scale caveat:** team-level slopes above 1 are partly shrinkage compression, and the turnover and faceoff components below explain much of the rest for possession (see the next section); no rescaling is applied, and the joint calibration is the next step. `python -m src.finishing.run` then `python -m src.valuation.run` (or `make finishing valuation`) write `data/outputs/fin_player_season.csv` and the combined `player_value_season.csv`. Docs: [methodology & pre-registration](docs/finishing/methodology.md) · [xG_f validation](reports/finishing/xg_validation.md) · [finishing validation](reports/finishing/validation_report.md) · [integration report](reports/valuation/integration_report.md) · [model card](reports/finishing/model_card.md). The optional full-Bayes check uses its own environment (`requirements-bayes.txt`).
-
-## Turnover, faceoff and penalty components (v1.0)
-
-The named slices of 5v5 value that PM-EPA, DPM and FIN leave unclaimed. **Turnover cost** charges the opponent's possession-start value after a player's team's turnovers to the committers (with an arena/scorer adjustment); **faceoffs** value taker skill by the ledger's own start values; **penalties** value drawing and taking by the net xG of the resulting man advantage. Ten of eleven pre-registered gates pass; the turnover team-level slope band is missed by 0.01 and reported as such.
-
-| Check | Result |
-|---|---|
-| A test of the "unclaimed turnover value" hypothesis on team goal differential | PM-EPA's slope 1.68 → 1.05 with the turnover charge (R² 0.46 → 0.52) |
-| Turnover accounting (charge ÷ slice DPM excludes) | 0.89, after also excluding DPM's unobserved starts |
-| Arena (scorer) bias in the turnover charge | 15-23% of the mean in 2017-2023, ≈ 0 in 2024-25 |
-| Faceoff skill vs no taker / vs raw win rate, next season | z = 24.5 / 12.4; a win is worth 0.0245 xG |
-| Penalty cost per 5v5 minor | 0.175 xG; drawn and taken both repeatable (YOY 0.48, 0.52) |
-
-**Caveat:** the turnover component is right at team level but biased in allocation against puck-dominant players (giveaways are recorded, successful plays are not). The role-adjusted version (TO-RA) compares players with similar observed puck involvement; it mitigates part of the bias (modestly), passes its gates and is the default `to_gar` in the combined table (the original charge is `to_gar_orig`, total `total_gar_to_orig`). `python -m src.components.run` then `python -m src.valuation.run` (or `make components valuation`) put all six components in `player_value_season.csv`. Docs: [methodology & pre-registration](docs/components/methodology.md) · [validation report](reports/components/validation_report.md) · [model card](reports/components/model_card.md).
-
-## Joint calibration of component scales (v1.0)
-
-Are the six components each worth one goal per goal? Team-level slopes for the *shrunk* components mix genuine scale error with **shrinkage compression** (independent-player priors shrink effects shared across a team), so the calibration is estimated on the *unshrunk* components at team level with a ridge prior toward 1 (λ by leave-one-season-out cross-validation), and applied to the shrunk player values only if it improves held-out prediction (paired z > 2). Player-level effects are checked out of sample on next-season on-ice results with team-season fixed effects and a teammate-context control.
-
-| Check | Result |
-|---|---|
-| Unshrunk team-level slopes (5v5 goal differential, 284 team-seasons; turnover = TO-RA) | possession 1.79 ± 0.28, defense 1.05 ± 0.16, finishing 0.81 ± 0.08, turnover 1.18 ± 0.40, faceoff 1.32 ± 0.63 |
-| The same components shrunk | finishing 1.87, turnover 2.19, faceoff 2.07: shrinkage compression, not scale error |
-| xG-to-goals factor (team goal differential on xG differential) | 1.03 ± 0.05 |
-| Pre-registered decision (calibrated vs all-ones, held-out season error) | z = 1.50 < 2: **all weights stay at 1** |
-
-The ridge weights (possession 1.53, defense 1.09, finishing 0.82, turnover 1.15, faceoff 1.10) are published as a variant (`total_gar_ridge`) and validated, but not applied. `python -m src.calibration.run` (or `make calibration`) writes `data/outputs/player_value_calibrated.csv`. Docs: [methodology & pre-registration](docs/calibration/methodology.md) · [validation report](reports/calibration/validation_report.md).
-
-### All-strength extension of the calibration
-
-With special teams in place, the same calibration runs on ten components (the five 5v5 components, penalties, PP, PK, 4v4, 3v3) against all-strength goal differential. The pre-registered rule **adopts** the ridge weights, narrowly (z = 2.17 against a threshold of 2): possession 1.42, defense 1.20, finishing 0.78, turnover 1.22, faceoffs 1.02, penalties 0.94, PP 1.31, PK 1.10, 4v4 0.96, 3v3 1.05. The player-level check as pre-registered fails (z = −10.8) because the raw all-strength outcome rewards power-play time and penalizes penalty-kill time whatever the skill; with a deployment adjustment, logged as a deviation, the calibrated total is no worse on goals (z = −1.0) and better on xG (z = +4.2). Both `total_gar_all` (uncalibrated) and `total_gar_all_cal` (calibrated) are in `player_value_calibrated_all.csv`; because the margin is thin, treat the calibrated column as an alternative until new data confirm it. **Superseded by the goalie version below: with goaltending in the regression the adoption test fails and all weights stay at 1.** [Report](reports/calibration/validation_report_all.md).
-
-### Goalie in the joint calibration (v3)
-
-The team's goalie value is an eleventh regressor in the all-strength identity. It cuts cross-validated team-level error by 32% (897 → 610) and lifts the unshrunk R² from 0.65 to 0.79. The goalie weight is 0.93 (0.82 to 1.03), so goalie values are on the goal scale (a near-1 slope is largely mechanical). **With goaltending accounted for, the adoption test for the skater weights no longer passes (z = 1.58, was 2.17): all weights stay at 1**, the earlier `total_gar_all_cal` is superseded, and the uncalibrated `total_gar_all` default is the consistent choice. `data/outputs/player_value_all_in.csv` stacks skaters and goalies in one table; goalie totals depend heavily on the replacement convention (a full-workload goalie starts about 20 goals above replacement), so read goalie-versus-skater rankings with care. [Report](reports/calibration/validation_report_all_gk.md).
-
-### Position-specific weights (variant, from the Morrissey/Appleton review)
-
-A review of Josh Morrissey and Mason Appleton (2022, both 2.73 GAR) found that defensemen were systematically compressed relative to forwards and that forwards' penalty-kill value carried no information about team success (slope −0.98 ± 0.35 against 3.16 ± 0.51 for defensemen). Position-specific calibration weights for the seven main components improve held-out team-level error (549 vs 589 pooled vs 610 all ones; z = 2.24 and 2.27; exploratory, chosen after four specifications) and do no harm at the player level. They are published as `total_gar_all_pos` in `player_value_calibrated_all_pos.csv` (default unchanged). Effects: Appleton 2.73 → 1.35, defensemen mean 3.25 → 4.40 (forwards 5.94 → 4.62), **Morrissey 2.73 → 2.87, essentially unchanged**: his gap comes from his own power-play and defense estimates (2.73 ± 2.7), which no position weight fixes. [Report](reports/calibration/validation_report_pos.md).
-
-### On-ice offense / defenseman transition (tested, not adopted)
-
-Following the Morrissey/Appleton review, an on-ice offense measure (independent-season offense RAPM, OPM) and its part not already in PM-EPA (TR) were tested as a transition component for defensemen. **All substantive gates fail** (year-over-year for defensemen 0.13, next-season prediction z = 0.65, team-level z = −1.27), so the default total is unchanged; `total_gar_all_tr` (in `data/outputs/player_transition.csv`) is the **model owner's preferred skater total by an explicit judgment call that overrides the failed gates** (logged in the methodology, §9) (it lowers Hughes and Makar, whose credited actions are elite but whose on-ice offense is not above expectation, and raises Morrissey, whose on-ice offense exceeds what his credited actions show). Findings: defensemen's PM-EPA is reliable (year-over-year 0.51) but compressed 3 to 4 times relative to on-ice offense, and the on-ice residual is mostly noise for defensemen. Breakout and entry skill needs puck-tracking event data that is not available. `data/outputs/player_transition.csv`, [report](reports/transition/validation_report.md), [methodology](docs/transition/methodology.md). `python -m src.transition.run`.
-
-### Standings projection from opening-night rosters (backtest; not yet a forecast)
-
-Pre-registered backtest ([methodology](docs/standings/methodology.md), [report](reports/standings/validation_report.md)) of a bottom-up team forecast (projected player rates × projected minutes, plus goalies, converted to points per 82). Over 2021–2025 it beats the league mean (z = 4.3) and is about one point of RMSE worse than last season's goal differential (14.6 against 13.7; non-inferiority passes), the blend with history does not beat history (z = −0.82), and calibration slope is 1.22 (band 0.8–1.2). In short: parity with last season's results, not an improvement. `python -m src.standings.run`, `data/outputs/standings_backtest.csv`.
-
-Three pre-registered improvements were then tested ([plan](docs/standings/improvements.md), [results](reports/standings/candidates_narrative.md)): a **portable team residual** (each player carries his minute share of last season's unexplained team result to his new roster; 14.58 → 14.00, z = 1.33), **deployment-aware minutes** (ice time depends on quality relative to the roster; 14.48, z = 1.81) and a team-level fine-tuning of the projection (no gain, not used). The first two are implemented (13.96 combined; still not better than last season's goal differential, 13.70). `python -m src.standings.candidates`; the 2026-27 forecast (`python -m src.standings.next 2026`, [table](reports/standings/forecast_2026.md)) uses them.
-
-### Game-level model with in-season player ratings
-
-Pre-registered ([methodology](docs/gamemodel/methodology.md), [report](reports/gamemodel/validation_report.md), [interpretation](reports/gamemodel/narrative.md)). Each skater's rating starts at his preseason projection plus carried team residual and is updated after every game from the team's expected-goal surprise in proportion to ice time; goalies update by shots. On 6,502 games (2021–2025) log loss is 0.6585 against 0.6613 for a tuned team rating (z = 1.99, the main gate fails narrowly) and 0.6655 for a goals-only team rating (z = 3.4); in-season updating (z = 5.7) and player attribution (z = 2.4) pass; lineup news adds nothing measurable. `python -m src.gamemodel.run`, `data/outputs/game_predictions.csv`. A market comparison runs when `data/external/odds.csv` is supplied.
-
-### Pre-NHL priors for young and thin-history players
-
-Pre-registered ([methodology](docs/prospects/methodology.md), [results](reports/prospects/narrative.md)). League-translated production (factors estimated from our own data: AHL 0.46, KHL 0.61, NCAA 0.37, OHL 0.29) and draft position enter the projection, fading as NHL minutes accumulate. Player projections improve overall (z = 2.62) and for thin-history forwards (z = 1.48, not reliable), but there is **no team-level gain** (game model z = −0.25, standings z = −1.39). Implemented in the standings forecast under the pre-registered rule; the effect on any team is under a point. `python -m src.prospects.ingest`, `python -m src.prospects.run`.
-
-### Chemistry and roster fit (tested, not adopted)
-
-Pre-registered ([methodology](docs/chemistry/methodology.md), [results](reports/chemistry/narrative.md)). A factorization machine on 5v5 stints (latent traits per player, pairwise synergy within a unit, able to score pairs that never played together). **Both gates fail:** it predicts next-season stints worse than the additive model (pooled z = −2.66), pair synergies are uncorrelated across non-overlapping windows (0.01), and a roster-fit covariate does not help the game model (z = −0.97). Lineups are additive as far as 5v5 expected goals can tell. `python -m src.chemistry.run`.
-
-### Possession under-scaling (tested, not adopted)
-
-Pre-registered ([methodology](docs/possession/methodology.md), [results](reports/possession/narrative.md)). Tuning on 2019–2020 selected no rescaling of the possession component, so nothing is implemented. Declared context variants (×1.5 for both positions; ×3 for defensemen) do slightly better on 2021–2025 (z = 2.7–3.5, about 0.0002 log loss, 3% of the preseason prior's gap to a team rating), which is encouraging but not a clean test. `python -m src.possession.run`.
-
-### What the team residual is made of
-
-Pre-registered ([methodology](docs/residual/methodology.md), [results](reports/residual/narrative.md), `data/outputs/team_residual_buckets.csv`). An exact accounting of each team's goal differential against the player components. **45% of the unexplained part is 5v5 play that the components rank correctly (r = 0.85) but under-scale (slope 1.62); it is stable (0.65 year over year) and travels with players (carry 0.94 ± 0.15).** Finishing, special teams and empty-net/other parts carry at only 0.2–0.4. A bucket-split prior improves the preseason game model by 0.0014 log loss (z = 1.80, not adopted). `python -m src.residual.run`.
-
-### Game-by-game reports for the current season
-
-`python -m src.live.update 2026` fetches the season's completed games and runs them through the trained models (shot xG fitted on all historical seasons, the saved possession-value surfaces) into `data/live/`, without refitting anything or touching the historical tables.
-`python -m src.live.game_report <game_id>` writes `reports/games/<date>_<AWAY>_at_<HOME>/`: a game-flow figure (cumulative expected goals and a shot map), a skater table figure (ice time, goals, assists, individual xG, puck value, 5v5 on-ice xG), `players.csv`, `teams.csv` and `summary.md` with takeaways.
-These are single-game descriptions, not ratings: the season-level components (defense, finishing talent, special-teams ratings) need many games.
-
-### Elite-prospect priors (adopted; small effect)
-
-Pre-registered ([methodology](docs/prospects/elite.md), [results](reports/prospects/elite_narrative.md)). Draft slot bins and debut timing replace the single draft term in the rate model. The data do not support a large premium: the fourteen top-three forwards who debuted at 18 since 2018 averaged 0.11 goals above replacement per 60, about a generic rookie; the model projects such a player at 0.16 (0.12–0.19). Adopted by the pre-registered rule (no harm), with no forecast gain (true rookies z = 0.29; game model z = −1.1 to −1.5). Faster in-season learning for inexperienced players was tested and not adopted. `python -m src.prospects.elite`.
-
-### Early-sample updating for young players (adopted)
-
-Pre-registered ([methodology](docs/prospects/hybrid.md), [results](reports/prospects/hybrid_narrative.md)). A thin-history player's rating is his prior plus an adjustment from his own games so far (ice time per game, puck value, individual expected goals, points, 5v5 on-ice expected goals), with weights learned from history at 2, 5, 10, 20 and 40 games. Full-season projections improve reliably from five games (z = 2.25 at 5, 2.64 at 10, 4.57 at 40; 6% to 18% of the prior's error removed); two games say almost nothing (z = 1.16); the game model is unchanged to slightly better (z = 0.60). The signal is mostly ice time and on-ice results, and the shifts are modest (about ±0.05 per 60). `python -m src.prospects.hybrid`.
-
-### Score-effects adjustment (adopted; small effect)
-
-Pre-registered ([methodology](docs/scoreeffects/methodology.md), [results](reports/scoreeffects/narrative.md)). 5v5 expected goals are re-weighted to even-score value by score state and period (league rates from earlier seasons). At 5v5 the effect is small except for teams trailing in the third period (10–11% more expected goals per minute); game differentials change by 0.03 goals on average. No gain for the player-rating game model (z = 0.39), a small gain for the team-rating benchmark (z = 2.84). Used in the in-season update of the forward forecasts and shown beside raw expected goals in game reports. `python -m src.scoreeffects.run`.
-
-### Daily forecasts and the prospective market test
-
-Pre-registered protocol: [docs/market/methodology.md](docs/market/methodology.md). Once a day, before the first game:
-
-```
-python -m src.live.daily          # refresh completed games, forecast today's and tomorrow's games, capture prices, append to data/private/logs/ (private; see below)
-python -m src.live.score          # score logged forecasts and prices against results -> reports/live/market_summary.md (public totals) and data/private/reports/market_tracking.md
-python -m src.live.predict WPG DET 2026-10-04     # one game
-```
-
-Forecasts use the frozen game model with in-season updating. Each run snapshots the published rosters and reads the RotoWire lineups page for listed starting goalies (confirmed or expected) and injury lists: players listed out, on injured reserve or suspended, and players no longer on the roster, are removed from a team's previous lineup and replaced from the roster. Prices are midday moneylines from FanDuel, DraftKings and BetMGM (scoresandodds.com), margin removed. The run is scheduled daily at 12:00 Eastern. Manual roster facts (suspensions, named starters) go in `data/external/roster_overrides.json`.
-Nothing is claimed about the market before 300 scored games. This is analysis of a model, not betting advice.
-
-**Public and private files.** The forecast, odds and scoring logs contain sportsbook prices and lineup-feed data, so they are kept in `data/private/`, a separate private repository. The public record is the picks ledger in units and decimal odds ([data/live/public/picks_record.csv](data/live/public/picks_record.csv)), the market test's totals ([reports/live/market_summary.md](reports/live/market_summary.md)), and a SHA-256 fingerprint of every private log at each run ([data/live/public/fingerprints.csv](data/live/public/fingerprints.csv)), which lets the private logs be checked against what existed at the time.
-
-**Picks ledger** ([rules](docs/market/picks.md), [ledger](reports/live/picks.md)): the daily run also locks moneyline picks for the day's games where the model is at least 3 points above break-even, sized at 1–3 one-dollar units (a quarter of the Kelly fraction at a probability halfway between market and model, on a fixed 100-unit reference bankroll), settles the previous day's picks and charts cumulative profit. It is bookkeeping for the owner's own small wagers; the model has no demonstrated edge.
-
-## Special teams: power play, penalty kill, 4v4, 3v3 (v1.0)
-
-Four components on the goals-above-replacement scale (`st_pp_gar`, `st_pk_gar`, `st_4v4_gar`, `st_3v3_gar` in `player_value_season.csv`). PP and PK include the extra-attacker states (6v5, 6v4, and their mirrors). Each is a strength-specific ridge RAPM on shot xG (role-specific player columns, chained prior, replacement = the fringe pool) plus the player's finishing above the fringe pool in that state (from the finishing model, which previously held it as a memo column). `total_gar` keeps its 5v5 definition; `total_gar_all` adds the four components and is not yet calibrated.
-
-| Gate (PP and PK are gated; 4v4 and 3v3 reported) | Result |
-|---|---|
-| Coverage of shot xG in valid stints | 97–98% in every state |
-| Beats the covariates-only baseline out of sample | PP/PK z = 6.6 (small effect: 0.19% lower MSE); 3v3 z = 2.8; 4v4 z = 0.5 |
-| Year-over-year stability ≥ 0.20 (F and D) | PK passes (0.30 / 0.22); **PP fails for defensemen (0.18)**; forwards 0.28 |
-| Team reconciliation slope in [0.5, 2.0] | PP 1.11, PK 0.52, 4v4 0.64, 3v3 0.59 |
-
-Read 4v4 and 3v3 as low-information (about 20 median minutes per player-season): mostly shrinkage and finishing. `python -m src.specialteams.run` (or `make specialteams`) then `python -m src.valuation.run`. Docs: [methodology & pre-registration](docs/specialteams/methodology.md) · [validation report](reports/specialteams/validation_report.md).
-
-## Projection and aging (v1.0)
-
-`data/outputs/player_projection.csv`: for each skater who played in 2025, projected rate (goals above replacement per 60 modeled minutes) for one, two and three seasons ahead with 80% intervals, projected minutes, goals above replacement and wins for the next season. `reports/projection/aging_curves.csv`: position-specific aging curves with bootstrap intervals. Weighted ridge on shrunk component histories (finishing and faceoffs are the rolling-refit values, so no leakage), age spline, height and weight; no EDGE features (none in the repository; `Spec.extra` accepts them).
-
-| Gate | Result |
-|---|---|
-| Beats position mean / Marcel (horizon 1, player level) | z = 10.6 / 5.2 ✅ |
-| Age terms help | z = 4.7 ✅ |
-| Calibration slope; 80% interval coverage | 0.93 ± 0.01; 78.9% ✅ |
-| **Team level: projected rates vs last season's rolling-refit rates** | RMSE 48.4 vs 44.9, z = −2.75 ❌ |
-
-The projections forecast next season's *value estimates* (player talent). Removing the chained priors in defense and special teams does not fix the team-level failure; exploratory diagnostics point to team context, since last season's rates alone forecast teams best. A results-trained variant (exploratory) does better at the team level (RMSE 42.4) but does not beat the prior team goal differential (41.4). Use the projections for ranking, aging and contract-length questions, not as validated team forecasts. [Report](reports/projection/validation_report.md) · [methodology & pre-registration](docs/projection/methodology.md). `python -m src.projection.run` (needs `python -m src.wholemodel.rolling` first).
-
-## NHL EDGE tracking features (v1.0)
-
-`python -m src.ingestion.edge` fetches EDGE season summaries per skater (max skating speed, bursts over 20 mph, distance, top shot speed, zone time) for 2021 to 2025 into `data/raw/edge/` and `data/processed/edge_player_season.parquet` (4,727 skater-seasons, 100% coverage of skaters with 300+ minutes). EDGE exists only from 2021-22.
-
-| Result | Value |
-|---|---|
-| Physical aging (27 to 33) | forwards lose 0.37 mph of top speed (0.26 to 0.47) and about 2.5 bursts per 60; defensemen 0.21 mph |
-| EDGE features in the projection (2024–2025 test, 1,348 player-seasons) | no improvement: MSE 0.0149 vs 0.0148, z = −0.63; players 30+ z = 0.30 |
-| Does speed explain the value aging curve? | no: the age effect is unchanged with EDGE features |
-| Is a speed drop a leading indicator? (exploratory) | no, 11 of 12 tests null |
-
-Physical decline is real and measurable, but the value history already reflects it; no defaults change. The test is small (five EDGE seasons) and should be repeated as seasons accumulate; the ingestion and the `Spec.extra` hook are ready. [Report](reports/edge/validation_report.md) · [methodology](docs/edge/methodology.md). `python -m src.edge.run`.
-
-## Team context: "system / chemistry" (v1.0)
-
-How much of a player's value travels when he changes teams, and does the new team's context predict his next-season value? No coach data is in the repository, so context is the team-season (coaching, system, linemates and arena bundled).
-
-| Result | Value |
-|---|---|
-| Share of persistence that travels (movers vs stayers), total value | 91% published; **74%** with chain-free defense and special teams |
-| By component | possession 65%, turnover 64%, finishing/PP/PK about 85%, penalties 100% |
-| Movers: destination / origin context coefficient | +0.21 (t = 3.6) / −0.18 (t = −3.0); defensemen destination 0.39 (t = 4.4), forwards 0.07 (t = 0.9) |
-| Context features in the projection | movers z = 5.1, overall z = 3.6, stayers unchanged; team level RMSE 48.4 → 47.1 (z = 3.1), still short of last season's rates (44.9) |
-
-`python -m src.teamcontext.move --player "Name" --team XXX` projects a player under a destination team. All four pre-registered gates pass. Chemistry cannot be separated here from teammates or coaching; head-coach data would allow a same-team coaching-change test. [Report](reports/teamcontext/validation_report.md) · [methodology](docs/teamcontext/methodology.md). `python -m src.teamcontext.run`.
-
-## Chain-free defense and special teams (v1.0)
-
-The defensive component and the special-teams RAPM use a chained prior, which makes their values persistent partly by construction. `data/processed/chainfree_values.parquet` holds ρ = 0 variants (`def_gar_rho0`, `st_<state>_rapm_gar_rho0`); the published defaults are unchanged.
-
-| Check | Result |
-|---|---|
-| Year-over-year, defense | 0.78 (chained) → 0.30–0.33 (ρ = 0) |
-| Team-level forecast, chain-free vs chained rolling total | RMSE 41.4 vs 41.2, z = −0.71 (not significantly different) |
-| Projection with chain-free rates: player level / team level | beats Marcel (z = 3.9) / still loses to last season's rates (z = −2.77) |
-
-Removing the chain does not fix the projection's team-level failure. Exploratory diagnostics point to team context instead: last season's rates alone forecast teams best, older seasons dilute it. [Report](reports/chainfree/validation_report.md) · [methodology](docs/chainfree/methodology.md). `python -m src.chainfree.run`, then `python -m src.wholemodel.run`, `python -m src.projection.run --chainfree`, `python -m src.chainfree.diagnostics`, `python -m src.chainfree.report`.
-
-## Goaltending (v1.0)
-
-`goalie_gar` (goals above replacement, all strengths) in `goalie_player_season.csv`, a separate table because goalies are not in the skater stints. A logistic mixed model on unblocked shots: xG offset plus the shooter's fitted shift, season × strength effect, persistent and season-deviation goalie effects, and an unpenalized replacement effect for goalie-seasons under 500 shots (replacement goalie ≈ 0.88 goals per 100 shots worse than average).
-
-| Gate | Result |
-|---|---|
-| Goal attribution | 99.98% ✅ |
-| Beats the goalie-free baseline on test folds (rolling refits, no future data) | z = 2.75 ✅ |
-| Forward calibration slope | 0.91 ± 0.17 ✅ |
-| Year-over-year stability of single-season effects | r = 0.13 (gate 0.15) ❌ |
-| Rolling goalie term vs the crude proxy at predicting team goal differential | z = 1.02 ❌ |
-
-Goalie values are strongly shrunk and uncertain (mean posterior SD 6.3 goals against a spread of 8.6 among starters), and the replacement convention drives the absolute level: read them for ranking goalies, less for absolute totals. The whole-model conclusions are unchanged with the component in place of the proxy. [Report](reports/goaltending/validation_report.md) · [methodology & pre-registration](docs/goaltending/methodology.md). `python -m src.goaltending.run`.
-
-## Whole-model validation (v1.0)
-
-Does the published total (`total_gar_all`, weights 1) predict next-season team goal differential, and does it add information beyond simple baselines? Six out-of-sample seasons (189 team-seasons), expanding-window OLS with the actual roster, and a goalie proxy in every model.
-
-| Result | Value |
-|---|---|
-| Total vs goalie-proxy-only baseline | RMSE 39.9 vs 48.8 goals, out-of-sample R² 0.33, z = 4.6, better in all 6 seasons |
-| Calibration slope of actual on predicted (slope fixed at 1) | 1.16 ± 0.10 |
-| Versus simple baselines | **no better**: prior team goal differential 39.4, naive roster-weighted on-ice xG 38.9 (WM-2 fails); adds to team history at z = 1.94 (WM-3 just misses) |
-| Leakage-clean total | forecasts worse (43.5); confounded with shrinkage (WM-5 fails as pre-registered) |
-| **Rolling refit** of the finishing and faceoff models (fit on data up to each season only) | RMSE 41.2 vs the headline's 39.9; headline better by z = 2.46, so **the headline is leakage-sensitive**. Use the rolling-refit total for forecasting claims (R² 0.29 vs the goalie-only baseline); finishing and faceoffs add essentially nothing to next-season team forecasts once leakage is removed |
-| Calibrated vs uncalibrated total | indistinguishable (z = 0.38): supports keeping the uncalibrated default |
-
-The total is best read as a decomposition of team results into player-level credit on one scale, not as a forecast that beats a team's own recent results. [Report](reports/wholemodel/validation_report.md) · [methodology & pre-registration](docs/wholemodel/methodology.md). `python -m src.wholemodel.run`.
-
-## Using PM-EPA responsibly
-
-* **EV = 5v5.** Qualify at ≥ 500 5v5 minutes and **read the 95% CI before the rank**.
-* **The `pm_direct_per60_ev` / `pm_pooled_per60_ev` columns** show how much of a number is individually observed and how much is shared with linemates.
-* **Own-zone giveaways are nearly free in the headline number (λ = 0).** `pm_epa_per60_ev_lam1` is the risk-adjusted companion that also charges the opponent's gain from a turnover. Read both when turnover risk matters.
-* **2024-25 onward is a different scorekeeping regime:** recorded giveaways doubled. Compare players within regime.
-* **PM-EPA is offense and transition value.** It does not measure defensive positioning, and it is not WAR.
-
-## Name
-
-**PM-EPA (Puck-Movement Expected Goals Added)** is recommended. "EPA" signals the NFL lineage and delta logic, while "Puck-Movement" states the scope: value from what a player does to the puck's state, not finishing. The alternative considered, *Transition xG Added (TxGA)*, reads well, but it collides with "xGA" (expected goals against) and undersells the offensive-zone movement component.
+| `data/value_surfaces/` | value tables by strength and the cross-fitted V_start / V_dec / V_att models |
+| `reports/` | validation reports, model cards, figures and metrics for every component and study |
 
 ## Repository map
 
 ```
-config.yaml                 all tunables (pydantic-validated in src/config.py)
-src/ingestion/              NHL API scraper + parser (events, shifts, players)
-src/possession/             possession chains, on-ice + TOI
-src/xg/                     shot xG features + model
-src/states/                 state spaces (26 zones, 10/20-ft grids)
-src/value/                  V_start / V_dec / V_att estimators, bake-offs
-src/epa/                    PM-EPA attribution engine
-src/metrics/                player/team/game aggregation, bootstrap CIs
-src/validation/             validation suite, RAPM, ablations, report
-src/defense/                Defensive PM-EPA: stints, ridge RAPM, pre-registered selection, report
-src/finishing/              Finishing talent: shot table, xG_f, penalized mixed model, evaluation, NUTS check
-src/components/             turnover cost, faceoff skill, penalties at 5v5
-src/valuation/              replacement level, goals per win, combined component table
-src/viz/                    rink drawing + figures
-tests/                      110 unit tests (pytest)
-notebooks/                  01–06 analysis notebooks (generated by notebooks/_build_notebooks.py)
-docs/pm_epa/                methodology, formulas, definitions, examples, edge cases, limitations, literature, plan, phase summaries, post-mortem
-reports/                    validation report, model card, figures, metrics JSON
-schemas/                    SQL DDL + transitions Parquet schema
+config.yaml              all tunables (validated by src/config.py)
+src/
+  ingestion/             NHL API scraper and parser; rosters, career pages, EDGE summaries
+  possession/ xg/ states/ value/ epa/ metrics/
+                         possession chains, shot xG, state spaces, value functions, the PM-EPA engine, aggregation
+  defense/ finishing/ components/ specialteams/ goaltending/
+                         the other valuation components
+  valuation/ calibration/ transition/ wholemodel/
+                         replacement level, goals per win, joint calibration, the combined table, whole-model tests
+  projection/ edge/ teamcontext/ chainfree/
+                         projection and aging, tracking features, team context, chain-free variants
+  standings/ gamemodel/ prospects/
+                         team and game forecasting, young-player priors
+  chemistry/ residual/ scoreeffects/ schedule/ angles/ structure/ deshrink/ infoquality/
+                         the experiments in the table above
+  live/                  current-season pipeline: update, forecasts, odds, picks, reports
+  validation/ viz/       validation suite and figures
+tests/                   unit tests (pytest)
+notebooks/               analysis notebooks (generated by notebooks/_build_notebooks.py)
+docs/<topic>/            methodology and pre-registration for each component and study
+reports/<topic>/         results, validation reports and model cards
+schemas/                 SQL DDL and the transitions Parquet schema
 ```
 
 ## Documentation
 
-[Methodology](docs/pm_epa/methodology.md) · [Formulas](docs/pm_epa/formulas.md) · [Definitions](docs/pm_epa/definitions.md) · [Attribution examples](docs/pm_epa/attribution_examples.md) · [Edge cases](docs/pm_epa/edge_cases.md) · [Limitations & roadmap](docs/pm_epa/limitations.md) · [Literature review](docs/pm_epa/literature_review.md) · [Data model](docs/pm_epa/data_model.md) · [Implementation plan](docs/pm_epa/implementation_plan.md) · [Post-mortem](docs/pm_epa/post_mortem.md)
+PM-EPA: [methodology](docs/pm_epa/methodology.md) · [formulas](docs/pm_epa/formulas.md) · [definitions](docs/pm_epa/definitions.md) · [attribution examples](docs/pm_epa/attribution_examples.md) · [edge cases](docs/pm_epa/edge_cases.md) · [limitations and roadmap](docs/pm_epa/limitations.md) · [literature review](docs/pm_epa/literature_review.md) · [data model](docs/pm_epa/data_model.md) · [post-mortem](docs/pm_epa/post_mortem.md). Every other component and study has its own `docs/<topic>/methodology.md` and `reports/<topic>/` results, linked from the tables above.
 
-Data © NHL, used via its public web APIs for research. This project is not affiliated with the NHL.
+## License and data
+
+Code is released under the [MIT License](LICENSE). NHL data are used via the league's public web APIs for research; this project is not affiliated with the NHL.

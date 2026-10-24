@@ -16,7 +16,7 @@ The reference M1 is reproduced exactly (largest difference 0.0 points). Metrics:
 ## Interpretation
 
 **None of the three is a reliable improvement** (no z above 2), so all three are, strictly, parity results. Two were implemented under the pre-registered rule for methodologically sound
-candidates, and the combination is the new published forecast; the model owner's instruction and the rule made in advance, not the size of the gain, is the basis for that.
+candidates, and the combination is the new published forecast; the author's instruction and the rule made in advance, not the size of the gain, is the basis for that.
 
 **C1 is the informative one.** Carrying last season's unexplained team result with the players closes about two thirds of the gap between the roster model and last season's goal differential
 (14.58 → 14.00 against 13.70) and fixes the compression (calibration slope 1.22 → 0.86). The fitted coefficient is close to 1 in every fold (0.92–1.17), which means that, on average, a player's

@@ -1,6 +1,7 @@
 """Starting goalies and injury lists from the RotoWire NHL lineups page (docs/market/methodology.md §8).
 
-Per game: each team's listed starter with its status (Confirmed / Expected) and the players listed as unavailable. Names are matched to NHL ids through the published rosters."""
+Per game: each team's listed starter with its status (Confirmed / Expected) and the players listed as unavailable. Names
+are matched to NHL ids through the published rosters."""
 
 from __future__ import annotations
 
@@ -12,10 +13,28 @@ import requests
 from bs4 import BeautifulSoup
 
 log = logging.getLogger("live")
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"}
+UA = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
+}
 URL = "https://www.rotowire.com/hockey/nhl-lineups.php"
-ABBR = {"NJ": "NJD", "TB": "TBL", "LA": "LAK", "SJ": "SJS", "MON": "MTL", "WAS": "WSH", "CLB": "CBJ", "NAS": "NSH", "VEG": "VGK", "VGS": "VGK", "UTAH": "UTA", "CAL": "CGY", "WIN": "WPG", "ANH": "ANA"}
-OUT_PREFIX = ("OUT", "IR", "SUSP", "LTIR")          # day-to-day and game-time decisions stay in the lineup; they are logged as questionable
+ABBR = {
+    "NJ": "NJD",
+    "TB": "TBL",
+    "LA": "LAK",
+    "SJ": "SJS",
+    "MON": "MTL",
+    "WAS": "WSH",
+    "CLB": "CBJ",
+    "NAS": "NSH",
+    "VEG": "VGK",
+    "VGS": "VGK",
+    "UTAH": "UTA",
+    "CAL": "CGY",
+    "WIN": "WPG",
+    "ANH": "ANA",
+}
+# day-to-day and game-time decisions stay in the lineup; they are logged as questionable
+OUT_PREFIX = ("OUT", "IR", "SUSP", "LTIR")
 
 
 def norm(name: str) -> str:
@@ -24,7 +43,8 @@ def norm(name: str) -> str:
 
 
 def _slug_name(a) -> str | None:
-    """'/hockey/player/ukko-pekka-luukkonen-5516' -> 'ukko pekka luukkonen' (the link carries the full name even when the label is abbreviated)."""
+    """'/hockey/player/ukko-pekka-luukkonen-5516' -> 'ukko pekka luukkonen' (the link carries the full name even when
+    the label is abbreviated)."""
     m = re.search(r"/player/([a-z0-9-]+?)-\d+$", a.get("href", "")) if a else None
     return norm(m.group(1)) if m else None
 
@@ -45,7 +65,9 @@ def parse(html: str) -> list[dict]:
                 if "lineup__player-highlight" in cls:
                     info["goalie"] = _slug_name(li.find("a"))
                     txt = li.get_text(" ", strip=True)
-                    info["goalie_status"] = "confirmed" if "Confirmed" in txt else "expected" if "Expected" in txt else "listed"
+                    info["goalie_status"] = (
+                        "confirmed" if "Confirmed" in txt else "expected" if "Expected" in txt else "listed"
+                    )
                 elif "lineup__title" in cls:
                     section = li.get_text(" ", strip=True).upper()
                 elif "lineup__player" in cls and section == "INJURIES":
@@ -70,7 +92,8 @@ def fetch(tomorrow: bool = False, timeout: int = 30) -> list[dict]:
 
 
 def resolve(game: dict, roster: dict[str, dict[str, int]]) -> dict:
-    """Names -> player ids using ``roster[team] = {normalised full name: id}``; a last-name match is accepted when it is unique on the team. Unmatched names are returned for the log."""
+    """Names -> player ids using ``roster[team] = {normalised full name: id}``; a last-name match is accepted when it is
+    unique on the team. Unmatched names are returned for the log."""
     res = {}
     for team, info in game["teams"].items():
         names = roster.get(team, {})
@@ -90,6 +113,13 @@ def resolve(game: dict, roster: dict[str, dict[str, int]]) -> dict:
         for n, _ in info["out"]:
             i = pid(n)
             (out_ids.add(i) if i else missed.append(n))
-        res[team] = {"goalie_id": pid(info["goalie"]), "goalie_name": info["goalie"], "goalie_status": info["goalie_status"], "out_ids": out_ids, "out_names": [n for n, _ in info["out"]],
-                     "questionable": [n for n, _ in info["questionable"]], "unmatched": missed}
+        res[team] = {
+            "goalie_id": pid(info["goalie"]),
+            "goalie_name": info["goalie"],
+            "goalie_status": info["goalie_status"],
+            "out_ids": out_ids,
+            "out_names": [n for n, _ in info["out"]],
+            "questionable": [n for n, _ in info["questionable"]],
+            "unmatched": missed,
+        }
     return res

@@ -56,12 +56,23 @@ def run() -> dict:
         return out
 
     base = losses(None)
-    variants = {"tuned": {"F": kf, "D": kd}, "earlier_estimate_1.5_1.5": {"F": 1.5, "D": 1.5}, "defense_only_1_3": {"F": 1.0, "D": 3.0}}
+    variants = {
+        "tuned": {"F": kf, "D": kd},
+        "earlier_estimate_1.5_1.5": {"F": 1.5, "D": 1.5},
+        "defense_only_1_3": {"F": 1.0, "D": 3.0},
+    }
     game = {"n_games": int(te.sum()), "logloss_base": {k: float(v.mean()) for k, v in base.items()}}
     for name, kappa in variants.items():
         ll = base if all(v == 1.0 for v in kappa.values()) else losses(kappa)
-        game[name] = {"kappa": kappa, **{m: {"logloss": float(ll[m].mean()), **grun.paired(ll[m], base[m], dates)} for m in ("P_pre", "P")}}
-        game[name]["by_season"] = {str(T): {m: float((base[m][seas == T] - ll[m][seas == T]).mean()) for m in ("P_pre", "P")} for T in grun.TEST}      # positive: the rescaled model is better
+        game[name] = {
+            "kappa": kappa,
+            **{m: {"logloss": float(ll[m].mean()), **grun.paired(ll[m], base[m], dates)} for m in ("P_pre", "P")},
+        }
+        # positive: the rescaled model is better
+        game[name]["by_season"] = {
+            str(T): {m: float((base[m][seas == T] - ll[m][seas == T]).mean()) for m in ("P_pre", "P")}
+            for T in grun.TEST
+        }
         log.info("%s %s: P-pre z %.2f, P z %.2f", name, kappa, game[name]["P_pre"]["z"], game[name]["P"]["z"])
     res["game"] = game
 
@@ -69,20 +80,39 @@ def run() -> dict:
     pj = json.loads((met / "prospects.json").read_text()) if (met / "prospects.json").exists() else {}
     yp = pl.read_parquet(proc / "prospect_features.parquet") if pj.get("implement") else None
     nothing = kf == 1.0 and kd == 1.0
-    ks = variants["earlier_estimate_1.5_1.5"] if nothing else variants["tuned"]      # with nothing tuned, the context variant is shown instead (reported only)
+    # with nothing tuned, the context variant is shown instead (reported only)
+    ks = variants["earlier_estimate_1.5_1.5"] if nothing else variants["tuned"]
     e0, _ = cd.evaluate(cd.assemble(proc, cfg, yp)[0])
     df1, _ = cd.assemble(proc, cfg, yp, ks)
     if not nothing:
         df1.write_parquet(proc / "standings_candidates_table_kappa.parquet")
     e1, fitted = cd.evaluate(df1)
-    j = e0.select("season", "team_id", "pts82", pl.col("C1_C3").alias("base"), pl.col("M1").alias("base_M1")).join(e1.select("season", "team_id", "C1_C3", "M1"), on=["season", "team_id"])
+    j = e0.select("season", "team_id", "pts82", pl.col("C1_C3").alias("base"), pl.col("M1").alias("base_M1")).join(
+        e1.select("season", "team_id", "C1_C3", "M1"), on=["season", "team_id"]
+    )
     yy = j["pts82"].to_numpy()
-    r = lambda c: float(np.sqrt(((yy - j[c].to_numpy()) ** 2).mean()))  # noqa: E731
-    res["standings"] = {"kappa": ks, "rmse_published": r("base"), "rmse_rescaled": r("C1_C3"), "z": sr._z(yy - j["C1_C3"].to_numpy(), yy - j["base"].to_numpy()), "rmse_M1": r("base_M1"), "rmse_M1_rescaled": r("M1"),
-                        "z_M1": sr._z(yy - j["M1"].to_numpy(), yy - j["base_M1"].to_numpy()), "c_residual_by_fold": fitted["c13"]}
-    log.info("standings: %.2f -> %.2f (z %.2f); M1 alone %.2f -> %.2f (z %.2f)", *[res["standings"][k] for k in ("rmse_published", "rmse_rescaled", "z", "rmse_M1", "rmse_M1_rescaled", "z_M1")])
-    z1, z2 = (0.0, 0.0) if nothing else (game["tuned"]["P_pre"]["z"], game["tuned"]["P"]["z"])      # the tuned model is the baseline itself when nothing was selected
-    g = {"PS1": {"z": z1, "pass": bool(z1 > 2)}, "PS2": {"z": z2, "pass": bool(z2 > 2)}, "PS3": {"pass": bool(z1 > -2 and z2 > -2)}}
+    r = lambda c: float(np.sqrt(((yy - j[c].to_numpy()) ** 2).mean()))
+    res["standings"] = {
+        "kappa": ks,
+        "rmse_published": r("base"),
+        "rmse_rescaled": r("C1_C3"),
+        "z": sr._z(yy - j["C1_C3"].to_numpy(), yy - j["base"].to_numpy()),
+        "rmse_M1": r("base_M1"),
+        "rmse_M1_rescaled": r("M1"),
+        "z_M1": sr._z(yy - j["M1"].to_numpy(), yy - j["base_M1"].to_numpy()),
+        "c_residual_by_fold": fitted["c13"],
+    }
+    log.info(
+        "standings: %.2f -> %.2f (z %.2f); M1 alone %.2f -> %.2f (z %.2f)",
+        *[res["standings"][k] for k in ("rmse_published", "rmse_rescaled", "z", "rmse_M1", "rmse_M1_rescaled", "z_M1")],
+    )
+    # the tuned model is the baseline itself when nothing was selected
+    z1, z2 = (0.0, 0.0) if nothing else (game["tuned"]["P_pre"]["z"], game["tuned"]["P"]["z"])
+    g = {
+        "PS1": {"z": z1, "pass": bool(z1 > 2)},
+        "PS2": {"z": z2, "pass": bool(z2 > 2)},
+        "PS3": {"pass": bool(z1 > -2 and z2 > -2)},
+    }
     res["tuning_selected_no_rescaling"] = nothing
     res["gates"] = g
     res["implement"] = bool(not nothing and g["PS3"]["pass"] and z1 > -1 and z2 > -1)

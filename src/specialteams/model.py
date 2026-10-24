@@ -19,14 +19,18 @@ from src.defense.stints import COMPONENTS
 
 log = logging.getLogger(__name__)
 
-ADV_STATES = [(5, 3), (4, 3), (6, 5), (6, 4), (6, 3), (4, 5), (3, 5), (3, 4), (5, 6), (4, 6), (3, 6)]   # ordered (attackers, defenders); (5, 4) is the reference
+# ordered (attackers, defenders); (5, 4) is the reference
+ADV_STATES = [(5, 3), (4, 3), (6, 5), (6, 4), (6, 3), (4, 5), (3, 5), (3, 4), (5, 6), (4, 6), (3, 6)]
 CLASSES = {"pp": ("adv", 1), "pk": ("adv", 2), "4v4": ("4v4", 0), "3v3": ("3v3", 0)}
 GROUP_ROLES = {"adv": (1, 2), "4v4": (0,), "3v3": (0,)}
 
 
 def fringe_lookup(status: pl.DataFrame) -> dict[tuple[int, int], tuple[bool, bool]]:
     """(season, player_id) -> (is_fringe, is_defenseman)."""
-    return {(s, p): (bool(f), g == "D") for p, s, f, g in status.select("player_id", "season", "fringe", "pos_group").iter_rows()}
+    return {
+        (s, p): (bool(f), g == "D")
+        for p, s, f, g in status.select("player_id", "season", "fringe", "pos_group").iter_rows()
+    }
 
 
 def _fr_keys(group: str) -> list[tuple[int, str, str]]:
@@ -39,7 +43,9 @@ def as_stints_frame(st: pl.DataFrame, group: str) -> pl.DataFrame:
     roles = [((1, 2) if h > a else (2, 1)) if adv else (0, 0) for h, a in zip(st["nh"].to_list(), st["na"].to_list())]
     home_on = [[p * 10 + r[0] for p in lst] for lst, r in zip(st["home_on"].to_list(), roles)]
     away_on = [[p * 10 + r[1] for p in lst] for lst, r in zip(st["away_on"].to_list(), roles)]
-    d = st.with_columns(pl.Series("home_on", home_on, dtype=pl.List(pl.Int64)), pl.Series("away_on", away_on, dtype=pl.List(pl.Int64)))
+    d = st.with_columns(
+        pl.Series("home_on", home_on, dtype=pl.List(pl.Int64)), pl.Series("away_on", away_on, dtype=pl.List(pl.Int64))
+    )
     zero = pl.lit(0.0)
     for side in "ha":
         for c in COMPONENTS:
@@ -48,7 +54,8 @@ def as_stints_frame(st: pl.DataFrame, group: str) -> pl.DataFrame:
 
 
 def extras(st: pl.DataFrame, group: str, lookup: dict) -> np.ndarray:
-    """Extra unpenalized covariates for the 2n rows: skater-count state dummies (adv) and fringe counts by role, block, position."""
+    """Extra unpenalized covariates for the 2n rows: skater-count state dummies (adv) and fringe counts by role, block,
+    position."""
     n = st.height
     keys = _fr_keys(group)
     kidx = {k: i for i, k in enumerate(keys)}
@@ -59,7 +66,10 @@ def extras(st: pl.DataFrame, group: str, lookup: dict) -> np.ndarray:
     for r in range(n):
         s = seasons[r]
         rh, ra = ((1, 2) if nh[r] > na[r] else (2, 1)) if adv else (0, 0)
-        for row, att, dfn, r_att, r_def in ((r, home_on[r], away_on[r], rh, ra), (n + r, away_on[r], home_on[r], ra, rh)):
+        for row, att, dfn, r_att, r_def in (
+            (r, home_on[r], away_on[r], rh, ra),
+            (n + r, away_on[r], home_on[r], ra, rh),
+        ):
             for p in att:
                 f, is_d = lookup.get((s, p), (True, False))
                 if f:
@@ -76,7 +86,8 @@ def extras(st: pl.DataFrame, group: str, lookup: dict) -> np.ndarray:
 
 
 def make_design(st: pl.DataFrame, group: str, lookup: dict, players: list[int] | None = None) -> ridge.Design:
-    """Design for one group's stints (any set of seasons). The last ``len(_fr_keys(group))`` columns are the fringe counts."""
+    """Design for one group's stints (any set of seasons). The last ``len(_fr_keys(group))`` columns are the fringe
+    counts."""
     fr = as_stints_frame(st, group)
     d = ridge.build_design(fr, ["xg"], players)
     ex = extras(st, group, lookup)
@@ -99,13 +110,15 @@ def chain_fits(designs: dict[int, ridge.Design], alpha: float, rho: float) -> di
     return out
 
 
-def predict_next(fit_d: ridge.Design, beta: np.ndarray, nxt: pl.DataFrame, group: str, lookup: dict) -> tuple[ridge.Design, np.ndarray, np.ndarray]:
+def predict_next(
+    fit_d: ridge.Design, beta: np.ndarray, nxt: pl.DataFrame, group: str, lookup: dict
+) -> tuple[ridge.Design, np.ndarray, np.ndarray]:
     """Season-Y coefficients applied to season Y+1 stints: (design, full prediction, covariates-only prediction)."""
     nd = make_design(nxt, group, lookup, players=fit_d.players)
     b = beta[:, 0]
     P = fit_d.P
     cov_only = b.copy()
-    cov_only[1:1 + 2 * P] = 0.0
+    cov_only[1 : 1 + 2 * P] = 0.0
     return nd, nd.X @ b, nd.X @ cov_only
 
 
@@ -117,10 +130,13 @@ def fringe_effects(fits: dict, group: str) -> dict[tuple[int, str, str], float]:
     return dict(zip(keys, mat.mean(0).tolist()))
 
 
-def player_values(fits: dict, group: str, fringe_fx: dict, lookup: dict, draws: dict[int, np.ndarray] | None = None) -> pl.DataFrame:
+def player_values(
+    fits: dict, group: str, fringe_fx: dict, lookup: dict, draws: dict[int, np.ndarray] | None = None
+) -> pl.DataFrame:
     """Per player-season-role rate above replacement (xG per 60) and goals, from the fitted coefficients.
 
-    rate = (offense - regular * f_att) - (defense - regular * f_def): a regular's coefficients are measured against the pooled
+    rate = (offense - regular * f_att) - (defense - regular * f_def): a regular's coefficients are measured against the
+    pooled
     fringe effect of the same role, block and position; a fringe player carries his own shrunk deviation.
     """
     rows = []
@@ -139,9 +155,26 @@ def player_values(fits: dict, group: str, fringe_fx: dict, lookup: dict, draws: 
         sd_rate = np.full(len(ids), np.nan)
         if draws is not None:
             P = d.P
-            net = draws[s][:, 1:1 + P, 0] - draws[s][:, 1 + P:1 + 2 * P, 0]
+            net = draws[s][:, 1 : 1 + P, 0] - draws[s][:, 1 + P : 1 + 2 * P, 0]
             sd_rate = net.std(0)
         m = t["minutes"].to_numpy()
-        rows.append(pl.DataFrame({"player_id": pid, "role": role, "season": s, "minutes": m, "fringe": fr, "pos_group": pos, "rate_rapm": rate,
-                                  "gar_rapm": rate * m / 60.0, "gar_rapm_sd": sd_rate * m / 60.0, "off_xg": t["off_xg"], "def_xg": t["def_xg"]}))
-    return pl.concat(rows).with_columns(pl.col("season").cast(pl.Int64), pl.col("player_id").cast(pl.Int64), pl.col("role").cast(pl.Int64))
+        rows.append(
+            pl.DataFrame(
+                {
+                    "player_id": pid,
+                    "role": role,
+                    "season": s,
+                    "minutes": m,
+                    "fringe": fr,
+                    "pos_group": pos,
+                    "rate_rapm": rate,
+                    "gar_rapm": rate * m / 60.0,
+                    "gar_rapm_sd": sd_rate * m / 60.0,
+                    "off_xg": t["off_xg"],
+                    "def_xg": t["def_xg"],
+                }
+            )
+        )
+    return pl.concat(rows).with_columns(
+        pl.col("season").cast(pl.Int64), pl.col("player_id").cast(pl.Int64), pl.col("role").cast(pl.Int64)
+    )
