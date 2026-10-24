@@ -16,7 +16,6 @@ data/outputs/pm_epa_player_game.csv
 reports/figures/value_surfaces/*.svg
 .DS_Store
 .venv-bayes/
-.claude/
 
 # logs and reports with third-party data (sportsbook prices, lineup feed): a separate private repository (src/live/paths.py)
 data/private/
