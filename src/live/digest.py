@@ -2,7 +2,7 @@
 
 Builds data/private/reports/daily_digest.md (plain text; first line is the subject) and daily_digest.html (the same with charts drawn as HTML tables, so no image attachment is needed):
 yesterday's settled picks with how each game went on expected goals, the season ledger with a cumulative-profit chart by date, today's locked picks and forecasts, and for the owner's teams (Jets, Senators)
-a stacked-bar chart of each skater's 5v5 impact in yesterday's game. Run after src.live.daily (which calls it). Prices are decimal odds."""
+a stacked-bar chart of each skater's impact in yesterday's game in every situation (even strength, power play, shorthanded). Run after src.live.daily (which calls it). Prices are decimal odds."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from src.config import ROOT
 from src.live import paths
 from src.live import picks as pk
 from src.live import score as sc
+from src.live.game_report import ES_C, PP_C, SH_C  # situation colours: even strength blue, power play orange, shorthanded aqua
 from src.live.odds import implied
 from src.scoreeffects import factors as sf
 
@@ -26,8 +27,7 @@ OUT_HTML = paths.PRIVATE_REPORTS / "daily_digest.html"
 LIVE = ROOT / "data/live/processed"
 FOCUS_TEAMS = ("WPG", "OTT")            # teams whose games get the per-player chart
 BLUE, ORANGE, GREY, RED, GREEN, INK, MUTED = "#2a78d6", "#eb6834", "#9a9994", "#c9403f", "#1a8f63", "#0b0b0b", "#52514e"
-OWN, MATES, AGAINST = "#2a78d6", "#1baf7a", "#eb6834"   # stacked-bar components: blue, aqua, orange (the reference palette's first three slots, colour-blind-safe in every pairing)
-BLOCK = "\u2588"            # full block: the unit of the text bars
+BLOCK, SHADE = "\u2588", "\u2592"            # full block; medium shade marks linemates' even-strength shots (texture, so it does not rest on colour alone)
 VERDICT = {(True, True): ("deserved", "won and had the better of the chances"), (True, False): ("fortunate", "won despite being out-chanced"),
            (False, True): ("unlucky", "lost despite having the better of the chances"), (False, False): ("outplayed", "lost and was out-chanced")}
 
@@ -127,24 +127,40 @@ def html_profit_chart(cum: pl.DataFrame, max_days: int = 45) -> str:
             f"<tr><td colspan={c.height} height=1 bgcolor={MUTED}></td></tr>\n<tr>{nl.join(dn)}</tr>\n<tr>{nl.join(lab)}</tr>\n</table>")
 
 
-def html_impact(players: pl.DataFrame, title: str, width: int = 16) -> str:
-    """Stacked horizontal bars per skater, drawn with block characters in a monospace block (small enough to pass through the mail tool as text):
-    expected goals against at 5v5 to the left of the centre line (orange), for to the right (his own shots blue, linemates' aqua), net at the end; sorted by net within team."""
-    lim = max(float(players["on_xgf_5v5"].max()), float(players["on_xga_5v5"].max()), 0.1)
+def _segments(values: list[float], per: float, width: int) -> list[int]:
+    """Block counts for consecutive stacked segments, rounded on the running total so the bar's length matches the total and small segments are not lost to rounding."""
+    out, cum, prev = [], 0.0, 0
+    for v in values:
+        cum += v
+        end = min(int(round(cum * per)), width)
+        out.append(max(end - prev, 0))
+        prev = end
+    return out
+
+
+def html_impact(players: pl.DataFrame, title: str, width: int = 18) -> str:
+    """Stacked horizontal bars per skater in every situation, drawn with block characters in a monospace block (small enough to pass through the mail tool as text):
+    expected goals against while on the ice to the left of the centre line, for to the right; colour = situation, shaded blocks = linemates' even-strength shots;
+    the number is the situation-adjusted net (each situation against a league-average skater in his minutes there), and skaters are sorted by it."""
+    lim = max(float(players["xgf_all"].max()), float(players["xga_all"].max()), 0.1)
     per = width / lim
     teams = players["team"].unique(maintain_order=True).to_list()
+    key = (f'<b><font color={ES_C}>{BLOCK * 2}</font></b> even strength (his own shots) <b><font color={ES_C}>{SHADE * 2}</font></b> even strength (linemates) '
+           f'<b><font color={PP_C}>{BLOCK * 2}</font></b> power play <b><font color={SH_C}>{BLOCK * 2}</font></b> shorthanded / penalty kill')
     out = [f'<p style="margin:14px 0 2px 0"><b>{html.escape(title)}</b></p>',
-           f'<p style="margin:0 0 4px 0;font-size:11px;color:{MUTED}">Expected goals at 5v5 while on the ice: <b><font color={AGAINST}>{BLOCK * 2} against</font></b> (left of the line), <b><font color={OWN}>{BLOCK * 2} his own shots</font></b>, <b><font color={MATES}>{BLOCK * 2} linemates\' shots</font></b>; number = net for minus against. Sorted best to worst.</p>',
+           f'<p style="margin:0 0 4px 0;font-size:11px;color:{MUTED}">Expected goals while on the ice, all situations: against left of the line, for right of it. {key}. '
+           "Number = net versus a league-average skater in the same minutes of each situation, so special-teams minutes do not tilt it. Sorted best to worst. Empty-net shots left out.</p>",
            '<pre style="font-family:Consolas,Menlo,monospace;font-size:12px;line-height:14px;margin:0">']
     for team in teams:
-        t = players.filter(pl.col("team") == team).sort("on_xgd_5v5", descending=True)
+        t = players.filter(pl.col("team") == team).sort("net_adj", descending=True)
         out.append(f"<b>{html.escape(team)}</b>")
         for r in t.iter_rows(named=True):
-            a = min(int(round(r["on_xga_5v5"] * per)), width)
-            own = min(int(round(r["own_xg_5v5"] * per)), width)
-            tot = min(max(int(round(r["on_xgf_5v5"] * per)), own), width)
+            own, mates, pp, sh = _segments([r["es_own"], r["es_mates"], r["pp_for"], r["sh_for"]], per, width)
+            ea, pk, ppa = _segments([r["es_against"], r["pk_against"], r["ppa_against"]], per, width)
             name = f"{r['name']} ({r['position']})"[:21].ljust(21)
-            out.append(f"{html.escape(name)} {' ' * (width - a)}<font color={AGAINST}>{BLOCK * a}</font>|<font color={OWN}>{BLOCK * own}</font><font color={MATES}>{BLOCK * (tot - own)}</font>{' ' * (width - tot)} <b>{r['on_xgd_5v5']:+.2f}</b>")
+            right = f"<font color={ES_C}>{BLOCK * own}{SHADE * mates}</font><font color={PP_C}>{BLOCK * pp}</font><font color={SH_C}>{BLOCK * sh}</font>"
+            left = f"<font color={PP_C}>{BLOCK * ppa}</font><font color={SH_C}>{BLOCK * pk}</font><font color={ES_C}>{BLOCK * ea}</font>"
+            out.append(f"{html.escape(name)} {' ' * (width - ea - pk - ppa)}{left}|{right}{' ' * (width - own - mates - pp - sh)} <b>{r['net_adj']:+.2f}</b>")
         out.append("")
     out.append("</pre>")
     return "\n".join(out)
@@ -290,9 +306,9 @@ def build(day: str | None = None) -> tuple[str, str]:
         for x in fg:
             T.append(f"- {x['title']}. {x['line']}")
             for team in x["players"]["team"].unique(maintain_order=True).to_list():
-                t = x["players"].filter(pl.col("team") == team).sort("on_xgd_5v5", descending=True)
-                T.append(f"    {team} by 5v5 on-ice xG differential: best " + ", ".join(f"{r['name']} {r['on_xgd_5v5']:+.2f}" for r in t.head(3).iter_rows(named=True))
-                         + "; lowest " + ", ".join(f"{r['name']} {r['on_xgd_5v5']:+.2f}" for r in t.tail(3).iter_rows(named=True)) + ".")
+                t = x["players"].filter(pl.col("team") == team).sort("net_adj", descending=True)
+                T.append(f"    {team} by situation-adjusted net xG: best " + ", ".join(f"{r['name']} {r['net_adj']:+.2f}" for r in t.head(3).iter_rows(named=True))
+                         + "; lowest " + ", ".join(f"{r['name']} {r['net_adj']:+.2f}" for r in t.tail(3).iter_rows(named=True)) + ".")
             T.append(f"    Full charts: {rel(x['dir'])}")
             H += [html_impact(x["players"], x["title"]), f'<p style="font-size:12px;color:{MUTED};margin:4px 0">{html.escape(x["line"])}</p>']
     foot = ("The model has no demonstrated edge over the market yet. This is record-keeping of your own picks, not betting advice. Prices are decimal odds as captured at the daily run and may have moved. "

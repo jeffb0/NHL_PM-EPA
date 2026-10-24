@@ -2,7 +2,7 @@
 
 Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 units per pick; decimal odds as locked at the daily run. **Bookkeeping for the owner's own wagers, not advice; the model has no demonstrated edge over the market.**
 
-**Season to date: +8.29 units ($+8.29) on 73 units staked; record 36–21; return +11.4% per unit (95% interval -12% to +33%).** 7 pick(s) pending (12 units).
+**Season to date: +3.33 units ($+3.33) on 85 units staked; record 38–26; return +3.9% per unit (95% interval -19% to +26%).** 1 pick(s) pending (1 units).
 
 ![cumulative profit](picks_profit.png)
 
@@ -10,18 +10,13 @@ Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 
 
 | date | pick | units | odds (decimal) | book | model |
 |---|---|---|---|---|---|
-| 2026-10-22 | **NSH** over BOS | 1 ($1) | 2.35 | BetMGM | 47.0% |
-| 2026-10-22 | **NYR** over TOR | 1 ($1) | 1.95 | Hard Rock Bet | 56.2% |
-| 2026-10-22 | **PIT** over FLA | 2 ($2) | 1.89 | Caesars | 61.9% |
-| 2026-10-22 | **MIN** over CGY | 3 ($3) | 1.51 | theScore Bet | 74.7% |
-| 2026-10-22 | **CAR** over EDM | 2 ($2) | 1.87 | Caesars | 62.5% |
-| 2026-10-22 | **UTA** over SEA | 1 ($1) | 1.62 | Hard Rock Bet | 66.1% |
-| 2026-10-22 | **DET** over VAN | 2 ($2) | 1.62 | Hard Rock Bet | 67.4% |
+| 2026-10-23 | **TBL** over COL | 1 ($1) | 2.12 | FanDuel | 50.6% |
 
 ## By day
 
 | date | picks | won | units staked | profit |
 |---|---|---|---|---|
+| 2026-10-22 | 7 | 2 | 12 | -4.96 |
 | 2026-10-21 | 1 | 1 | 2 | +1.90 |
 | 2026-10-20 | 6 | 5 | 8 | +0.61 |
 | 2026-10-19 | 1 | 1 | 2 | +1.48 |
@@ -44,6 +39,13 @@ Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 
 
 | date | pick | units | odds (decimal) | book | score (away–home) | result | profit |
 |---|---|---|---|---|---|---|---|
+| 2026-10-22 | UTA over SEA | 1 | 1.62 | Hard Rock Bet | UTA 3–5 SEA (REG) | lost | -1.00 |
+| 2026-10-22 | DET over VAN | 2 | 1.62 | Hard Rock Bet | DET 5–2 VAN (REG) | won | +1.25 |
+| 2026-10-22 | MIN over CGY | 3 | 1.51 | theScore Bet | MIN 1–2 CGY (REG) | lost | -3.00 |
+| 2026-10-22 | CAR over EDM | 2 | 1.87 | Caesars | CAR 5–6 EDM (SO) | lost | -2.00 |
+| 2026-10-22 | NSH over BOS | 1 | 2.35 | BetMGM | NSH 0–6 BOS (REG) | lost | -1.00 |
+| 2026-10-22 | NYR over TOR | 1 | 1.95 | Hard Rock Bet | NYR 4–5 TOR (REG) | lost | -1.00 |
+| 2026-10-22 | PIT over FLA | 2 | 1.89 | Caesars | FLA 0–4 PIT (REG) | won | +1.79 |
 | 2026-10-21 | OTT over FLA | 2 | 1.95 | Hard Rock Bet | FLA 1–5 OTT (REG) | won | +1.90 |
 | 2026-10-20 | TBL over VGK | 1 | 1.98 | Caesars | TBL 6–2 VGK (REG) | won | +0.98 |
 | 2026-10-20 | CAR over VAN | 1 | 1.34 | BetMGM | CAR 6–3 VAN (REG) | won | +0.34 |
@@ -97,7 +99,3 @@ Rules: [docs/market/picks.md](../../docs/market/picks.md). One unit = $1; 1–3 
 | 2026-10-05 | DAL over SJS | 1 | 1.50 | BetMGM | SJS 0–5 DAL (REG) | won | +0.50 |
 | 2026-10-05 | OTT over BOS | 1 | 1.85 | DraftKings | OTT 4–1 BOS (REG) | won | +0.85 |
 | 2026-10-05 | PIT over WPG | 2 | 1.57 | FanDuel | WPG 3–2 PIT (REG) | lost | -2.00 |
-| 2026-10-04 | VGK over VAN | 1 | 1.36 | BetMGM | VGK 3–2 VAN (REG) | won | +0.36 |
-| 2026-10-04 | FLA over ANA | 1 | 1.75 | FanDuel | FLA 2–3 ANA (OT) | lost | -1.00 |
-| 2026-10-04 | SEA over CGY | 1 | 1.67 | BetMGM | CGY 1–6 SEA (REG) | won | +0.67 |
-| 2026-10-04 | NYR over UTA | 1 | 1.80 | BetMGM | UTA 2–4 NYR (REG) | won | +0.80 |
