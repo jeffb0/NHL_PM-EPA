@@ -24,8 +24,9 @@ UNBLOCKED = ["shot-on-goal", "missed-shot", "goal"]
 # impact-chart colours by situation (the reference palette's first three slots: the only three that stay distinct in every pairing for colour-blind readers);
 # the side of the centre line says for or against, and texture separates a player's own even-strength shots (solid) from his linemates' (hatched / shaded)
 ES_C, PP_C, SH_C = "#2a78d6", "#eb6834", "#1baf7a"           # even strength blue, power play orange, shorthanded aqua
+ES_LIGHT = "#86b6ef"                                          # linemates' even-strength shots: a lighter step of the same blue (passes the colour-blind and normal-vision checks against the other three)
 EVEN = ("5v5", "4v4", "3v3")
-SIT = ["es_own", "es_mates", "pp_for", "sh_for", "es_against", "pk_against", "ppa_against"]
+SIT = ["es_own", "es_mates", "pp_for", "sh_for", "es_against", "pk_against", "ppa_against", "es_danger_for", "es_danger_against"]
 
 
 def load(game_id: int) -> dict:
@@ -40,12 +41,24 @@ def load(game_id: int) -> dict:
     sh = sf.apply(sh, pl.read_csv(wp) if wp.exists() else pl.DataFrame(schema={"period": pl.Int64, "d": pl.Int64, "rate60": pl.Float64, "w": pl.Float64}))
     pg = pl.read_parquet(proc / "player_game.parquet").filter(pl.col("game_id") == game_id)
     oi = pl.read_parquet(proc / "onice.parquet").filter(pl.col("game_id") == game_id).select("event_idx", "home_on", "away_on")
-    return {"g": g, "ev": ev, "sh": sh, "pg": pg, "names": names, "oi": oi}
+    obs = pl.read_parquet(proc / "obs_valued.parquet", columns=["poss_id", "game_id", "seq", "team_id", "strength", "v", "onice", "opp_onice"]).filter(pl.col("game_id") == game_id)
+    poss = pl.read_parquet(proc / "poss_valued_epa.parquet", columns=["poss_id", "game_id", "end_class"]).filter(pl.col("game_id") == game_id)
+    return {"g": g, "ev": ev, "sh": sh, "pg": pg, "names": names, "oi": oi, "obs": obs, "poss": poss}
+
+
+def unconverted_danger(obs: pl.DataFrame, poss: pl.DataFrame) -> pl.DataFrame:
+    """Per even-strength possession that ended without an unblocked shot (blocked shots included): the danger it built, its highest expected-goal value
+    (PM-EPA possession value) minus its value at the start, floored at zero, with the skaters on ice for each side at that peak."""
+    first = obs.sort("poss_id", "seq").group_by("poss_id").agg(pl.col("v").first().alias("v_start"))
+    peak = obs.sort(["poss_id", "v", "seq"], descending=[False, True, False]).unique("poss_id", keep="first").select("poss_id", "team_id", "strength", pl.col("v").alias("v_peak"), "onice", "opp_onice")
+    p = peak.join(first, on="poss_id").join(poss.select("poss_id", "end_class"), on="poss_id")
+    return p.filter((pl.col("end_class") == 2) & pl.col("strength").is_in(EVEN)).with_columns((pl.col("v_peak") - pl.col("v_start")).clip(lower_bound=0.0).alias("built"))
 
 
 def situations(d: dict) -> pl.DataFrame:
     """Per skater: on-ice expected goals by situation, from his team's point of view. For: his own even-strength shots, his linemates' even-strength shots,
-    power play, shorthanded. Against: even strength, on the penalty kill, on the power play (shorthanded chances conceded). Empty-net shots are left out."""
+    power play, shorthanded. Against: even strength, on the penalty kill, on the power play (shorthanded chances conceded). Empty-net shots are left out.
+    Also the even-strength danger built without an unblocked shot (unconverted_danger): by his team (for) and by the opponent (against) while he was on the ice."""
     g = d["g"]
     s = d["sh"].filter(~pl.col("empty_net") & (pl.col("strength") != "EN")).join(d["oi"], on="event_idx", how="inner")
     home = pl.col("team_id") == g["home_id"]
@@ -56,7 +69,11 @@ def situations(d: dict) -> pl.DataFrame:
         pl.col("xg").filter(pp).sum().alias("pp_for"), pl.col("xg").filter(pk).sum().alias("sh_for"))
     a = s.explode("against_on").group_by(pl.col("against_on").alias("player_id")).agg(
         pl.col("xg").filter(es).sum().alias("es_against"), pl.col("xg").filter(pp).sum().alias("pk_against"), pl.col("xg").filter(pk).sum().alias("ppa_against"))
-    return f.join(a, on="player_id", how="full", coalesce=True).with_columns(pl.col(SIT).fill_null(0.0))
+    u = unconverted_danger(d["obs"], d["poss"])
+    df = u.explode("onice").group_by(pl.col("onice").alias("player_id")).agg(pl.col("built").sum().alias("es_danger_for"))
+    da = u.explode("opp_onice").group_by(pl.col("opp_onice").alias("player_id")).agg(pl.col("built").sum().alias("es_danger_against"))
+    out = f.join(a, on="player_id", how="full", coalesce=True).join(df, on="player_id", how="full", coalesce=True).join(da, on="player_id", how="full", coalesce=True)
+    return out.with_columns(pl.col(SIT).fill_null(0.0))
 
 
 def team_summary(d: dict) -> pl.DataFrame:
@@ -100,7 +117,7 @@ def adjusted(t: pl.DataFrame, r: dict[str, float]) -> pl.DataFrame:
     """Situation-adjusted net: in each situation, (on-ice for minus the league rate times his minutes) minus (on-ice against minus the league rate times his minutes), summed.
     A penalty killer is credited for allowing fewer chances than an average penalty kill would in his minutes, not charged for every chance; the same for the power play and even strength."""
     t_es, t_pp, t_pk = (pl.col("toi_5v5_s") + pl.col("toi_4v4") + pl.col("toi_3v3")) / 60, pl.col("toi_PP") / 60, pl.col("toi_PK") / 60
-    return t.with_columns(((pl.col("es_own") + pl.col("es_mates") - r["es_for"] * t_es) - (pl.col("es_against") - r["es_against"] * t_es)).alias("adj_es"),
+    return t.with_columns(((pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for") - r["es_for"] * t_es) - (pl.col("es_against") + pl.col("es_danger_against") - r["es_against"] * t_es)).alias("adj_es"),
                           ((pl.col("pp_for") - r["pp_for"] * t_pp) - (pl.col("ppa_against") - r["pp_against"] * t_pp)).alias("adj_pp"),
                           ((pl.col("sh_for") - r["pk_for"] * t_pk) - (pl.col("pk_against") - r["pk_against"] * t_pk)).alias("adj_pk")).with_columns(
         (pl.col("adj_es") + pl.col("adj_pp") + pl.col("adj_pk")).alias("net_adj"))
@@ -113,7 +130,8 @@ def player_table(d: dict) -> pl.DataFrame:
                      pl.col("oi_xgf").alias("on_xgf_5v5"), pl.col("oi_xga").alias("on_xga_5v5"), (pl.col("oi_xgf") - pl.col("oi_xga")).alias("on_xgd_5v5"), (pl.col("toi_5v5") / 60).alias("toi_5v5"),
                      pl.col("ixg_ev").alias("own_xg_5v5"), (pl.col("oi_xgf") - pl.col("ixg_ev")).clip(lower_bound=0.0).alias("mates_xg_5v5"), "player_id", pl.col("toi_5v5").alias("toi_5v5_s"), "toi_4v4", "toi_3v3", "toi_PP", "toi_PK")
     t = t.join(situations(d), on="player_id", how="left").with_columns(pl.col(SIT).fill_null(0.0))
-    t = t.with_columns((pl.col("es_own") + pl.col("es_mates") + pl.col("pp_for") + pl.col("sh_for")).alias("xgf_all"), (pl.col("es_against") + pl.col("pk_against") + pl.col("ppa_against")).alias("xga_all"))
+    t = t.with_columns((pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for") + pl.col("pp_for") + pl.col("sh_for")).alias("xgf_all"),
+                       (pl.col("es_against") + pl.col("es_danger_against") + pl.col("pk_against") + pl.col("ppa_against")).alias("xga_all"))
     t = adjusted(t.with_columns((pl.col("xgf_all") - pl.col("xga_all")).alias("net_all")), league_rates(str(load_config().path(load_config().data.processed_dir))))
     return t.drop("player_id", "toi_5v5_s", "toi_4v4", "toi_3v3").with_columns((pl.col("toi_PP") / 60).alias("toi_pp"), (pl.col("toi_PK") / 60).alias("toi_pk")).drop("toi_PP", "toi_PK").sort(
         "team", "net_adj", descending=[False, True])
@@ -131,13 +149,14 @@ def fig_impact(d: dict, pt: pl.DataFrame):
         y = np.arange(t.height)
         v = {c: t[c].to_numpy() for c in SIT}
         left = np.zeros(t.height)
-        for c, col, hatch in (("es_own", ES_C, None), ("es_mates", ES_C, "////"), ("pp_for", PP_C, None), ("sh_for", SH_C, None)):
-            ax.barh(y, v[c], left=left, color=col, alpha=0.55 if hatch else 1.0, hatch=hatch, **bar)
-            left += v[c]
+        play = v["es_mates"] + v["es_danger_for"]
+        for val, col, hatch in ((v["es_own"], ES_C, None), (play, ES_LIGHT, "////"), (v["pp_for"], PP_C, None), (v["sh_for"], SH_C, None)):
+            ax.barh(y, val, left=left, color=col, hatch=hatch, **bar)
+            left += val
         left = np.zeros(t.height)
-        for c, col in (("es_against", ES_C), ("pk_against", SH_C), ("ppa_against", PP_C)):
-            ax.barh(y, -v[c], left=left, color=col, **bar)
-            left -= v[c]
+        for val, col, hatch in ((v["es_against"], ES_C, None), (v["es_danger_against"], ES_LIGHT, "////"), (v["pk_against"], SH_C, None), (v["ppa_against"], PP_C, None)):
+            ax.barh(y, -val, left=left, color=col, hatch=hatch, **bar)
+            left -= val
         net = t["net_adj"].to_numpy()
         ax.text(lim, t.height - 0.3, "net vs\naverage", va="bottom", ha="right", fontsize=8, color=style.TEXT2, linespacing=1.0)
         for yi, n in zip(y, net):
@@ -150,15 +169,15 @@ def fig_impact(d: dict, pt: pl.DataFrame):
         ax.set_title(ab, color=style.TEXT, fontsize=13)
         ax.set_xlabel("expected goals while on the ice, all situations   (against  ←  →  for)")
     h = axes[0]
-    h.barh([-9], [0], color=ES_C, label="even strength: his own shots")
-    h.barh([-9], [0], color=ES_C, alpha=0.55, hatch="////", label="even strength: linemates' shots")
+    h.barh([-9], [0], color=ES_C, label="EV-Shots: even-strength shots (his own for; all against)")
+    h.barh([-9], [0], color=ES_LIGHT, hatch="////", label="EV-Play: linemates' shots and danger built without a shot (for), danger allowed without a shot (against)")
     h.barh([-9], [0], color=PP_C, label="power play")
     h.barh([-9], [0], color=SH_C, label="shorthanded / penalty kill")
-    fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=4, bbox_to_anchor=(0.5, 0.025), fontsize=9)
+    fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=2, bbox_to_anchor=(0.5, 0.025), fontsize=9)
     fig.text(0.5, 0.004, "Number at right: net versus a league-average skater in the same minutes of each situation (even strength, power play, penalty kill), so special-teams minutes do not tilt it.",
              ha="center", fontsize=8.5, color=style.TEXT2)
     fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: impact by skater, all situations (sorted by situation-adjusted net)", x=0.02, ha="left", fontweight="bold", fontsize=12)
-    fig.tight_layout(rect=(0, 0.07, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.1, 1, 0.96))
     return fig
 
 
