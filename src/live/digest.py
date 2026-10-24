@@ -34,7 +34,7 @@ FOCUS_TEAMS = ("WPG", "OTT")            # teams whose games get the per-player c
 BLUE, ORANGE, GREY, RED, GREEN, INK, MUTED = "#2a78d6", "#eb6834", "#9a9994", "#c9403f", "#1a8f63", "#0b0b0b", "#52514e"
 BLOCK = "\u2588"            # full block, the unit of the text bars (shade characters render grey and too tall in Gmail, so linemates' shots are a lighter blue instead)
 LEGEND = [(ES_C, "EV-Shots", "even-strength shot chances"), (ES_LIGHT, "EV-Play", "linemates' shots and danger built without a shot; left of the line, danger allowed without a shot"),
-          (PP_C, "PP", "power play"), (SH_C, "PK", "shorthanded: chances for on the right, chances against on the left")]
+          (PP_C, "PP", "power play, net vs league average: right if better, left if worse"), (SH_C, "PK", "penalty kill, net vs league average: right if better, left if worse")]
 VERDICT = {(True, True): ("deserved", "won and had the better of the chances"), (True, False): ("fortunate", "won despite being out-chanced"),
            (False, True): ("unlucky", "lost despite having the better of the chances"), (False, False): ("outplayed", "lost and was out-chanced")}
 
@@ -148,8 +148,11 @@ def _segments(values: list[float], per: float, width: int) -> list[int]:
 def html_impact(players: pl.DataFrame, title: str, width: int = 18) -> str:
     """Stacked horizontal bars per skater in every situation, drawn with block characters in a monospace block (small enough to pass through the mail tool as text):
     expected goals against while on the ice to the left of the centre line, for to the right; colour = situation, light blue = linemates' even-strength shots;
-    the number is the situation-adjusted net (each situation against a league-average skater in his minutes there), and skaters are sorted by it."""
-    lim = max(float(players["xgf_all"].max()), float(players["xga_all"].max()), 0.1)
+    power play and penalty kill are each one net segment against the league rate for his minutes there (right if better, left if worse). The bars add up to the number,
+    the situation-adjusted net, and skaters are sorted by it."""
+    right = players["es_own"] + players["es_mates"] + players["es_danger_for"] + players["adj_pp"].clip(lower_bound=0) + players["adj_pk"].clip(lower_bound=0)
+    left = players["es_against"] + players["es_danger_against"] + (-players["adj_pp"]).clip(lower_bound=0) + (-players["adj_pk"]).clip(lower_bound=0)
+    lim = max(float(right.max()), float(left.max()), 0.1)
     per = width / lim
     teams = players["team"].unique(maintain_order=True).to_list()
     legend = "".join(f"<tr><td width=14 bgcolor={c}>&nbsp;</td><td>&nbsp;<b>{lab}</b> <font color={MUTED}>{desc}</font></td></tr>" for c, lab, desc in LEGEND)
@@ -161,11 +164,11 @@ def html_impact(players: pl.DataFrame, title: str, width: int = 18) -> str:
         t = players.filter(pl.col("team") == team).sort("net_adj", descending=True)
         out.append(f"<b>{html.escape(team)}</b>")
         for r in t.iter_rows(named=True):
-            own, mates, pp, sh = _segments([r["es_own"], r["es_mates"] + r["es_danger_for"], r["pp_for"], r["sh_for"]], per, width)
-            ea, da, pk, ppa = _segments([r["es_against"], r["es_danger_against"], r["pk_against"], r["ppa_against"]], per, width)
+            own, mates, pp, sh = _segments([r["es_own"], r["es_mates"] + r["es_danger_for"], max(r["adj_pp"], 0.0), max(r["adj_pk"], 0.0)], per, width)
+            ea, da, ppa, pk = _segments([r["es_against"], r["es_danger_against"], max(-r["adj_pp"], 0.0), max(-r["adj_pk"], 0.0)], per, width)
             name = f"{r['name']} ({r['position']})"[:21].ljust(21)
             right = f"<font color={ES_C}>{BLOCK * own}</font><font color={ES_LIGHT}>{BLOCK * mates}</font><font color={PP_C}>{BLOCK * pp}</font><font color={SH_C}>{BLOCK * sh}</font>"
-            left = f"<font color={PP_C}>{BLOCK * ppa}</font><font color={SH_C}>{BLOCK * pk}</font><font color={ES_LIGHT}>{BLOCK * da}</font><font color={ES_C}>{BLOCK * ea}</font>"
+            left = f"<font color={SH_C}>{BLOCK * pk}</font><font color={PP_C}>{BLOCK * ppa}</font><font color={ES_LIGHT}>{BLOCK * da}</font><font color={ES_C}>{BLOCK * ea}</font>"     # outward: EV, EV-Play, PP, PK
             out.append(f"{html.escape(name)} {' ' * (width - ea - da - pk - ppa)}{left}|{right}{' ' * (width - own - mates - pp - sh)} <b>{r['net_adj']:+.2f}</b>")
         out.append("")
     out.append("</pre>")

@@ -139,10 +139,13 @@ def player_table(d: dict) -> pl.DataFrame:
 
 def fig_impact(d: dict, pt: pl.DataFrame):
     """Stacked bars of each skater's on-ice expected goals in every situation: for (right of the line) his own and his linemates' even-strength shots, power play and shorthanded;
-    against (left) at even strength, on the penalty kill and on the power play. The number is the situation-adjusted net (each situation against the league rate for his minutes); sorted by it."""
+    against (left) at even strength. Power play and penalty kill are each one net segment against the league rate for his minutes there (right if better than average, left if worse),
+    so the bars add up to the number at the right, the situation-adjusted net; sorted by it."""
     g = d["g"]
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 7.8), sharex=True)
-    lim = 1.3 * max(float(pt["xgf_all"].max()), float(pt["xga_all"].max()), 0.1)            # room on the right for the net figure
+    right = pt["es_own"] + pt["es_mates"] + pt["es_danger_for"] + pt["adj_pp"].clip(lower_bound=0) + pt["adj_pk"].clip(lower_bound=0)
+    left = pt["es_against"] + pt["es_danger_against"] + (-pt["adj_pp"]).clip(lower_bound=0) + (-pt["adj_pk"]).clip(lower_bound=0)
+    lim = 1.3 * max(float(right.max()), float(left.max()), 0.1)                                # room on the right for the net figure
     bar = {"height": 0.72, "edgecolor": style.SURFACE, "linewidth": 2}
     for ax, ab in ((axes[0], g["away_abbrev"]), (axes[1], g["home_abbrev"])):
         t = pt.filter(pl.col("team") == ab).sort("net_adj")
@@ -150,11 +153,12 @@ def fig_impact(d: dict, pt: pl.DataFrame):
         v = {c: t[c].to_numpy() for c in SIT}
         left = np.zeros(t.height)
         play = v["es_mates"] + v["es_danger_for"]
-        for val, col, hatch in ((v["es_own"], ES_C, None), (play, ES_LIGHT, "////"), (v["pp_for"], PP_C, None), (v["sh_for"], SH_C, None)):
+        pp, pk = t["adj_pp"].to_numpy(), t["adj_pk"].to_numpy()
+        for val, col, hatch in ((v["es_own"], ES_C, None), (play, ES_LIGHT, "////"), (np.clip(pp, 0, None), PP_C, None), (np.clip(pk, 0, None), SH_C, None)):
             ax.barh(y, val, left=left, color=col, hatch=hatch, **bar)
             left += val
         left = np.zeros(t.height)
-        for val, col, hatch in ((v["es_against"], ES_C, None), (v["es_danger_against"], ES_LIGHT, "////"), (v["pk_against"], SH_C, None), (v["ppa_against"], PP_C, None)):
+        for val, col, hatch in ((v["es_against"], ES_C, None), (v["es_danger_against"], ES_LIGHT, "////"), (np.clip(-pp, 0, None), PP_C, None), (np.clip(-pk, 0, None), SH_C, None)):
             ax.barh(y, -val, left=left, color=col, hatch=hatch, **bar)
             left -= val
         net = t["net_adj"].to_numpy()
@@ -171,10 +175,10 @@ def fig_impact(d: dict, pt: pl.DataFrame):
     h = axes[0]
     h.barh([-9], [0], color=ES_C, label="EV-Shots: even-strength shots (his own for; all against)")
     h.barh([-9], [0], color=ES_LIGHT, hatch="////", label="EV-Play: linemates' shots and danger built without a shot (for), danger allowed without a shot (against)")
-    h.barh([-9], [0], color=PP_C, label="power play")
-    h.barh([-9], [0], color=SH_C, label="shorthanded / penalty kill")
+    h.barh([-9], [0], color=PP_C, label="PP: power-play net vs league average (right if better, left if worse)")
+    h.barh([-9], [0], color=SH_C, label="PK: penalty-kill net vs league average (right if better, left if worse)")
     fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=2, bbox_to_anchor=(0.5, 0.025), fontsize=9)
-    fig.text(0.5, 0.004, "Number at right: net versus a league-average skater in the same minutes of each situation (even strength, power play, penalty kill), so special-teams minutes do not tilt it.",
+    fig.text(0.5, 0.004, "Number at right: net versus a league-average skater in the same minutes of each situation; the bars add up to it (right minus left).",
              ha="center", fontsize=8.5, color=style.TEXT2)
     fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: impact by skater, all situations (sorted by situation-adjusted net)", x=0.02, ha="left", fontweight="bold", fontsize=12)
     fig.tight_layout(rect=(0, 0.1, 1, 0.96))

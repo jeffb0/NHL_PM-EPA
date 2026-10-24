@@ -24,11 +24,12 @@ def test_impact_chart_lists_each_team_sorted_by_net():
                       "es_danger_for": [0.0, 0.1, 0.0], "es_danger_against": [0.2, 0.0, 0.0]})
     p = p.with_columns((pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for") + pl.col("pp_for") + pl.col("sh_for")).alias("xgf_all"),
                        (pl.col("es_against") + pl.col("es_danger_against") + pl.col("pk_against") + pl.col("ppa_against")).alias("xga_all"))
-    p = p.with_columns((pl.col("xgf_all") - pl.col("xga_all")).alias("net_all")).with_columns((pl.col("net_all") * 0.5).alias("net_adj"))            # the email shows and sorts by the situation-adjusted net
+    p = p.with_columns((pl.col("xgf_all") - pl.col("xga_all")).alias("net_all"), pl.Series("adj_pp", [0.0, 0.2, 0.0]), pl.Series("adj_pk", [-0.1, 0.0, 0.0]))
+    p = p.with_columns((pl.col("net_all") * 0.5).alias("net_adj"))            # the email shows and sorts by the situation-adjusted net
     page = html_impact(p, "AAA 1 at BBB 2 (REG)")
     assert page.index("Y. High") < page.index("X. Low") < page.index("Z. Solo")
     assert "+0.50" in page and "-0.33" in page and "<script" not in page and "\u2588" in page and "\u2592" not in page and "#86b6ef" in page      # solid blocks; linemates in light blue
-    assert all(lab in page for lab in ("PK", "PP", "EV-Shots", "EV-Play", "danger allowed without a shot"))                 # the legend table
+    assert all(lab in page for lab in ("PK", "PP", "EV-Shots", "EV-Play", "danger allowed without a shot", "net vs league average"))                 # the legend table
     assert len(page) < 3000                                                                # small: it is passed through the mail tool as text
 
 
