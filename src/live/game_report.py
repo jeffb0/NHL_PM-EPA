@@ -24,7 +24,10 @@ UNBLOCKED = ["shot-on-goal", "missed-shot", "goal"]
 # impact-chart colours by situation (the reference palette's first three slots: the only three that stay distinct in every pairing for colour-blind readers);
 # the side of the centre line says for or against, and texture separates a player's own even-strength shots (solid) from his linemates' (hatched / shaded)
 ES_C, PP_C, SH_C = "#2a78d6", "#eb6834", "#1baf7a"           # even strength blue, power play orange, shorthanded aqua
-ES_LIGHT = "#86b6ef"                                          # linemates' even-strength shots: a lighter step of the same blue (passes the colour-blind and normal-vision checks against the other three)
+ES_LIGHT = "#86b6ef"                                          # a lighter step of the same blue (passes the colour-blind and normal-vision checks against the other three); kept for reference
+# the six card components in drawing order outward from the centre line: (column, colour, defense?); offense is solid, defense textured (hatched / striped)
+CARD = [("ev_off", ES_C, False), ("ev_def", ES_C, True), ("pp_off", PP_C, False), ("pp_def", PP_C, True), ("pk_off", SH_C, False), ("pk_def", SH_C, True)]
+CARD_LABELS = {"ev_off": "EV-Offense", "ev_def": "EV-Defense", "pp_off": "PP-Offense", "pp_def": "PP-Defense", "pk_off": "PK-Offense", "pk_def": "PK-Defense"}
 EVEN = ("5v5", "4v4", "3v3")
 SIT = ["es_own", "es_mates", "pp_for", "sh_for", "es_against", "pk_against", "ppa_against", "es_danger_for", "es_danger_against"]
 
@@ -119,7 +122,11 @@ def adjusted(t: pl.DataFrame, r: dict[str, float]) -> pl.DataFrame:
     t_es, t_pp, t_pk = (pl.col("toi_5v5_s") + pl.col("toi_4v4") + pl.col("toi_3v3")) / 60, pl.col("toi_PP") / 60, pl.col("toi_PK") / 60
     return t.with_columns(((pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for") - r["es_for"] * t_es) - (pl.col("es_against") + pl.col("es_danger_against") - r["es_against"] * t_es)).alias("adj_es"),
                           ((pl.col("pp_for") - r["pp_for"] * t_pp) - (pl.col("ppa_against") - r["pp_against"] * t_pp)).alias("adj_pp"),
-                          ((pl.col("sh_for") - r["pk_for"] * t_pk) - (pl.col("pk_against") - r["pk_against"] * t_pk)).alias("adj_pk")).with_columns(
+                          ((pl.col("sh_for") - r["pk_for"] * t_pk) - (pl.col("pk_against") - r["pk_against"] * t_pk)).alias("adj_pk"),
+                          # the six card components (each signed: positive = helps his team); they add up to net_adj
+                          (pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for")).alias("ev_off"), (-(pl.col("es_against") + pl.col("es_danger_against"))).alias("ev_def"),
+                          (pl.col("pp_for") - r["pp_for"] * t_pp).alias("pp_off"), (r["pp_against"] * t_pp - pl.col("ppa_against")).alias("pp_def"),
+                          (pl.col("sh_for") - r["pk_for"] * t_pk).alias("pk_off"), (r["pk_against"] * t_pk - pl.col("pk_against")).alias("pk_def")).with_columns(
         (pl.col("adj_es") + pl.col("adj_pp") + pl.col("adj_pk")).alias("net_adj"))
 
 
@@ -137,30 +144,33 @@ def player_table(d: dict) -> pl.DataFrame:
         "team", "net_adj", descending=[False, True])
 
 
+def card_extent(pt: pl.DataFrame) -> tuple[pl.Series, pl.Series]:
+    """Length of each skater's bar right of the line (positive components) and left of it (negative components)."""
+    right = sum(pt[c].clip(lower_bound=0) for c, _, _ in CARD)
+    left = sum((-pt[c]).clip(lower_bound=0) for c, _, _ in CARD)
+    return right, left
+
+
 def fig_impact(d: dict, pt: pl.DataFrame):
-    """Stacked bars of each skater's on-ice expected goals in every situation: for (right of the line) his own and his linemates' even-strength shots, power play and shorthanded;
-    against (left) at even strength. Power play and penalty kill are each one net segment against the league rate for his minutes there (right if better than average, left if worse),
-    so the bars add up to the number at the right, the situation-adjusted net; sorted by it."""
+    """Stacked bars of each skater's six components: EV-Offense (his own and linemates' shots and danger built without a shot), EV-Defense (shots and danger allowed),
+    and offense and defense on the power play and the penalty kill against a league-average skater in his minutes there. Each is drawn right of the line if it helped his team
+    and left if it hurt; offense solid, defense hatched. The bars add up to the number at the right, the situation-adjusted net; sorted by it."""
     g = d["g"]
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 7.8), sharex=True)
-    right = pt["es_own"] + pt["es_mates"] + pt["es_danger_for"] + pt["adj_pp"].clip(lower_bound=0) + pt["adj_pk"].clip(lower_bound=0)
-    left = pt["es_against"] + pt["es_danger_against"] + (-pt["adj_pp"]).clip(lower_bound=0) + (-pt["adj_pk"]).clip(lower_bound=0)
+    right, left = card_extent(pt)
     lim = 1.3 * max(float(right.max()), float(left.max()), 0.1)                                # room on the right for the net figure
     bar = {"height": 0.72, "edgecolor": style.SURFACE, "linewidth": 2}
     for ax, ab in ((axes[0], g["away_abbrev"]), (axes[1], g["home_abbrev"])):
         t = pt.filter(pl.col("team") == ab).sort("net_adj")
         y = np.arange(t.height)
-        v = {c: t[c].to_numpy() for c in SIT}
-        left = np.zeros(t.height)
-        play = v["es_mates"] + v["es_danger_for"]
-        pp, pk = t["adj_pp"].to_numpy(), t["adj_pk"].to_numpy()
-        for val, col, hatch in ((v["es_own"], ES_C, None), (play, ES_LIGHT, "////"), (np.clip(pp, 0, None), PP_C, None), (np.clip(pk, 0, None), SH_C, None)):
-            ax.barh(y, val, left=left, color=col, hatch=hatch, **bar)
-            left += val
-        left = np.zeros(t.height)
-        for val, col, hatch in ((v["es_against"], ES_C, None), (v["es_danger_against"], ES_LIGHT, "////"), (np.clip(-pp, 0, None), PP_C, None), (np.clip(-pk, 0, None), SH_C, None)):
-            ax.barh(y, -val, left=left, color=col, hatch=hatch, **bar)
-            left -= val
+        pos, neg = np.zeros(t.height), np.zeros(t.height)
+        for c, col, defense in CARD:
+            v = t[c].to_numpy()
+            hatch = "////" if defense else None
+            ax.barh(y, np.clip(v, 0, None), left=pos, color=col, hatch=hatch, **bar)
+            ax.barh(y, -np.clip(-v, 0, None), left=-neg, color=col, hatch=hatch, **bar)
+            pos += np.clip(v, 0, None)
+            neg += np.clip(-v, 0, None)
         net = t["net_adj"].to_numpy()
         ax.text(lim, t.height - 0.3, "net vs\naverage", va="bottom", ha="right", fontsize=8, color=style.TEXT2, linespacing=1.0)
         for yi, n in zip(y, net):
@@ -171,14 +181,14 @@ def fig_impact(d: dict, pt: pl.DataFrame):
         ax.set_ylim(-0.6, t.height - 0.4)
         ax.grid(axis="y", visible=False)
         ax.set_title(ab, color=style.TEXT, fontsize=13)
-        ax.set_xlabel("expected goals while on the ice, all situations   (against  ←  →  for)")
+        ax.set_xlabel("expected goals   (hurt his team  ←  →  helped his team)")
     h = axes[0]
-    h.barh([-9], [0], color=ES_C, label="EV-Shots: even-strength shots (his own for; all against)")
-    h.barh([-9], [0], color=ES_LIGHT, hatch="////", label="EV-Play: linemates' shots and danger built without a shot (for), danger allowed without a shot (against)")
-    h.barh([-9], [0], color=PP_C, label="PP: power-play net vs league average (right if better, left if worse)")
-    h.barh([-9], [0], color=SH_C, label="PK: penalty-kill net vs league average (right if better, left if worse)")
-    fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=2, bbox_to_anchor=(0.5, 0.025), fontsize=9)
-    fig.text(0.5, 0.004, "Number at right: net versus a league-average skater in the same minutes of each situation; the bars add up to it (right minus left).",
+    desc = {"ev_off": "his own and linemates' shots, and danger built without a shot", "ev_def": "shots and danger allowed without a shot",
+            "pp_off": "vs league average", "pp_def": "vs league average", "pk_off": "vs league average", "pk_def": "vs league average"}
+    for c, col, defense in CARD:
+        h.barh([-9], [0], color=col, hatch="////" if defense else None, label=f"{CARD_LABELS[c]}: {desc[c]}")
+    fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.025), fontsize=9)
+    fig.text(0.5, 0.004, "Offense solid, defense hatched. Number at right: net versus a league-average skater in the same minutes of each situation; the bars add up to it (right minus left).",
              ha="center", fontsize=8.5, color=style.TEXT2)
     fig.suptitle(f"{g['away_abbrev']} at {g['home_abbrev']}, {g['game_date']}: impact by skater, all situations (sorted by situation-adjusted net)", x=0.02, ha="left", fontweight="bold", fontsize=12)
     fig.tight_layout(rect=(0, 0.1, 1, 0.96))

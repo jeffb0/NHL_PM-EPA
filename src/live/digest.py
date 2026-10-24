@@ -17,12 +17,7 @@ from src.config import ROOT
 from src.live import paths
 from src.live import picks as pk
 from src.live import score as sc
-from src.live.game_report import (  # situation colours: even strength blue (linemates light blue), power play orange, shorthanded aqua
-    ES_C,
-    ES_LIGHT,
-    PP_C,
-    SH_C,
-)
+from src.live.game_report import CARD, CARD_LABELS, card_extent  # the six card components
 from src.live.odds import implied
 from src.scoreeffects import factors as sf
 
@@ -32,9 +27,9 @@ OUT_HTML = paths.PRIVATE_REPORTS / "daily_digest.html"
 LIVE = ROOT / "data/live/processed"
 FOCUS_TEAMS = ("WPG", "OTT")            # teams whose games get the per-player chart
 BLUE, ORANGE, GREY, RED, GREEN, INK, MUTED = "#2a78d6", "#eb6834", "#9a9994", "#c9403f", "#1a8f63", "#0b0b0b", "#52514e"
-BLOCK = "\u2588"            # full block, the unit of the text bars (shade characters render grey and too tall in Gmail, so linemates' shots are a lighter blue instead)
-LEGEND = [(ES_C, "EV-Shots", "even-strength shot chances"), (ES_LIGHT, "EV-Play", "linemates' shots and danger built without a shot; left of the line, danger allowed without a shot"),
-          (PP_C, "PP", "power play, net vs league average: right if better, left if worse"), (SH_C, "PK", "penalty kill, net vs league average: right if better, left if worse")]
+BLOCK, STRIPE = "\u2588", "\u258c"     # full block = offense; left half block = defense (reads as stripes; shade characters render grey and too tall in Gmail)
+LEGEND_DESC = {"ev_off": "his own and linemates' shots, and danger built without a shot", "ev_def": "shots and danger allowed without a shot",
+               "pp_off": "vs league average", "pp_def": "vs league average", "pk_off": "vs league average", "pk_def": "vs league average"}
 VERDICT = {(True, True): ("deserved", "won and had the better of the chances"), (True, False): ("fortunate", "won despite being out-chanced"),
            (False, True): ("unlucky", "lost despite having the better of the chances"), (False, False): ("outplayed", "lost and was out-chanced")}
 
@@ -146,30 +141,27 @@ def _segments(values: list[float], per: float, width: int) -> list[int]:
 
 
 def html_impact(players: pl.DataFrame, title: str, width: int = 18) -> str:
-    """Stacked horizontal bars per skater in every situation, drawn with block characters in a monospace block (small enough to pass through the mail tool as text):
-    expected goals against while on the ice to the left of the centre line, for to the right; colour = situation, light blue = linemates' even-strength shots;
-    power play and penalty kill are each one net segment against the league rate for his minutes there (right if better, left if worse). The bars add up to the number,
-    the situation-adjusted net, and skaters are sorted by it."""
-    right = players["es_own"] + players["es_mates"] + players["es_danger_for"] + players["adj_pp"].clip(lower_bound=0) + players["adj_pk"].clip(lower_bound=0)
-    left = players["es_against"] + players["es_danger_against"] + (-players["adj_pp"]).clip(lower_bound=0) + (-players["adj_pk"]).clip(lower_bound=0)
-    lim = max(float(right.max()), float(left.max()), 0.1)
-    per = width / lim
+    """Stacked horizontal bars per skater, drawn with block characters in a monospace block (small enough to pass through the mail tool as text): six components,
+    each right of the line if it helped his team and left if it hurt; colour = situation, solid = offense, striped = defense. The bars add up to the number, the situation-adjusted net."""
+    right, left = card_extent(players)
+    per = width / max(float(right.max()), float(left.max()), 0.1)
     teams = players["team"].unique(maintain_order=True).to_list()
-    legend = "".join(f"<tr><td width=14 bgcolor={c}>&nbsp;</td><td>&nbsp;<b>{lab}</b> <font color={MUTED}>{desc}</font></td></tr>" for c, lab, desc in LEGEND)
+    legend = "".join(f"<tr><td><font color={col}>{(STRIPE if d else BLOCK) * 3}</font></td><td>&nbsp;<b>{CARD_LABELS[c]}</b> <font color={MUTED}>{LEGEND_DESC[c]}</font></td></tr>" for c, col, d in CARD)
     out = [f'<p style="margin:14px 0 2px 0"><b>{html.escape(title)}</b></p>',
-           f'<table cellpadding=1 cellspacing=2 style="font-size:11px;border-collapse:separate;margin:0 0 2px 0">{legend}</table>',
-           f'<p style="margin:0 0 4px 0;font-size:11px;color:{MUTED}">Left of the line: chances against; right: chances for. Number: net vs league average.</p>',
+           f'<table cellpadding=0 cellspacing=1 style="font-size:11px;border-collapse:separate;margin:0 0 2px 0;font-family:Consolas,Menlo,monospace">{legend}</table>',
+           f'<p style="margin:0 0 4px 0;font-size:11px;color:{MUTED}">Right of the line: helped his team; left: hurt. Number: net vs league average (the bars add up to it).</p>',
            '<pre style="font-family:Consolas,Menlo,monospace;font-size:12px;line-height:14px;margin:0">']
     for team in teams:
         t = players.filter(pl.col("team") == team).sort("net_adj", descending=True)
         out.append(f"<b>{html.escape(team)}</b>")
         for r in t.iter_rows(named=True):
-            own, mates, pp, sh = _segments([r["es_own"], r["es_mates"] + r["es_danger_for"], max(r["adj_pp"], 0.0), max(r["adj_pk"], 0.0)], per, width)
-            ea, da, ppa, pk = _segments([r["es_against"], r["es_danger_against"], max(-r["adj_pp"], 0.0), max(-r["adj_pk"], 0.0)], per, width)
+            pos = _segments([max(r[c], 0.0) for c, _, _ in CARD], per, width)
+            neg = _segments([max(-r[c], 0.0) for c, _, _ in CARD], per, width)
+            seg = lambda n, col, d: f"<font color={col}>{(STRIPE if d else BLOCK) * n}</font>" if n else ""      # noqa: E731
+            right_s = "".join(seg(n, col, d) for n, (_, col, d) in zip(pos, CARD))
+            left_s = "".join(seg(n, col, d) for n, (_, col, d) in reversed(list(zip(neg, CARD))))      # outward from the line: the first component sits next to it
             name = f"{r['name']} ({r['position']})"[:21].ljust(21)
-            right = f"<font color={ES_C}>{BLOCK * own}</font><font color={ES_LIGHT}>{BLOCK * mates}</font><font color={PP_C}>{BLOCK * pp}</font><font color={SH_C}>{BLOCK * sh}</font>"
-            left = f"<font color={SH_C}>{BLOCK * pk}</font><font color={PP_C}>{BLOCK * ppa}</font><font color={ES_LIGHT}>{BLOCK * da}</font><font color={ES_C}>{BLOCK * ea}</font>"     # outward: EV, EV-Play, PP, PK
-            out.append(f"{html.escape(name)} {' ' * (width - ea - da - pk - ppa)}{left}|{right}{' ' * (width - own - mates - pp - sh)} <b>{r['net_adj']:+.2f}</b>")
+            out.append(f"{html.escape(name)} {' ' * (width - sum(neg))}{left_s}|{right_s}{' ' * (width - sum(pos))} <b>{r['net_adj']:+.2f}</b>")
         out.append("")
     out.append("</pre>")
     return "\n".join(out)
