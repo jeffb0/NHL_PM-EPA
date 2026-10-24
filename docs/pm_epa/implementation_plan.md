@@ -1,7 +1,7 @@
 # PM-EPA Implementation Plan (Phase 0)
 
 **Project:** Puck-Movement Expected Goals Added (PM-EPA) for NHL skaters
-**Repo root:** this repository (`nhl-EGA-model/`) *is* the `pm-epa-nhl/` project root from the brief; the directory layout below mirrors the brief's §10.1 exactly, just without an extra nesting level.
+**Repo root:** the root of this repository is the `pm-epa-nhl/` project root from the brief; the directory layout below follows the brief's §10.1 without the extra nesting level.
 **Date:** 2026-09-27
 
 ---
