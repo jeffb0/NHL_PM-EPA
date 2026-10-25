@@ -20,7 +20,7 @@ from src.config import ROOT
 from src.live import paths
 from src.live import picks as pk
 from src.live import score as sc
-from src.live.game_report import CARD, CARD_LABELS, card_extent  # the six card components
+from src.live.game_report import CARD, CARD_DESC, CARD_LABELS, card_extent  # the seven card components
 from src.live.odds import implied
 from src.scoreeffects import factors as sf
 
@@ -32,14 +32,6 @@ FOCUS_TEAMS = ("WPG", "OTT")  # teams whose games get the per-player chart
 BLUE, ORANGE, GREY, RED, GREEN, INK, MUTED = "#2a78d6", "#eb6834", "#9a9994", "#c9403f", "#1a8f63", "#0b0b0b", "#52514e"
 # full block = offense; left half block = defense (reads as stripes; shade characters render grey and too tall in Gmail)
 BLOCK, STRIPE = "\u2588", "\u258c"
-LEGEND_DESC = {
-    "ev_off": "his own and linemates' shots, and danger built without a shot",
-    "ev_def": "shots and danger allowed without a shot",
-    "pp_off": "vs league average",
-    "pp_def": "vs league average",
-    "pk_off": "vs league average",
-    "pk_def": "vs league average",
-}
 VERDICT = {
     (True, True): ("deserved", "won and had the better of the chances"),
     (True, False): ("fortunate", "won despite being out-chanced"),
@@ -198,14 +190,14 @@ def _segments(values: list[float], per: float, width: int) -> list[int]:
 
 def html_impact(players: pl.DataFrame, title: str, width: int = 18) -> str:
     """Stacked horizontal bars per skater, drawn with block characters in a monospace block (small enough to pass
-    through the mail tool as text): six components,
+    through the mail tool as text): seven components,
     each right of the line if it helped his team and left if it hurt; colour = situation, solid = offense, striped =
     defense. The bars add up to the number, the situation-adjusted net."""
     right, left = card_extent(players)
     per = width / max(float(right.max()), float(left.max()), 0.1)
     teams = players["team"].unique(maintain_order=True).to_list()
     legend = "".join(
-        f"<tr><td><font color={col}>{(STRIPE if d else BLOCK) * 3}</font></td><td>&nbsp;<b>{CARD_LABELS[c]}</b> <font color={MUTED}>{LEGEND_DESC[c]}</font></td></tr>"
+        f"<tr><td><font color={col}>{(STRIPE if d else BLOCK) * 3}</font></td><td>&nbsp;<b>{CARD_LABELS[c]}</b> <font color={MUTED}>{CARD_DESC[c]}</font></td></tr>"
         for c, col, d in CARD
     )
     out = [

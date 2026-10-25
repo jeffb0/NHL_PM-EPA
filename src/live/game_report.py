@@ -9,6 +9,7 @@ shown."""
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import sys
 
@@ -32,7 +33,9 @@ ES_C, PP_C, SH_C = "#2a78d6", "#eb6834", "#1baf7a"  # even strength blue, power 
 # a lighter step of the same blue (passes the colour-blind and normal-vision checks against the other three); kept for
 # reference
 ES_LIGHT = "#86b6ef"
-# the six card components in drawing order outward from the centre line: (column, colour, defense?); offense is solid,
+# penalties drawn minus taken: a neutral grey, told apart from the three situation colours by lightness
+PEN_C = "#9a9994"
+# the seven card components in drawing order outward from the centre line: (column, colour, defense?); offense is solid,
 # defense textured (hatched / striped)
 CARD = [
     ("ev_off", ES_C, False),
@@ -41,6 +44,7 @@ CARD = [
     ("pp_def", PP_C, True),
     ("pk_off", SH_C, False),
     ("pk_def", SH_C, True),
+    ("pen", PEN_C, False),
 ]
 CARD_LABELS = {
     "ev_off": "EV-Offense",
@@ -49,7 +53,21 @@ CARD_LABELS = {
     "pp_def": "PP-Defense",
     "pk_off": "PK-Offense",
     "pk_def": "PK-Defense",
+    "pen": "Penalties",
 }
+CARD_DESC = {
+    "ev_off": "his own and linemates' shots, and danger built without a shot",
+    "ev_def": "shots and danger allowed without a shot",
+    "pp_off": "vs league average",
+    "pp_def": "vs league average",
+    "pk_off": "vs league average",
+    "pk_def": "vs league average",
+    "pen": "drawn minus taken, at the average cost of a power play",
+}
+# a penalty's cost by length in minutes: the net expected goals of the man advantage it gives, measured at 5v5 by the
+# season penalty component (src/components/penalty.py, reports/metrics/pen_component.json); used if that file is absent
+PEN_COST = {2: 0.175, 4: 0.316, 5: 0.279}
+PEN_TYPES = ("MIN", "MAJ")
 EVEN = ("5v5", "4v4", "3v3")
 SIT = [
     "es_own",
@@ -95,7 +113,7 @@ def load(game_id: int) -> dict:
     oi = (
         pl.read_parquet(proc / "onice.parquet")
         .filter(pl.col("game_id") == game_id)
-        .select("event_idx", "home_on", "away_on")
+        .select("game_id", "event_idx", "home_on", "away_on")
     )
     obs = pl.read_parquet(
         proc / "obs_valued.parquet",
@@ -116,7 +134,7 @@ def unconverted_danger(obs: pl.DataFrame, poss: pl.DataFrame) -> pl.DataFrame:
     peak = (
         obs.sort(["poss_id", "v", "seq"], descending=[False, True, False])
         .unique("poss_id", keep="first")
-        .select("poss_id", "team_id", "strength", pl.col("v").alias("v_peak"), "onice", "opp_onice")
+        .select("poss_id", "game_id", "team_id", "strength", pl.col("v").alias("v_peak"), "onice", "opp_onice")
     )
     p = peak.join(first, on="poss_id").join(poss.select("poss_id", "end_class"), on="poss_id")
     return p.filter((pl.col("end_class") == 2) & pl.col("strength").is_in(EVEN)).with_columns(
@@ -125,23 +143,33 @@ def unconverted_danger(obs: pl.DataFrame, poss: pl.DataFrame) -> pl.DataFrame:
 
 
 def situations(d: dict) -> pl.DataFrame:
-    """Per skater: on-ice expected goals by situation, from his team's point of view. For: his own even-strength shots,
-    his linemates' even-strength shots,
-    power play, shorthanded. Against: even strength, on the penalty kill, on the power play (shorthanded chances
-    conceded). Empty-net shots are left out.
+    """Per skater in one game: on_ice() for the game in `d`."""
+    home = pl.DataFrame({"game_id": [d["g"]["game_id"]], "home_id": [d["g"]["home_id"]]})
+    return on_ice(d["sh"], d["oi"], d["obs"], d["poss"], home).drop("game_id")
+
+
+def on_ice(
+    sh: pl.DataFrame, oi: pl.DataFrame, obs: pl.DataFrame, poss: pl.DataFrame, home: pl.DataFrame
+) -> pl.DataFrame:
+    """Per skater and game: on-ice expected goals by situation, from his team's point of view. For: his own
+    even-strength shots, his linemates' even-strength shots, power play, shorthanded. Against: even strength, on the
+    penalty kill, on the power play (shorthanded chances conceded). Empty-net shots are left out.
     Also the even-strength danger built without an unblocked shot (unconverted_danger): by his team (for) and by the
-    opponent (against) while he was on the ice."""
-    g = d["g"]
-    s = d["sh"].filter(~pl.col("empty_net") & (pl.col("strength") != "EN")).join(d["oi"], on="event_idx", how="inner")
-    home = pl.col("team_id") == g["home_id"]
+    opponent (against) while he was on the ice. `home` maps game_id to home_id."""
+    s = (
+        sh.filter(~pl.col("empty_net") & (pl.col("strength") != "EN"))
+        .join(oi, on=["game_id", "event_idx"], how="inner")
+        .join(home, on="game_id")
+    )
+    at_home = pl.col("team_id") == pl.col("home_id")
     s = s.with_columns(
-        pl.when(home).then(pl.col("home_on")).otherwise(pl.col("away_on")).alias("for_on"),
-        pl.when(home).then(pl.col("away_on")).otherwise(pl.col("home_on")).alias("against_on"),
+        pl.when(at_home).then(pl.col("home_on")).otherwise(pl.col("away_on")).alias("for_on"),
+        pl.when(at_home).then(pl.col("away_on")).otherwise(pl.col("home_on")).alias("against_on"),
     )
     es, pp, pk = pl.col("strength").is_in(EVEN), pl.col("strength") == "PP", pl.col("strength") == "PK"
     f = (
         s.explode("for_on")
-        .group_by(pl.col("for_on").alias("player_id"))
+        .group_by("game_id", pl.col("for_on").alias("player_id"))
         .agg(
             pl.col("xg").filter(es & (pl.col("player1") == pl.col("for_on"))).sum().alias("es_own"),
             pl.col("xg").filter(es & (pl.col("player1") != pl.col("for_on"))).sum().alias("es_mates"),
@@ -151,30 +179,75 @@ def situations(d: dict) -> pl.DataFrame:
     )
     a = (
         s.explode("against_on")
-        .group_by(pl.col("against_on").alias("player_id"))
+        .group_by("game_id", pl.col("against_on").alias("player_id"))
         .agg(
             pl.col("xg").filter(es).sum().alias("es_against"),
             pl.col("xg").filter(pp).sum().alias("pk_against"),
             pl.col("xg").filter(pk).sum().alias("ppa_against"),
         )
     )
-    u = unconverted_danger(d["obs"], d["poss"])
+    u = unconverted_danger(obs, poss)
     df = (
         u.explode("onice")
-        .group_by(pl.col("onice").alias("player_id"))
+        .group_by("game_id", pl.col("onice").alias("player_id"))
         .agg(pl.col("built").sum().alias("es_danger_for"))
     )
     da = (
         u.explode("opp_onice")
-        .group_by(pl.col("opp_onice").alias("player_id"))
+        .group_by("game_id", pl.col("opp_onice").alias("player_id"))
         .agg(pl.col("built").sum().alias("es_danger_against"))
     )
+    key = ["game_id", "player_id"]
     out = (
-        f.join(a, on="player_id", how="full", coalesce=True)
-        .join(df, on="player_id", how="full", coalesce=True)
-        .join(da, on="player_id", how="full", coalesce=True)
+        f.join(a, on=key, how="full", coalesce=True)
+        .join(df, on=key, how="full", coalesce=True)
+        .join(da, on=key, how="full", coalesce=True)
     )
     return out.with_columns(pl.col(SIT).fill_null(0.0))
+
+
+@functools.lru_cache(maxsize=1)
+def penalty_costs() -> dict[int, float]:
+    p = ROOT / "reports/metrics/pen_component.json"
+    if not p.exists():
+        return dict(PEN_COST)
+    return {int(k): v["cost"] for k, v in json.loads(p.read_text())["class_costs"].items()}
+
+
+def penalties(ev: pl.DataFrame, costs: dict[int, float]) -> pl.DataFrame:
+    """Per skater and game: expected goals of the penalties he drew minus those he took. Each minor, double minor or
+    major is worth the league-average cost of the man advantage it gives (penalty_costs), at any strength. Penalties to
+    both teams at the same moment offset and are left out, as are misconducts and bench minors (no player named)."""
+    p = ev.filter(
+        (pl.col("type") == "penalty")
+        & pl.col("penalty_type").is_in(PEN_TYPES)
+        & pl.col("penalty_min").is_in(list(costs))
+    )
+    both = (
+        p.group_by("game_id", "period", "t_period")
+        .agg(pl.col("team_id").n_unique().alias("teams"))
+        .filter(pl.col("teams") > 1)
+    )
+    p = p.join(both, on=["game_id", "period", "t_period"], how="anti").with_columns(
+        pl.col("penalty_min").replace_strict(costs, return_dtype=pl.Float64).alias("cost")
+    )
+    taken = (
+        p.filter(pl.col("player1").is_not_null())
+        .group_by("game_id", pl.col("player1").alias("player_id"))
+        .agg(pl.len().alias("pen_taken"), pl.col("cost").sum().alias("cost_taken"))
+    )
+    drawn = (
+        p.filter(pl.col("player2").is_not_null())
+        .group_by("game_id", pl.col("player2").alias("player_id"))
+        .agg(pl.len().alias("pen_drawn"), pl.col("cost").sum().alias("cost_drawn"))
+    )
+    out = taken.join(drawn, on=["game_id", "player_id"], how="full", coalesce=True)
+    cols = ["pen_taken", "pen_drawn", "cost_taken", "cost_drawn"]
+    return (
+        out.with_columns(pl.col(cols).fill_null(0))
+        .with_columns((pl.col("cost_drawn") - pl.col("cost_taken")).alias("pen"))
+        .select("game_id", "player_id", pl.col("pen_taken", "pen_drawn").cast(pl.Int64), "pen")
+    )
 
 
 def team_summary(d: dict) -> pl.DataFrame:
@@ -275,7 +348,8 @@ def adjusted(t: pl.DataFrame, r: dict[str, float]) -> pl.DataFrame:
     """Situation-adjusted net: in each situation, (on-ice for minus the league rate times his minutes) minus (on-ice
     against minus the league rate times his minutes), summed.
     A penalty killer is credited for allowing fewer chances than an average penalty kill would in his minutes, not
-    charged for every chance; the same for the power play and even strength."""
+    charged for every chance; the same for the power play and even strength. Penalties drawn minus taken (`pen`, from
+    penalties()) are added on top."""
     t_es, t_pp, t_pk = (
         (pl.col("toi_5v5_s") + pl.col("toi_4v4") + pl.col("toi_3v3")) / 60,
         pl.col("toi_PP") / 60,
@@ -288,14 +362,14 @@ def adjusted(t: pl.DataFrame, r: dict[str, float]) -> pl.DataFrame:
         ).alias("adj_es"),
         ((pl.col("pp_for") - r["pp_for"] * t_pp) - (pl.col("ppa_against") - r["pp_against"] * t_pp)).alias("adj_pp"),
         ((pl.col("sh_for") - r["pk_for"] * t_pk) - (pl.col("pk_against") - r["pk_against"] * t_pk)).alias("adj_pk"),
-        # the six card components (each signed: positive = helps his team); they add up to net_adj
+        # the card components (each signed: positive = helps his team); with `pen` they add up to net_adj
         (pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for")).alias("ev_off"),
         (-(pl.col("es_against") + pl.col("es_danger_against"))).alias("ev_def"),
         (pl.col("pp_for") - r["pp_for"] * t_pp).alias("pp_off"),
         (r["pp_against"] * t_pp - pl.col("ppa_against")).alias("pp_def"),
         (pl.col("sh_for") - r["pk_for"] * t_pk).alias("pk_off"),
         (r["pk_against"] * t_pk - pl.col("pk_against")).alias("pk_def"),
-    ).with_columns((pl.col("adj_es") + pl.col("adj_pp") + pl.col("adj_pk")).alias("net_adj"))
+    ).with_columns((pl.col("adj_es") + pl.col("adj_pp") + pl.col("adj_pk") + pl.col("pen")).alias("net_adj"))
 
 
 def player_table(d: dict) -> pl.DataFrame:
@@ -326,6 +400,9 @@ def player_table(d: dict) -> pl.DataFrame:
         "toi_PK",
     )
     t = t.join(situations(d), on="player_id", how="left").with_columns(pl.col(SIT).fill_null(0.0))
+    t = t.join(penalties(d["ev"], penalty_costs()).drop("game_id"), on="player_id", how="left").with_columns(
+        pl.col("pen_taken", "pen_drawn").fill_null(0), pl.col("pen").fill_null(0.0)
+    )
     t = t.with_columns(
         (pl.col("es_own") + pl.col("es_mates") + pl.col("es_danger_for") + pl.col("pp_for") + pl.col("sh_for")).alias(
             "xgf_all"
@@ -354,10 +431,10 @@ def card_extent(pt: pl.DataFrame) -> tuple[pl.Series, pl.Series]:
 
 
 def fig_impact(d: dict, pt: pl.DataFrame):
-    """Stacked bars of each skater's six components: EV-Offense (his own and linemates' shots and danger built without a
-    shot), EV-Defense (shots and danger allowed),
-    and offense and defense on the power play and the penalty kill against a league-average skater in his minutes there.
-    Each is drawn right of the line if it helped his team
+    """Stacked bars of each skater's seven components: EV-Offense (his own and linemates' shots and danger built without
+    a shot), EV-Defense (shots and danger allowed),
+    offense and defense on the power play and the penalty kill against a league-average skater in his minutes there,
+    and penalties drawn minus taken. Each is drawn right of the line if it helped his team
     and left if it hurt; offense solid, defense hatched. The bars add up to the number at the right, the
     situation-adjusted net; sorted by it."""
     g = d["g"]
@@ -398,16 +475,8 @@ def fig_impact(d: dict, pt: pl.DataFrame):
         ax.set_title(ab, color=style.TEXT, fontsize=13)
         ax.set_xlabel("expected goals   (hurt his team  ←  →  helped his team)")
     h = axes[0]
-    desc = {
-        "ev_off": "his own and linemates' shots, and danger built without a shot",
-        "ev_def": "shots and danger allowed without a shot",
-        "pp_off": "vs league average",
-        "pp_def": "vs league average",
-        "pk_off": "vs league average",
-        "pk_def": "vs league average",
-    }
     for c, col, defense in CARD:
-        h.barh([-9], [0], color=col, hatch="////" if defense else None, label=f"{CARD_LABELS[c]}: {desc[c]}")
+        h.barh([-9], [0], color=col, hatch="////" if defense else None, label=f"{CARD_LABELS[c]}: {CARD_DESC[c]}")
     fig.legend(*h.get_legend_handles_labels(), loc="lower center", ncol=3, bbox_to_anchor=(0.5, 0.025), fontsize=9)
     fig.text(
         0.5,

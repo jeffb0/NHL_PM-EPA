@@ -37,18 +37,45 @@ def test_impact_chart_lists_each_team_sorted_by_net():
             "pp_def": [0.0, -0.05, 0.0],
             "pk_off": [0.2, 0.0, 0.0],
             "pk_def": [-0.15, 0.0, 0.0],
+            "pen": [0.0, 0.0, -0.175],
         }
     )
-    p = p.with_columns(pl.sum_horizontal("ev_off", "ev_def", "pp_off", "pp_def", "pk_off", "pk_def").alias("net_adj"))
+    p = p.with_columns(
+        pl.sum_horizontal("ev_off", "ev_def", "pp_off", "pp_def", "pk_off", "pk_def", "pen").alias("net_adj")
+    )
     page = html_impact(p, "AAA 1 at BBB 2 (REG)")
     assert page.index("Y. High") < page.index("X. Low") < page.index("Z. Solo")
     # solid offense, striped defense
     assert "+0.95" in page and "-0.55" in page and "<script" not in page and "\u2588" in page and "\u258c" in page
     assert all(
-        lab in page for lab in ("EV-Offense", "EV-Defense", "PP-Offense", "PP-Defense", "PK-Offense", "PK-Defense")
+        lab in page
+        for lab in ("EV-Offense", "EV-Defense", "PP-Offense", "PP-Defense", "PK-Offense", "PK-Defense", "Penalties")
     )
     # small: it is passed through the mail tool as text
     assert len(page) < 3500
+
+
+def test_penalties_credit_the_drawer_charge_the_taker_and_skip_offsetting_calls():
+    from src.live.game_report import penalties
+
+    ev = pl.DataFrame(
+        {
+            "game_id": [9] * 6,
+            "period": [1, 1, 2, 2, 3, 3],
+            "t_period": [100, 300, 50, 50, 400, 600],
+            "type": ["penalty"] * 5 + ["faceoff"],
+            "team_id": [10, 10, 10, 20, 20, 20],
+            "player1": [1, 1, 2, 7, None, 7],
+            "player2": [7, 8, 8, 2, None, 1],
+            "penalty_type": ["MIN", "MIN", "MIN", "MIN", "BEN", None],
+            "penalty_min": [2, 4, 2, 2, 2, None],
+        }
+    )
+    p = {r["player_id"]: r for r in penalties(ev, {2: 0.2, 4: 0.35}).iter_rows(named=True)}
+    # player 1 took a minor and a double minor; the period-2 pair offsets; the bench minor names nobody
+    assert p[1]["pen_taken"] == 2 and abs(p[1]["pen"] + 0.55) < 1e-12
+    assert abs(p[7]["pen"] - 0.2) < 1e-12 and abs(p[8]["pen"] - 0.35) < 1e-12
+    assert 2 not in p
 
 
 def test_segments_keep_small_pieces_and_total_length():
