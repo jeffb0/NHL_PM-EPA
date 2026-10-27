@@ -488,6 +488,9 @@ def build(day: str | None = None) -> tuple[str, str]:
                 f'<p style="font-size:12px;color:{MUTED};margin:4px 0">{html.escape(x["line"])}</p>',
             ]
     foot = (
+        "Market is the average of FanDuel, DraftKings and BetMGM with the bookmaker's margin removed, so it sits a little below the break-even of the price on offer. "
+        "For example, at 1.83 a pick breaks even at 1 / 1.83 = 54.6%; with the other side at 2.00 (50.0%) the two add to 104.6%, and scaling them to 100% gives a market probability of 52.2%. "
+        "A pick's edge is the model against the break-even of its price, not against the market; the market probability is used only for sizing. "
         "The model has no demonstrated edge over the market yet. This is record-keeping of your own picks, not betting advice. Prices are decimal odds as captured at the daily run and may have moved. "
         "One game is a small sample: the per-game numbers describe what happened and are not ratings."
     )

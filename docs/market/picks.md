@@ -34,6 +34,16 @@ If the Kelly fraction at the blended probability is not positive (the gap does n
 
 Roughly, at near-even prices: a model gap of 3 to about 8 points over break-even is 1 unit, about 8 to 11 points is 2 units, and more than about 11 points is 3 units; for the same gap an underdog gets fewer units than a favourite. (The gap is halved from the market's margin-free probability, which sits about 2 points below the break-even of the price, so small gaps shrink to almost nothing.)
 
+### Market probability and break-even
+
+A pick line shows two probabilities that are easy to confuse with the price:
+
+* **Break-even** is 1 / decimal price: the win rate at which the pick neither makes nor loses money. It includes the bookmaker's margin. The edge that decides whether a side qualifies (§2) is the model's probability minus this number, at the best price among the picks books (`edge_vs_breakeven` in the ledger).
+* **Market** is the margin-free probability: at each of FanDuel, DraftKings and BetMGM the two sides' break-evens are scaled to sum to one, and the three are averaged (`p_market`; `mkt_home` in `src/live/score.py`). It is used only as the starting point of the sizing probability above, and it sits about 2 points below the break-even at near-even prices.
+
+Example (NSH over NYI, 2026-10-27): BetMGM had Nashville at 1.83 and the Islanders at 2.00. The break-evens are 1 / 1.83 = 54.6% and 1 / 2.00 = 50.0%, which sum to 104.6%; the 4.6% above 100% is the margin. Scaled to sum to one, Nashville is 54.6 / 104.6 = 52.2%, and the three-book average was 52.3%.
+With the model at 68.7%, the edge over break-even is 68.7 − 54.6 = 14.1 points (it qualifies); the sizing probability is 52.3 + 0.5 × (68.7 − 52.3) = 60.5%, a quarter-Kelly stake of 3 units at 1.83.
+
 ## 4. Why these choices
 
 * **Halving the gap:** the model's edge over even a simple team rating was not established in the backtest, and large gaps to the market have so far been more likely to mean missing information than a real edge.
