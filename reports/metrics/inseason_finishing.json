@@ -1,0 +1,100 @@
+{
+  "variance_components_sd": {
+    "u_F": 0.14956575945474543,
+    "d_F": 0.08178449220784767,
+    "u_D": 0.08881775874136799,
+    "d_D": 0.10236618636692149,
+    "v": 0.07173033541956382,
+    "e": 0.04945696391277499
+  },
+  "player": {
+    "100": {
+      "all": {
+        "player_seasons": 2418,
+        "attempts": 237761,
+        "mean_improvement": 6.0892481032278774e-05,
+        "se": 2.564009010643697e-05,
+        "z": 2.374893410261131,
+        "calibration_slope": 0.9109040454066812,
+        "sd_predicted_rest_goals": 0.35869688688511603,
+        "sd_dm": 0.042203974173678244
+      },
+      "forwards": {
+        "player_seasons": 1692,
+        "attempts": 184901,
+        "mean_improvement": 6.217562674977234e-05,
+        "se": 3.150942709095234e-05,
+        "z": 1.9732388840425963,
+        "calibration_slope": 0.8566746332047303,
+        "sd_predicted_rest_goals": 0.42214331985172887,
+        "sd_dm": 0.045970374380743466
+      },
+      "defensemen": {
+        "player_seasons": 726,
+        "attempts": 52860,
+        "mean_improvement": 5.640411693257613e-05,
+        "se": 3.3965407575944577e-05,
+        "z": 1.6606341851326225,
+        "calibration_slope": 2.5675377802720285,
+        "sd_predicted_rest_goals": 0.1149041445372066,
+        "sd_dm": 0.031315847003872035
+      }
+    },
+    "200": {
+      "all": {
+        "player_seasons": 1001,
+        "attempts": 73779,
+        "mean_improvement": 0.00010595241882571427,
+        "se": 5.454579765210283e-05,
+        "z": 1.9424487932413548,
+        "calibration_slope": 1.1497266634719978,
+        "sd_predicted_rest_goals": 0.3630082185816565,
+        "sd_dm": 0.05513191644793655
+      },
+      "forwards": {
+        "player_seasons": 799,
+        "attempts": 62820,
+        "mean_improvement": 9.469173989770935e-05,
+        "se": 6.118843834309835e-05,
+        "z": 1.5475430075000427,
+        "calibration_slope": 1.1030562718685268,
+        "sd_predicted_rest_goals": 0.4004053538724342,
+        "sd_dm": 0.056998123300815606
+      },
+      "defensemen": {
+        "player_seasons": 202,
+        "attempts": 10959,
+        "mean_improvement": 0.00017050172535525783,
+        "se": 0.00010838526825569427,
+        "z": 1.573107933386511,
+        "calibration_slope": 2.633701713483717,
+        "sd_predicted_rest_goals": 0.13715998658503584,
+        "sd_dm": 0.046673139061730984
+      }
+    }
+  },
+  "game": {
+    "n_games": 6502,
+    "logloss_without": 0.6585358299991729,
+    "logloss_with": 0.6583769228265964,
+    "calibration_slope_with": 0.9124408103605698,
+    "sd_mu_change": 0.027397599450146408,
+    "max_abs_mu_change": 0.11161264499733492,
+    "mean_diff": 0.00015890717257649545,
+    "z": 1.0797998196246894,
+    "z_cluster_date": 1.0155034697212426
+  },
+  "gates": {
+    "IS1": {
+      "z_100": 2.374893410261131,
+      "z_200": 1.9424487932413548,
+      "pass": false
+    },
+    "IS4_F": {
+      "z": 1.0797998196246894,
+      "calibration_slope": 0.9124408103605698,
+      "pass": true
+    }
+  },
+  "implement": false
+}
