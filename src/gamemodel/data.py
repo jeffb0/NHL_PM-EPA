@@ -155,6 +155,8 @@ class Priors:
     career: dict = field(default_factory=dict)  # season -> {player_id: modeled NHL minutes before the season}
     # season -> {player_id: discounted NHL minutes entering the season} (thin-history players: below 1,000)
     m_eff: dict = field(default_factory=dict)
+    # season -> {player_id: age on 1 October} (docs/inseason update P: its age groups); live forecasts only
+    age: dict = field(default_factory=dict)
 
 
 def build_priors(

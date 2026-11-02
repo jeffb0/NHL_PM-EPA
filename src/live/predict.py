@@ -23,6 +23,7 @@ from src.config import ROOT, load_config
 from src.gamemodel import data as gd_
 from src.gamemodel import model as gm
 from src.gamemodel import run as grun
+from src.inseason import individual as ind
 from src.projection import data as pd_
 from src.projection import model as pm
 from src.projection import run as pr
@@ -204,6 +205,7 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
         {season: float(lg.filter(pl.col("season") == season - 1)["shots82"].item()) / 82.0},
         base.home_adv,
         m_eff={season: dict(d.select("player_id", "m_eff").iter_rows())},
+        age={season: dict(d.select("player_id", "age").iter_rows())},
     )
     return pri, snap, stamp
 
@@ -258,6 +260,16 @@ def prepare(season: int = 2026) -> dict:
             hy.fit(pl.read_parquet(proc / "hybrid_training.parquet")),
             pri.pos,
         )
+    # individual results for established skaters (docs/inseason update P), the same way, when its rule adopted it
+    individual = None
+    ij = met / "inseason_individual.json"
+    if ij.exists() and json.loads(ij.read_text()).get("implement") and (proc / "inseason_training.parquet").exists():
+        individual = (
+            ind.fit(pl.read_parquet(proc / "inseason_training.parquet")),
+            ind.established(pri.m_eff[season], pri.age.get(season, {}), pri.pos),
+            ind.live_lines(LIVE),
+            pri.toi_last[season],
+        )
     g_last = pl.read_parquet(proc / "games.parquet").filter(pl.col("season") == season - 1)
     ids = dict(
         pl.concat(
@@ -289,6 +301,7 @@ def prepare(season: int = 2026) -> dict:
         "backups": backups,
         "snapshot_stamp": stamp,
         "early": early,
+        "individual": individual,
         "names": dict(snap.select("player_id", "name").iter_rows()),
     }
 
@@ -464,7 +477,11 @@ def forecast(
     played = live.table
     live.table = pl.concat([played, row])
     try:
-        mu = float(gm.run_player_season(live, ctx["pri"], season, early=ctx.get("early"), **ctx["kw"])[-1])
+        # the adjustment keeps per-season state, so each forecast replays the season with a fresh one
+        u_p = ind.Individual(*ctx["individual"]) if ctx.get("individual") else None
+        mu = float(
+            gm.run_player_season(live, ctx["pri"], season, early=ctx.get("early"), inseason=u_p, **ctx["kw"])[-1]
+        )
     finally:
         live.table = played  # the appended game never stays in the season table
         for tid in (hid, aid):

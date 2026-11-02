@@ -50,7 +50,8 @@ def signal_row(c: np.ndarray, toi_last: float | None) -> np.ndarray:
 
 
 def game_lines(proc) -> pl.DataFrame:
-    """Per player-game, in date order within player-season: the LINE quantities and the game index k."""
+    """Per player-game, in date order within player-season: the LINE quantities and the game index k (``proc``: the
+    historical or the live tables)."""
     g = pl.read_parquet(proc / "games.parquet").select("game_id", pl.col("game_date").alias("date"))
     pg = (
         pl.read_parquet(
@@ -201,6 +202,23 @@ class Individual:
             self.cache.pop(i, None)
 
 
+def live_lines(live_dir) -> dict:
+    """(game, player) -> LINE values for the season in the live tables."""
+    return {
+        (gid, pid): np.array(v, dtype=float)
+        for gid, pid, *v in game_lines(live_dir).select("game_id", "player_id", *LINE).iter_rows()
+    }
+
+
+def established(m_eff: dict, age: dict, pos: dict) -> dict:
+    """player -> (position, age group) for skaters with m_eff >= 1,000 entering the season."""
+    return {
+        i: (pos.get(i, "F"), "old" if (age.get(i) or 0.0) >= OLD else "young")
+        for i, v in m_eff.items()
+        if v is not None and v >= hy.THIN
+    }
+
+
 class Both:
     """Update F and update P together (IS-3)."""
 
@@ -224,6 +242,8 @@ def run() -> dict:
     lines = game_lines(proc)
     resid = residuals(p, bio, yp)
     data = resid.join(checkpoints(lines), on=["player_id", "season"], how="inner")
+    # the live forecasts fit their models on this (every completed season)
+    data.write_parquet(proc / "inseason_training.parquet")
     res: dict = {
         "rows_by_checkpoint": {
             str(n): int(data.filter((pl.col("n") == n) & (pl.col("m") >= 200)).height) for n in CHECK
