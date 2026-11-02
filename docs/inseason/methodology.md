@@ -93,3 +93,23 @@ The U-P target is the model's own season value estimate, and at n = 40 the signa
    * established (246+), 1,582 / 754: 1.73 / 1.25.
    By prior attempts: under 300, 0.37 / 0.63 (calibration slope 0.37 at 100); 300–799, 2.19 / 1.21; 800+, 1.62 / 1.42.
    No subgroup clears 2 at both checkpoints. The thinnest-history groups are the weakest: their updates are the largest (SD of the effect change 0.053–0.10 against 0.035–0.049 for the established) but hold up least. Their early finishing regresses more than the population prior allows. The signal is spread across experience levels, not concentrated in young players. Twelve subgroup tests were run on results already seen; a single z near 2 among them would be expected by chance.
+5. **Update P, implementation choices (2026-11-02, before any P result was computed).**
+   * **Player-level target.** §5 asks for the rest-of-season value rate, which does not exist: the components (defense, special teams, finishing) are estimated on whole seasons. The target is therefore the full-season value rate, as in docs/prospects/hybrid.md, which flatters later checkpoints (§8). The game-level test is the clean out-of-sample test.
+   * **"The current model."** The baseline for both tests is the model the live forecasts use: priors from rate model v3 (with the pre-NHL features), plus the thin-history adjustment for m_eff < 1,000. U-P adds models for m_eff ≥ 1,000 only.
+   * **Signal definitions.** Relative on-ice: 5v5 on-ice xGD per 60 minus the team's 5v5 xGD per 60 with him off the ice. The team's 5v5 totals are its skaters' on-ice sums divided by five, as in the weekly report. Ice-time change: minutes per game so far minus last season's mean (0 with no last season). The age group is set by age on 1 October of the season.
+   * **Other choices.** Ridge models need at least 40 training rows per position × age group × checkpoint, as in hybrid; otherwise there is no adjustment. P-recent is reported at n = 40 only, because at n = 20 the last 20 games are the season so far. IS-3's combined model adds U-F's adjustment to U-P's.
+6. **Update P outcome, applied mechanically (2026-11-02; `python -m src.inseason.individual`, `reports/metrics/inseason_individual.json`).**
+   **IS-2 passes.** The full-season value prediction improves at every checkpoint (test seasons 2021–2025, established skaters with 200+ minutes):
+
+   | n | player-seasons | z | share of the prior's error removed |
+   |---|---|---|---|
+   | 5 | 2,687 | 2.14 | 2.3% |
+   | 10 | 2,687 | 4.67 | 6.0% |
+   | 20 | 2,655 | 6.63 | 10.4% |
+   | 40 | 2,451 | 7.88 | 13.9% |
+
+   The gain holds for forwards and defensemen and for both age groups. Ages 31+: z = 2.19 at n = 10, 3.10 at n = 20. Forwards 31+: 1.71 and 2.33. At n = 40 part of the gain is overlap with the target (§9 item 5); at n = 10 the first games are about an eighth of the season.
+   **P-recent is worse than the season so far.** At n = 40 the last 20 games predict less well than all 40 (z = −3.49), so the season-so-far signals are kept.
+   **Game level.** U-P against the current model: log loss 0.65854 → 0.65835, z = 0.77 (by date 0.78); calibration slope 0.89 (current 0.91); forecasts move by SD 0.062 goals.
+   F and P together: 0.65822, z = 1.07. **IS-3 fails**, so no improvement in game prediction is claimed. IS-4 holds for P.
+   Under §6 **update P is to be implemented**: IS-2 passes, its game-level z is above 0, and IS-4 holds. Update F stays out, its player-level gate having failed.

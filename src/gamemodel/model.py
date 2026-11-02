@@ -43,13 +43,13 @@ def run_player_season(
     lam_team: float = 0.0,
     starter: dict | None = None,
     gscale: float = 1.0,
-    fin=None,
+    inseason=None,
 ):
     """Expected home goal differential (mu) for every game of ``season`` in date order, with ratings updated after each
     game.
 
-    With ``fin`` (docs/inseason, update F) each skater's rating carries ``fin.adj(i)``, re-estimated from his attempts
-    so far this season; ``fin.observe(game, ids, minutes)`` is called after each game.
+    With ``inseason`` (docs/inseason: update F or P) each skater's rating carries ``inseason.adj(i)``, re-estimated from
+    his games so far this season; ``inseason.observe(game, team, ids, minutes)`` is called after each game.
 
     With ``lam_team`` a team-level term is updated alongside the skaters and added to the team's strength
     (docs/structure/methodology.md, U1).
@@ -98,8 +98,8 @@ def run_player_season(
                 sum((theta.get(i, 0.0) + early.adj(i, cum.get(i))) * mi for i, mi in zip(ids.tolist(), m.tolist()))
                 / 60.0
             )
-        if fin is not None:
-            s += float(sum(fin.adj(i) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
+        if inseason is not None:
+            s += float(sum(inseason.adj(i) * mi for i, mi in zip(ids.tolist(), m.tolist())) / 60.0)
         rate = (n0 * g0.get(gk, rep) + gsaved[gk]) / (n0 + gshots[gk])
         # gscale < 1 narrows goalie differences (docs/infoquality/methodology.md §6)
         rate = rep + gscale * (rate - rep)
@@ -131,8 +131,8 @@ def run_player_season(
             for i, mi in zip(ids.tolist(), mins.tolist()):
                 recent[i].append(mi)
                 played[i] += mi
-            if fin is not None:
-                fin.observe(gid, ids, mins)
+            if inseason is not None:
+                inseason.observe(gid, team, ids, mins)
             if early is not None:
                 # a game being forecast has no lines yet
                 for i, line in zip(ids.tolist(), games.stats.get((gid, team), ())):

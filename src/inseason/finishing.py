@@ -170,7 +170,7 @@ class FinUpdate:
                 self.cache[i] = dm * (self.last.get(i, 0.0) + self.sw[i]) * 60.0 / m if m > 0 else 0.0
         return self.cache[i]
 
-    def observe(self, gid: int, ids: np.ndarray, mins: np.ndarray) -> None:
+    def observe(self, gid: int, team: int, ids: np.ndarray, mins: np.ndarray) -> None:
         shots = self.by_game.get(gid, {})
         for i, mi in zip(ids.tolist(), mins.tolist()):
             self.mins[i] += mi
@@ -223,7 +223,9 @@ def run() -> dict:
     te = t["season"].is_in(grun.TEST).to_numpy()
     y, dates = t["home_win"].to_numpy()[te], t["date"].to_numpy()[te]
     mu0 = np.concatenate([gm.run_player_season(games, pri, T, **kw) for T in FIT_SEASONS])
-    mu1 = np.concatenate([gm.run_player_season(games, pri, T, fin=FinUpdate(*updates[T]), **kw) for T in FIT_SEASONS])
+    mu1 = np.concatenate(
+        [gm.run_player_season(games, pri, T, inseason=FinUpdate(*updates[T]), **kw) for T in FIT_SEASONS]
+    )
     p0, p1 = grun.predict(t, mu0)[te], grun.predict(t, mu1)[te]
     l0, l1 = gm.logloss(p0, y), gm.logloss(p1, y)
     res["game"] = {
