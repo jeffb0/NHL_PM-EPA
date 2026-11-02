@@ -1,0 +1,80 @@
+# In-season player updates: finishing and individual results — methodology and pre-registration
+
+*Written 2026-11-02 before anything here was built, fitted or scored. Owner's request: let a player's rating within the season respond to (a) how he is finishing, for proven finishers whose goals regularly exceed the expected goals of their attempts, and (b) his own results, so a player in decline (or a breakout) is found individually rather than through his team.
+The design, tests and rules below are fixed here; changes after results are seen are logged in §9.*
+
+## 1. What the game model does now, and the two gaps
+
+The game model (docs/gamemodel/methodology.md §3) starts each skater at a preseason rating (the projection: the last three seasons weighted 5/4/3, shrunk by minutes, with position-specific aging; finishing enters through its rolling-refit estimate) and after every game moves every dressed skater by the team's surprise in expected-goal differential (λ = 0.04, α = 0), shared in proportion to ice time. Thin-history players also get an empirical-Bayes adjustment from their own early games (docs/prospects/hybrid.md).
+
+* **Gap F (finishing).** A skater's finishing estimate is fixed at its preseason value. Shots taken this season, and whether they went in, never change it. The finishing model's own variance components say part of finishing is season-specific (shooter-season deviation SD 0.09 logit for forwards, 0.13 for defensemen, against persistent talent 0.14 and 0.11; docs/finishing), so a season's shots carry some information about the rest of that season.
+* **Gap P (individual results).** Outside the thin-history group, nothing a player does individually moves his rating: the update sees only the team's result and credits it by ice time (the declared limitation "no line or matchup structure"). A declining veteran on a line that is doing well moves up with it.
+
+A third question is checked first because both updates depend on it:
+
+* **Check D0 (target consistency).** Ratings include finishing (goals above what the attempts were worth), but the in-season update target is expected-goal differential, which by construction excludes finishing. If this is a material mismatch, a team with good finishers is expected to beat its expected-goal differential by its finishing, never does on that target, and the update steadily removes the finishing from its players' ratings. D0 measures this on the test seasons: the mean update error e per game regressed on the dressed lineup's summed preseason finishing (goals per game), and the fraction of each skater's preseason finishing component remaining at game 82 on average. Reported, not gated; it decides whether U-F needs the finishing-adjusted target of §2.3.
+
+## 2. Update F: in-season finishing
+
+### 2.1 Estimate
+
+For each skater and each completed game, the finishing model (docs/finishing §5, model A: logit P(goal) = logit(xG_f) + season × strength intercept + shooter effect + goalie effect) is updated with his unblocked, non-empty-net attempts so far this season:
+
+* **Prior** for his effect this season: the forward-fit estimate through the previous season (mean m₀, SD s₀; the same fit that produces the rolling-refit finishing value in his preseason rating), widened by the season deviation: variance s₀² + σ_d² (σ_d by position from the production variance components).
+* **Posterior** after his attempts this season (one Laplace step around m₀; goalie effects and intercepts fixed at their preseason values; the current season's intercepts set by the league-level calibration of docs/finishing §7): `m₁ = m₀ + Σ(goal − p) / (1 / (s₀² + σ_d²) + Σ p(1 − p))`, with p each attempt's probability at m₀.
+* **Rating change:** `Δθ_F = (m₁ − m₀) × π̄ × A`, where π̄ = his mean p(1 − p) per attempt and A = his attempts per 60 (this season's and last season's pooled, weighted by minutes), giving goals per 60. Added to his rating after each game, replacing the previous game's Δθ_F (it is a re-estimate, not an accumulation).
+
+All strengths are pooled (the model's strength intercepts carry the level differences). Defensemen are included; their small samples shrink them almost to zero on their own.
+
+### 2.2 Expectation stated in advance
+
+Small. Information per attempt averages 0.0585; a forward with 60 attempts has ≈ 3.5 units against a prior precision of ≈ 55 (s₀ = 0.10, σ_d = 0.09), so his estimate moves about 6% of the way from prior toward his raw season. By 250 attempts it moves about 20%. Its effect on a team's game forecast is expected to be a few hundredths of a goal at most; a game-level gain is not expected to reach z = 2.
+
+### 2.3 Finishing-adjusted update target (variant, used only if D0 shows a mismatch)
+
+If D0's slope is clearly negative (z < −2), U-F is also run with the update target `xgd_F` = expected-goal differential + Σ over the game's attempts of (p at the shooter's current finishing estimate − xG_f): the goals the model expected the shooters to add. Both versions are reported; the gates apply to the one D0 selects.
+
+## 3. Update P: individual results for every skater
+
+The thin-history adjustment (docs/prospects/hybrid.md) extended to every skater, with its design and fitting kept as close as possible so the weights are learned from history rather than chosen:
+
+* **Who:** all skaters (the thin-history models stay as they are for m_eff < 1,000; this adds models for the rest).
+* **Signals** (cumulative over his games so far this season, per 60): the five hybrid signals (ice time per game, puck value, individual expected goals, points, 5v5 on-ice expected-goal differential), plus **5v5 on-ice expected-goal differential relative to his team with him off the ice** (separates him from the team, partly from his line), plus **ice time per game minus last season's** (a coach's verdict on decline or promotion).
+* **Target:** his full-season value rate minus his preseason projection.
+* **Fit:** ridge by position and checkpoint n ∈ {5, 10, 20, 40}, λ by leave-one-season-out, rows weighted by season minutes, using seasons before the one forecast; separate models for ages ≥ 31 at season start and younger (decline is the case the owner raised).
+* **Use:** after his g-th game his rating is prior + the fitted adjustment at the largest checkpoint ≤ g. The team-surprise update continues unchanged on top.
+
+**Variant P-recent (reported):** the same signals over his most recent 20 games instead of the whole season, at checkpoints n ≥ 20, to test whether recent form says more than the season so far.
+
+## 4. Data and protocol
+
+Historical seasons 2017–2025 from data/processed (attempts with xG_f from fin_shots; player-game lines from player_game). Hyperparameters of the game model stay frozen (λ = 0.04, α = 0, n0 = 3,000). Update F has no tuned parameters. Update P's ridge penalties are chosen by leave-one-season-out within the training seasons. Test seasons 2021–2025 (6,502 games), every model for season T fitted on seasons < T. The logistic step is refitted on earlier seasons for each variant, as in the game model.
+
+## 5. Tests
+
+1. **Player level.** Rest-of-season value rate (games after the checkpoint), prior against prior + update, minute-weighted squared error, paired z by player-cluster bootstrap, at each checkpoint. For U-F the target is rest-of-season goals minus xG_f per attempt (log loss of the rest-of-season attempts at m₀ against m₁). Reported subgroups: forwards aged 31+; the top decile of preseason finishers; this season's Jets and Senators.
+2. **Game level.** The game model with U-F, with U-P, and with both, against the current model, paired z on per-game log loss over the test games; calibration slope.
+3. **Reported, not gated.** D0; the fitted U-P coefficients by checkpoint and age group; the live 2026 adjustments for named players the owner raised (Kyle Connor, Nino Niederreiter); against the market on this season's logged games (too few for any claim).
+
+## 6. Gates and rules
+
+| gate | rule |
+|---|---|
+| IS-1 | U-F improves rest-of-season finishing prediction at 100 and 200 attempts (paired z > 2 at both) |
+| IS-2 | U-P improves rest-of-season value prediction at n = 10 and n = 20 (paired z > 2 at both) |
+| IS-3 | the combined model beats the current model at game level (paired z > 2) |
+| IS-4 | no harm: each update alone, game-level paired z > −2; calibration slope in [0.8, 1.2] |
+
+**Adoption rule (mechanical).** Each update is implemented in the live forecasts if its player-level gate (IS-1 or IS-2) passes and its game-level z is above 0 with IS-4 holding. Failing that, it is not used. An improvement in game prediction is claimed only if IS-3 passes. Because U-P changes the rating of every skater, the no-harm bar of the thin-history rule (z > −2 with player-level z > −1) is not enough here.
+
+## 7. What the result can say
+
+IS-1 says whether a season's finishing tells us anything about the rest of that season beyond a player's history; the finishing variance components predict "a little". IS-2 says whether individual in-season results find decline or improvement that the team-surprise update misses. IS-3 is the claim that matters for forecasts. Passing IS-1 or IS-2 with no game-level gain is a plausible outcome: player-level information can be real and still too small, spread over 18 skaters, to change who wins.
+
+## 8. Limitations stated in advance
+
+The U-P target is the model's own season value estimate, and at n = 40 the signals overlap half of it, which flatters the fit. On-ice and relative signals still reflect linemates and deployment. Finishing is whatever xG_f cannot see (screens, pre-shot passes), and its xG_f slope drifts by season (docs/finishing). Survivorship: players who lose their place mid-season leave the target. Nine seasons, two shortened.
+
+## 9. Deviations log
+
+*(any change to §2–§6 after results are seen is recorded here with its reason)*
