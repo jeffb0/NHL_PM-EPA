@@ -70,7 +70,7 @@ O_COLS = [
     "american",
     "source",
 ]
-MODEL = "game model P (docs/gamemodel); from 2026-10-04: rate model v3 (elite-prospect priors, docs/prospects/elite.md) and early-sample adjustment for thin-history players (docs/prospects/hybrid.md); from 2026-10-05: score-adjusted differential in the in-season update (docs/scoreeffects) and the back-to-back goalie rule; from 2026-11-02: individual results for established skaters (docs/inseason, update P); inputs: daily rosters, injury list and listed starting goalies"
+MODEL = "game model P (docs/gamemodel); from 2026-10-04: rate model v3 (elite-prospect priors, docs/prospects/elite.md) and early-sample adjustment for thin-history players (docs/prospects/hybrid.md); from 2026-10-05: score-adjusted differential in the in-season update (docs/scoreeffects) and the back-to-back goalie rule; from 2026-11-02: individual results for established skaters (docs/inseason, update P); from 2026-11-10: career or debut priors for goalies without a rolling rate and the logistic step fitted on the live configuration (docs/market/methodology.md §8 item 16); inputs: daily rosters, injury list and listed starting goalies"
 
 
 def slate(day: str) -> list[dict]:

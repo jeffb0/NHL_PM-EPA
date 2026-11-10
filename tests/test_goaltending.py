@@ -41,6 +41,16 @@ def test_model_recovers_goalie_effects_and_probabilities_are_ordered():
     assert np.all(p["with_status"] > 0) and np.all(p["rep"] >= 0)
 
 
+def test_returning_goalie_keeps_his_career_effect():
+    # the good goalie (0) sits out the last season: he is absent from its shots but keeps a rate from his effect
+    df = _shots(2000).filter(~((pl.col("season") == 2019) & (pl.col("goalie") == 0)))
+    lay = gm.build_layout(df, team_effect=False, fringe=True)
+    mode, _, _ = gm.fit(df, lay, s2={"u": 0.05, "d": 0.01})
+    back = gm.returning_rates(df.filter(pl.col("season") == 2019), lay, mode.beta)
+    assert back["goalie"].to_list() == [0]
+    assert back["rate_v"][0] > 0.005  # saves goals relative to an average goalie
+
+
 def test_unseen_ids_get_zero_effect():
     df = _shots(500)
     lay = gm.build_layout(df, team_effect=True)

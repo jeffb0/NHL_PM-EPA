@@ -55,9 +55,13 @@ def load_snapshot(raw, season: int, stamp: str | None = None) -> tuple[pl.DataFr
     return snap, stamp
 
 
-def next_goalie_rates(proc, cfg, season: int) -> pl.DataFrame:
+def next_goalie_rates(proc, cfg, season: int, returning: bool = False) -> pl.DataFrame:
     """Rolling persistent save rates for ``season``: the goaltending model fitted on shots through season - 1 (same
-    settings as src/goaltending forward step)."""
+    settings as src/goaltending forward step).
+
+    With ``returning`` (the live game forecasts, docs/gamemodel §10 item 2) goalies with a fitted career effect who
+    faced no shots in season - 1 are included, at that effect, with n_prev = 0; without it they are absent and fall to
+    the replacement rate."""
     met = cfg.path(cfg.data.metrics_dir)
     tune = json.loads((met / "gk_tune.json").read_text(encoding="utf-8"))
     team = tune["variant"] == "G2"
@@ -71,12 +75,13 @@ def next_goalie_rates(proc, cfg, season: int) -> pl.DataFrame:
     cur = tr.filter(pl.col("season") == T).with_columns(pl.Series("saved_v", ptr["base"] - ptr["v"]))
     g = cur.group_by("goalie").agg(pl.col("saved_v").sum().alias("saved"), pl.len().alias("n_prev"))
     rep = float((ptr["base"] - ptr["rep"]).mean())
-    return g.select(
-        "goalie",
-        pl.lit(season, pl.Int64).alias("season"),
-        (pl.col("saved") / pl.col("n_prev")).alias("rate_v"),
-        "n_prev",
-    ).with_columns(pl.lit(rep).alias("rep_v"))
+    out = g.select("goalie", (pl.col("saved") / pl.col("n_prev")).alias("rate_v"), "n_prev")
+    if returning:
+        back = gm.returning_rates(tr.filter(pl.col("season") == T), lay, mode.beta)
+        out = pl.concat([out, back.with_columns(pl.lit(0, out.schema["n_prev"]).alias("n_prev"))])
+    return out.select("goalie", pl.lit(season, pl.Int64).alias("season"), "rate_v", "n_prev").with_columns(
+        pl.lit(rep).alias("rep_v")
+    )
 
 
 def forecast_next(season: int = 2026, stamp: str | None = None) -> pl.DataFrame:

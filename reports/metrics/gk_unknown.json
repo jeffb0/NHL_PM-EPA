@@ -1,0 +1,60 @@
+{
+  "returning": {
+    "goalie_seasons": 40,
+    "shots": 13758,
+    "realized_per_shot": -0.001088854747344255,
+    "interval95": [
+      -0.005886854736314181,
+      0.003564358014359227
+    ],
+    "career_effect_prior": -0.0006286131641593419,
+    "replacement_prior": -0.00913260620706288,
+    "sq_error_career_effect": 1102.9390462416043,
+    "sq_error_replacement": 2177.133262883328
+  },
+  "debut": {
+    "goalie_seasons": 126,
+    "shots": 37540,
+    "realized_per_shot": -0.0020728387450497194,
+    "interval95": [
+      -0.004648048909170678,
+      0.00036419161783034394
+    ],
+    "replacement_prior": -0.00916738185321293,
+    "realized_under_300_shots": -0.010294161052322559,
+    "realized_300_plus_shots": 0.00022738258163995342
+  },
+  "debut_rate": -0.0020728387450497194,
+  "game": {
+    "n_games": 6502,
+    "logloss_current": 0.6585358299991729,
+    "returning": {
+      "logloss": 0.6584192145986878,
+      "games_changed": 4860,
+      "logloss_changed_games_before": 0.6534824570118115,
+      "logloss_changed_games_after": 0.6533235290943026,
+      "mean_diff": 0.00011661540048530041,
+      "z": 0.39497231843502517,
+      "z_cluster_date": 0.38862793617903896
+    },
+    "debut": {
+      "logloss": 0.6583264693684219,
+      "games_changed": 5981,
+      "logloss_changed_games_before": 0.657230621682841,
+      "logloss_changed_games_after": 0.6569097592074563,
+      "mean_diff": 0.0002093606307512289,
+      "z": 0.5439560467009488,
+      "z_cluster_date": 0.544709851279052
+    },
+    "both": {
+      "logloss": 0.6583023809758193,
+      "games_changed": 5981,
+      "logloss_changed_games_before": 0.657230621682841,
+      "logloss_changed_games_after": 0.6568856951024695,
+      "mean_diff": 0.00023344902335376347,
+      "z": 0.557673357359407,
+      "z_cluster_date": 0.5570839415917342
+    }
+  },
+  "implement": true
+}

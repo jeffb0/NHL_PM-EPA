@@ -150,6 +150,21 @@ def shot_probs(
     }
 
 
+def returning_rates(cur: pl.DataFrame, lay: Layout, beta: np.ndarray) -> pl.DataFrame:
+    """Goalies with a fitted persistent effect but no shots in ``cur`` (the last training season): goals saved per shot
+    relative to an average goalie, their effect applied to that season's league shots. Columns goalie, rate_v."""
+    X = design(cur, lay)
+    eta = cur["offset"].to_numpy()
+    for name in ("cell", "t"):
+        lo, hi = lay.blocks.get(name, (0, 0))
+        if hi > lo:
+            eta = eta + np.asarray(X[:, lo:hi] @ beta[lo:hi]).ravel()
+    base = float(expit(eta).mean())
+    played = set(cur["goalie"].unique().to_list())
+    rows = [(g, base - float(expit(eta + beta[c]).mean())) for g, c in lay.goalie.items() if g not in played]
+    return pl.DataFrame(rows, schema={"goalie": cur.schema["goalie"], "rate_v": pl.Float64}, orient="row")
+
+
 def logloss(p: np.ndarray, y: np.ndarray) -> np.ndarray:
     p = np.clip(p, 1e-9, 1 - 1e-9)
     return -(y * np.log(p) + (1 - y) * np.log1p(-p))

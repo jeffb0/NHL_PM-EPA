@@ -148,9 +148,11 @@ def rate_features(cfg, raw, season: int) -> pl.DataFrame | None:
     return pf.elite_table(raw, list(range(pr.FIRST_TARGET, season + 1)))
 
 
-def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> tuple[gd_.Priors, pl.DataFrame, str]:
+def season_priors(
+    proc, cfg, season: int, live: gd_.Games, base: gd_.Priors, yp: pl.DataFrame | None
+) -> tuple[gd_.Priors, pl.DataFrame, str]:
     """Preseason ratings for a season not yet in the historical tables: everyone on the published rosters or seen in a
-    game this season."""
+    game this season. ``yp``: the elite-prospect columns of ``rate_features`` (None for the original rate model)."""
     raw = cfg.path(cfg.data.raw_dir)
     snap, stamp = load_snapshot(raw, season)
     p = pd_.panel(proc, pl.read_parquet(proc / "wm_rolling_values.parquet"))
@@ -172,7 +174,6 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
         .unique("player_id")
         .with_columns(pl.lit(0, pl.Int64).alias("team_id"))
     )
-    yp = rate_features(cfg, raw, season)
     d = pf.with_yp(fc.roster_frame(p, bio, who, season), yp)
     M = pf.spec(yp)
     rate = pm.predict_models(
@@ -194,14 +195,19 @@ def season_priors(proc, cfg, season: int, live: gd_.Games, base: gd_.Priors) -> 
         .group_by("player_id")
         .agg((pl.col("toi_all").mean() / 60).alias("m"))
     )
-    rates = next_goalie_rates(proc, cfg, season)
+    # goalies without a rolling rate (docs/gamemodel §10 item 2): a returning goalie gets his career effect and a goalie
+    # with no NHL history the mean of past debut seasons, when that test adopted them; else the replacement rate
+    uj = cfg.path(cfg.data.metrics_dir) / "gk_unknown.json"
+    unknown = json.loads(uj.read_text(encoding="utf-8")) if uj.exists() else {}
+    rates = next_goalie_rates(proc, cfg, season, returning=bool(unknown.get("implement")))
+    no_history = float(unknown["debut_rate"]) if unknown.get("implement") else float(rates["rep_v"][0])
     _, lg = sd.goalie_usage(proc)
     pos = {**base.pos, **dict(who.select("player_id", "pos_group").iter_rows())}
     pri = gd_.Priors(
         {season: dict(zip(d["player_id"].to_list(), (rate + 60.0 * rho).tolist()))},
         pos,
         {season: dict(tl.iter_rows())},
-        {season: (dict(rates.select("goalie", "rate_v").iter_rows()), float(rates["rep_v"][0]))},
+        {season: (dict(rates.select("goalie", "rate_v").iter_rows()), no_history)},
         {season: float(lg.filter(pl.col("season") == season - 1)["shots82"].item()) / 82.0},
         base.home_adv,
         m_eff={season: dict(d.select("player_id", "m_eff").iter_rows())},
@@ -228,6 +234,41 @@ def overrides(path: Path | None = None) -> tuple[set, dict, dict]:
     )
 
 
+def historical_mu(
+    proc,
+    hist: gd_.Games,
+    base: gd_.Priors,
+    seasons: list[int],
+    kw: dict,
+    hdata: pl.DataFrame | None,
+    idata: pl.DataFrame | None,
+) -> np.ndarray:
+    """The expected margin of every historical game from the model in its live configuration: for season T the
+    early-sample models (``hdata``) and the individual-results models (``idata``) are fitted on seasons before T."""
+    lines = last = who = None
+    if idata is not None:
+        gl = ind.game_lines(proc)
+        lines = {
+            (gid, pid): np.array(v, dtype=float)
+            for gid, pid, *v in gl.select("game_id", "player_id", *ind.LINE).iter_rows()
+        }
+        last = {(i, s): m for i, s, m in ind.toi_last(gl).iter_rows()}
+        who = idata.select("player_id", "season", "pos_group", "agegrp").unique(["player_id", "season"])
+    out = []
+    for T in seasons:
+        early = u = None
+        if hdata is not None:
+            thin = {i for i, v in base.m_eff[T].items() if v < hy.THIN}
+            early = hy.Early(thin, hy.fit(hdata.filter(pl.col("season") < T)), base.pos)
+        if idata is not None:
+            w = {i: (g, a) for i, g, a in who.filter(pl.col("season") == T).drop("season").iter_rows()}
+            u = ind.Individual(
+                ind.fit(idata.filter(pl.col("season") < T)), w, lines, {i: last[(i, T)] for i in w if (i, T) in last}
+            )
+        out.append(gm.run_player_season(hist, base, T, early=early, inseason=u, **kw))
+    return np.concatenate(out)
+
+
 def prepare(season: int = 2026) -> dict:
     """Everything that does not depend on the game: the logistic step and margin calibration from history, this season's
     games and preseason ratings."""
@@ -240,32 +281,41 @@ def prepare(season: int = 2026) -> dict:
     kw = {"lam": hp["lam"], "alpha": hp["alpha"], "n0": hp["n0"]}
     hist = gd_.load_games(proc)
     seasons = grun.TUNE + grun.TEST
-    base = gd_.build_priors(proc, cfg, seasons, hist)
+    # the adopted extensions: elite-prospect priors (docs/prospects/elite.md), the early-sample adjustment for
+    # thin-history players (docs/prospects/hybrid.md) and individual results for established skaters (docs/inseason
+    # update P), each when its test's rule adopted it
+    yp = rate_features(cfg, cfg.path(cfg.data.raw_dir), season)
+    hj, ij = met / "hybrid_prospects.json", met / "inseason_individual.json"
+    hdata = (
+        pl.read_parquet(proc / "hybrid_training.parquet")
+        if hj.exists() and json.loads(hj.read_text()).get("implement") and (proc / "hybrid_training.parquet").exists()
+        else None
+    )
+    idata = (
+        pl.read_parquet(proc / "inseason_training.parquet")
+        if ij.exists() and json.loads(ij.read_text()).get("implement") and (proc / "inseason_training.parquet").exists()
+        else None
+    )
+    base = gd_.build_priors(proc, cfg, seasons, hist, yp)
     th = hist.table.filter(pl.col("season") >= grun.TUNE[0])
-    mu_h = np.concatenate([gm.run_player_season(hist, base, T, **kw) for T in seasons])
+    # the logistic step and the margin calibration are fitted on the model as it runs live: the same priors and
+    # adjustments, each season's adjustment models fitted on earlier seasons (docs/market/methodology.md §8 item 16)
+    mu_h = historical_mu(proc, hist, base, seasons, kw, hdata, idata)
     beta = gm.logit_fit(
         np.column_stack([mu_h, th["b2b_home"].to_numpy(), th["b2b_away"].to_numpy()]), th["home_win"].to_numpy()
     )
     # actual margin on the model's expected margin
     cal = np.linalg.lstsq(np.column_stack([np.ones(len(mu_h)), mu_h]), th["gd"].to_numpy(), rcond=None)[0]
     live = live_games(season)
-    pri, snap, stamp = season_priors(proc, cfg, season, live, base)
-    # early-sample adjustment for thin-history players (docs/prospects/hybrid.md), fitted on every completed season,
-    # when that test's rule adopted it
+    pri, snap, stamp = season_priors(proc, cfg, season, live, base, yp)
+    # this season's adjustments, fitted on every completed season
     early = None
-    hj = met / "hybrid_prospects.json"
-    if hj.exists() and json.loads(hj.read_text()).get("implement") and (proc / "hybrid_training.parquet").exists():
-        early = hy.Early(
-            {i for i, v in pri.m_eff[season].items() if v < hy.THIN},
-            hy.fit(pl.read_parquet(proc / "hybrid_training.parquet")),
-            pri.pos,
-        )
-    # individual results for established skaters (docs/inseason update P), the same way, when its rule adopted it
+    if hdata is not None:
+        early = hy.Early({i for i, v in pri.m_eff[season].items() if v < hy.THIN}, hy.fit(hdata), pri.pos)
     individual = None
-    ij = met / "inseason_individual.json"
-    if ij.exists() and json.loads(ij.read_text()).get("implement") and (proc / "inseason_training.parquet").exists():
+    if idata is not None:
         individual = (
-            ind.fit(pl.read_parquet(proc / "inseason_training.parquet")),
+            ind.fit(idata),
             ind.established(pri.m_eff[season], pri.age.get(season, {}), pri.pos),
             ind.live_lines(LIVE),
             pri.toi_last[season],
